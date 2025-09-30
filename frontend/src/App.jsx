@@ -9,6 +9,7 @@ import BrandForm from './components/BrandForm';
 import PackingsPage from './pages/PackingsPage';
 import ItemTypesPage from './pages/ItemTypesPage';
 import ItemUnitsPage from './pages/ItemUnitsPage';
+import AssetAllocationsPage from './pages/AssetAllocationsPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -242,11 +243,7 @@ function App() {
         );
 
       case 'asset-allocation':
-        return renderPlaceholderWithPadding(
-          "Asset / Items Allocation",
-          "Allocate assets and items to different departments or users.",
-          ArrowsRightLeftIcon
-        );
+        return <AssetAllocationsPage />;
 
       case 'asset-allocation-report':
         return renderPlaceholderWithPadding(
