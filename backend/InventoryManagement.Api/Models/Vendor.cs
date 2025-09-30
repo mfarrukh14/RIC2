@@ -7,94 +7,74 @@ namespace InventoryManagement.Api.Models
         public int Id { get; set; }
 
         [Required]
-        [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        [StringLength(20)]
-        public string? Code { get; set; }
-
-        [StringLength(50)]
-        public string? Type { get; set; }
-
-        [StringLength(500)]
         public string? Description { get; set; }
 
-        [StringLength(200)]
+        [EmailAddress]
+        public string? Email { get; set; }
+
+        public string? CNo { get; set; } // Contact Number
+
         public string? Address { get; set; }
 
-        [StringLength(50)]
-        public string? City { get; set; }
+        public string? NTN { get; set; } // National Tax Number
 
-        [StringLength(50)]
-        public string? State { get; set; }
+        public string? STN { get; set; } // Sales Tax Number
 
-        [StringLength(20)]
-        public string? PostalCode { get; set; }
+        // Contact Person 1
+        public string? CPName1 { get; set; }
+        public string? CPEmail1 { get; set; }
+        public string? CPContactNumber1 { get; set; }
 
-        [StringLength(50)]
-        public string? Country { get; set; }
+        // Contact Person 2
+        public string? CPName2 { get; set; }
+        public string? CPEmail2 { get; set; }
+        public string? CPContactNumber2 { get; set; }
 
-        // Contact Information
-        [StringLength(100)]
-        public string? ContactPersonName1 { get; set; }
+        // Foreign Keys
+        public int? CountryId { get; set; }
+        public string? CountryName { get; set; } // For display
 
-        [StringLength(50)]
-        public string? ContactPersonType1 { get; set; }
+        public int? StateOrProvinceId { get; set; }
+        public string? StateOrProvinceName { get; set; } // For display
 
-        [StringLength(100)]
-        [EmailAddress]
-        public string? Email1 { get; set; }
+        public int? CityId { get; set; }
+        public string? CityName { get; set; } // For display
 
-        [StringLength(20)]
-        public string? Phone1 { get; set; }
+        public int? BranchId { get; set; }
+        public string? BranchName { get; set; } // For display
 
-        [StringLength(100)]
-        public string? ContactPersonName2 { get; set; }
-
-        [StringLength(50)]
-        public string? ContactPersonType2 { get; set; }
-
-        [StringLength(100)]
-        [EmailAddress]
-        public string? Email2 { get; set; }
-
-        [StringLength(20)]
-        public string? Phone2 { get; set; }
-
-        // Account Details
-        [StringLength(50)]
-        public string? VendorAccountNumber { get; set; }
-
-        [StringLength(50)]
-        public string? TaxIdNumber { get; set; }
-
-        // Bank Details
-        [StringLength(100)]
-        public string? BankName { get; set; }
-
-        [StringLength(50)]
-        public string? AccountNumber { get; set; }
-
-        [StringLength(20)]
-        public string? RoutingNumber { get; set; }
-
-        [StringLength(20)]
-        public string? SwiftCode { get; set; }
-
-        [StringLength(50)]
-        public string? IbanNumber { get; set; }
-
-        // Additional Fields
-        [StringLength(20)]
-        public string? CreditLimit { get; set; }
-
-        [StringLength(50)]
-        public string? PaymentTerms { get; set; }
-
+        // System fields
         public bool IsActive { get; set; } = true;
+        public int? CreatedById { get; set; }
+        public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
+        public int? ModifiedById { get; set; }
+        public DateTime? ModifiedOn { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        // Additional fields from schema
+        public string? Code { get; set; }
+        public int? VendorOrCustomer { get; set; }
+        public int? IncomeTaxStatus { get; set; }
+        public int? VendorType { get; set; }
 
-        public DateTime? UpdatedAt { get; set; }
+        public int? TaxPayerCategoryId { get; set; }
+        public string? TaxPayerCategoryName { get; set; } // For display
+
+        public int? TaxPayerStatus { get; set; }
+        public int? SaleTaxType { get; set; }
+        public string? ExemptUnderSRO { get; set; }
+
+        public int? AccountPayableId { get; set; }
+        public string? AccountPayableName { get; set; } // For display
+
+        public int? AccountReceivableId { get; set; }
+        public string? AccountReceivableName { get; set; } // For display
+
+        public int? CreditStatus { get; set; }
+        public int? NetDueDays { get; set; }
+        public int? CreditLimit { get; set; }
+        public string? FaxNo { get; set; }
+        public bool IsVerified { get; set; } = false;
     }
 }

@@ -4,6 +4,11 @@ import VendorList from './components/VendorList';
 import VendorForm from './components/VendorForm';
 import ManufacturerList from './components/ManufacturerList';
 import ManufacturerForm from './components/ManufacturerForm';
+import BrandList from './components/BrandList';
+import BrandForm from './components/BrandForm';
+import PackingsPage from './pages/PackingsPage';
+import ItemTypesPage from './pages/ItemTypesPage';
+import ItemUnitsPage from './pages/ItemUnitsPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -30,6 +35,10 @@ function App() {
   const [editingVendor, setEditingVendor] = useState(null);
   const [showManufacturerForm, setShowManufacturerForm] = useState(false);
   const [editingManufacturer, setEditingManufacturer] = useState(null);
+  const [showBrandForm, setShowBrandForm] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(null);
+  const [showPackingForm, setShowPackingForm] = useState(false);
+  const [editingPacking, setEditingPacking] = useState(null);
 
   const handleSectionChange = (section) => {
     setActiveSection(section);
@@ -37,6 +46,10 @@ function App() {
     setEditingVendor(null);
     setShowManufacturerForm(false);
     setEditingManufacturer(null);
+    setShowBrandForm(false);
+    setEditingBrand(null);
+    setShowPackingForm(false);
+    setEditingPacking(null);
   };
 
   const handleToggleSidebar = () => {
@@ -85,6 +98,50 @@ function App() {
     // The ManufacturerList component will refresh automatically
   };
 
+  const handleAddBrand = () => {
+    setEditingBrand(null);
+    setShowBrandForm(true);
+  };
+
+  const handleEditBrand = (brand) => {
+    setEditingBrand(brand);
+    setShowBrandForm(true);
+  };
+
+  const handleCloseBrandForm = () => {
+    setShowBrandForm(false);
+    setEditingBrand(null);
+  };
+
+  const handleSaveBrand = () => {
+    setShowBrandForm(false);
+    setEditingBrand(null);
+    // The BrandList component will refresh automatically
+  };
+
+  const handleAddPacking = () => {
+    setEditingPacking(null);
+    setShowPackingForm(true);
+  };
+
+  const handleEditPacking = (packing) => {
+    setEditingPacking(packing);
+    setShowPackingForm(true);
+  };
+
+  const handleClosePackingForm = () => {
+    setShowPackingForm(false);
+    setEditingPacking(null);
+  };
+
+  const handleSavePacking = () => {
+    setShowPackingForm(false);
+    setEditingPacking(null);
+    // The PackingList component will refresh automatically
+  };
+
+
+
   const renderPlaceholderWithPadding = (title, description, icon) => (
     <div className="p-6">
       <PlaceholderSection title={title} description={description} icon={icon} />
@@ -112,6 +169,30 @@ function App() {
           onSave={handleSaveManufacturer}
           onCancel={handleCloseManufacturerForm}
           isEditing={!!editingManufacturer}
+        />
+      );
+    }
+
+    // If brand form is open, show it instead of the section content
+    if (showBrandForm) {
+      return (
+        <BrandForm
+          brand={editingBrand}
+          onSave={handleSaveBrand}
+          onCancel={handleCloseBrandForm}
+          isEditing={!!editingBrand}
+        />
+      );
+    }
+
+    // If packing form is open, show it instead of the section content
+    if (showPackingForm) {
+      return (
+        <PackingForm
+          packing={editingPacking}
+          onSave={handleSavePacking}
+          onCancel={handleClosePackingForm}
+          isEditing={!!editingPacking}
         />
       );
     }
@@ -175,18 +256,10 @@ function App() {
         );
 
       case 'item-units':
-        return renderPlaceholderWithPadding(
-          "Item Units",
-          "Manage different units of measurement for your inventory items.",
-          ScaleIcon
-        );
+        return <ItemUnitsPage />;
 
       case 'item-types':
-        return renderPlaceholderWithPadding(
-          "Item Types",
-          "Define and manage different types of inventory items.",
-          TagIcon
-        );
+        return <ItemTypesPage />;
 
       case 'item-category':
         return renderPlaceholderWithPadding(
@@ -196,17 +269,26 @@ function App() {
         );
 
       case 'packing-types':
-        return renderPlaceholderWithPadding(
-          "Packing Types",
-          "Manage different packing and packaging types.",
-          CubeIcon
-        );
+        return <PackingsPage />;
 
       case 'brands':
-        return renderPlaceholderWithPadding(
-          "Brands",
-          "Manage brands and manufacturers of your inventory items.",
-          TagIcon
+        return (
+          <div className="p-6">
+            <BrandList
+              onEdit={handleEditBrand}
+              onAdd={handleAddBrand}
+            />
+          </div>
+        );
+
+      case 'item-types':
+        return (
+          <div className="p-6">
+            <ItemTypeList
+              onEdit={handleEditItemType}
+              onAdd={handleAddItemType}
+            />
+          </div>
         );
 
       case 'manufacturers':

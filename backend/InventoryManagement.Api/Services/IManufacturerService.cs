@@ -1,13 +1,13 @@
-using InventoryManagement.Api.DTOs;
+using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.Api.Services
 {
     public interface IManufacturerService
     {
-        Task<IEnumerable<ManufacturerDto>> GetAllManufacturersAsync();
-        Task<ManufacturerDto?> GetManufacturerByIdAsync(int id);
-        Task<ManufacturerDto> CreateManufacturerAsync(CreateManufacturerDto createManufacturerDto);
-        Task<ManufacturerDto?> UpdateManufacturerAsync(int id, UpdateManufacturerDto updateManufacturerDto);
-        Task<bool> DeleteManufacturerAsync(int id);
+        Task<IEnumerable<Manufacturer>> GetAllManufacturersAsync();
+        Task<Manufacturer?> GetManufacturerByIdAsync(int id);
+        Task<int> CreateManufacturerAsync(CreateManufacturerRequest request);
+        Task<bool> UpdateManufacturerAsync(UpdateManufacturerRequest request);
+        Task<bool> DeleteManufacturerAsync(int id, int modifiedById);
     }
 }

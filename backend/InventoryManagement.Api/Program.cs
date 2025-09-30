@@ -1,6 +1,4 @@
-using InventoryManagement.Api.Data;
 using InventoryManagement.Api.Services;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,13 +7,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add Entity Framework
-builder.Services.AddDbContext<InventoryContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Add services
-builder.Services.AddScoped<IVendorService, VendorService>();
-builder.Services.AddScoped<IManufacturerService, ManufacturerService>();
+// Add services (using stored procedures instead of Entity Framework)
+builder.Services.AddScoped<IVendorService, VendorServiceSP>();
+builder.Services.AddScoped<IManufacturerService, ManufacturerServiceSP>();
+builder.Services.AddScoped<IBrandService, BrandServiceSP>();
+builder.Services.AddScoped<IPackingService, PackingServiceSP>();
+builder.Services.AddScoped<IItemTypeService, ItemTypeServiceSP>();
+builder.Services.AddScoped<IItemUnitService, ItemUnitServiceSP>();
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -44,12 +42,5 @@ app.UseCors("AllowAll");
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<InventoryContext>();
-    context.Database.EnsureCreated();
-}
 
 app.Run();

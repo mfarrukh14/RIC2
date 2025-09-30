@@ -6,22 +6,22 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ManufacturersController : ControllerBase
+    public class ItemUnitsController : ControllerBase
     {
-        private readonly IManufacturerService _manufacturerService;
+        private readonly IItemUnitService _itemUnitService;
 
-        public ManufacturersController(IManufacturerService manufacturerService)
+        public ItemUnitsController(IItemUnitService itemUnitService)
         {
-            _manufacturerService = manufacturerService;
+            _itemUnitService = itemUnitService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Manufacturer>>> GetAllManufacturers()
+        public async Task<ActionResult<IEnumerable<ItemUnit>>> GetAllItemUnits()
         {
             try
             {
-                var manufacturers = await _manufacturerService.GetAllManufacturersAsync();
-                return Ok(manufacturers);
+                var itemUnits = await _itemUnitService.GetAllItemUnitsAsync();
+                return Ok(itemUnits);
             }
             catch (Exception ex)
             {
@@ -30,16 +30,16 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Manufacturer>> GetManufacturer(int id)
+        public async Task<ActionResult<ItemUnit>> GetItemUnit(int id)
         {
             try
             {
-                var manufacturer = await _manufacturerService.GetManufacturerByIdAsync(id);
-                if (manufacturer == null)
+                var itemUnit = await _itemUnitService.GetItemUnitByIdAsync(id);
+                if (itemUnit == null)
                 {
-                    return NotFound($"Manufacturer with ID {id} not found.");
+                    return NotFound($"Item unit with ID {id} not found.");
                 }
-                return Ok(manufacturer);
+                return Ok(itemUnit);
             }
             catch (Exception ex)
             {
@@ -48,17 +48,17 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<int>> CreateManufacturer([FromBody] CreateManufacturerRequest request)
+        public async Task<ActionResult<int>> CreateItemUnit([FromBody] CreateItemUnitRequest request)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(request.Name))
                 {
-                    return BadRequest("Manufacturer name is required.");
+                    return BadRequest("Item unit name is required.");
                 }
 
-                var manufacturerId = await _manufacturerService.CreateManufacturerAsync(request);
-                return CreatedAtAction(nameof(GetManufacturer), new { id = manufacturerId }, manufacturerId);
+                var itemUnitId = await _itemUnitService.CreateItemUnitAsync(request);
+                return CreatedAtAction(nameof(GetItemUnit), new { id = itemUnitId }, itemUnitId);
             }
             catch (Exception ex)
             {
@@ -67,7 +67,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateManufacturer(int id, [FromBody] UpdateManufacturerRequest request)
+        public async Task<IActionResult> UpdateItemUnit(int id, [FromBody] UpdateItemUnitRequest request)
         {
             try
             {
@@ -78,13 +78,13 @@ namespace InventoryManagement.Api.Controllers
 
                 if (string.IsNullOrWhiteSpace(request.Name))
                 {
-                    return BadRequest("Manufacturer name is required.");
+                    return BadRequest("Item unit name is required.");
                 }
 
-                var success = await _manufacturerService.UpdateManufacturerAsync(request);
+                var success = await _itemUnitService.UpdateItemUnitAsync(request);
                 if (!success)
                 {
-                    return NotFound($"Manufacturer with ID {id} not found.");
+                    return NotFound($"Item unit with ID {id} not found.");
                 }
 
                 return NoContent();
@@ -96,14 +96,14 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteManufacturer(int id, [FromQuery] int modifiedById = 1)
+        public async Task<IActionResult> DeleteItemUnit(int id, [FromQuery] int modifiedById = 1)
         {
             try
             {
-                var success = await _manufacturerService.DeleteManufacturerAsync(id, modifiedById);
+                var success = await _itemUnitService.DeleteItemUnitAsync(id, modifiedById);
                 if (!success)
                 {
-                    return NotFound($"Manufacturer with ID {id} not found.");
+                    return NotFound($"Item unit with ID {id} not found.");
                 }
 
                 return NoContent();
