@@ -102,4 +102,35 @@ export const itemTypeApi = {
   },
 };
 
+export const brandApi = {
+  // Get all brands
+  getAll: async () => {
+    const response = await api.get('/brands');
+    return response.data;
+  },
+
+  // Get brand by ID
+  getById: async (id) => {
+    const response = await api.get(`/brands/${id}`);
+    return response.data;
+  },
+
+  // Create new brand
+  create: async (brand) => {
+    const response = await api.post('/brands', brand);
+    return response.data;
+  },
+
+  // Update brand
+  update: async (id, brand) => {
+    const response = await api.put(`/brands/${id}`, brand);
+    return response.data;
+  },
+
+  // Delete brand
+  delete: async (id) => {
+    await api.delete(`/brands/${id}`);
+  },
+};
+
 export default api;

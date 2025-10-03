@@ -9,7 +9,9 @@ import BrandForm from './components/BrandForm';
 import PackingsPage from './pages/PackingsPage';
 import ItemTypesPage from './pages/ItemTypesPage';
 import ItemUnitsPage from './pages/ItemUnitsPage';
+import ItemsPage from './pages/ItemsPage';
 import AssetAllocationsPage from './pages/AssetAllocationsPage';
+import AssetAllocationReportPage from './pages/AssetAllocationReportPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -232,25 +234,13 @@ function App() {
         );
 
       case 'add-items':
-        return (
-          <div className="p-6">
-            <PlaceholderSection
-              title="Add Items"
-              description="Create and manage individual items in your inventory."
-              icon={PlusIcon}
-            />
-          </div>
-        );
+        return <ItemsPage />;
 
       case 'asset-allocation':
         return <AssetAllocationsPage />;
 
       case 'asset-allocation-report':
-        return renderPlaceholderWithPadding(
-          "Asset / Items Allocation Report",
-          "View detailed reports on asset and item allocations.",
-          DocumentTextIcon
-        );
+        return <AssetAllocationReportPage />;
 
       case 'item-units':
         return <ItemUnitsPage />;
