@@ -10,6 +10,9 @@ import PackingsPage from './pages/PackingsPage';
 import ItemTypesPage from './pages/ItemTypesPage';
 import ItemUnitsPage from './pages/ItemUnitsPage';
 import ItemsPage from './pages/ItemsPage';
+import InventoryListPage from './pages/InventoryListPage';
+import GRNPage from './pages/GRNPage';
+import TransferInventoryPage from './pages/TransferInventoryPage';
 import AssetAllocationsPage from './pages/AssetAllocationsPage';
 import AssetAllocationReportPage from './pages/AssetAllocationReportPage';
 import PlaceholderSection from './components/PlaceholderSection';
@@ -223,15 +226,7 @@ function App() {
         );
 
       case 'add-inventory':
-        return (
-          <div className="p-6">
-            <PlaceholderSection
-              title="Add Inventory"
-              description="Add new inventory items to your system."
-              icon={PlusIcon}
-            />
-          </div>
-        );
+        return <InventoryListPage />;
 
       case 'add-items':
         return <ItemsPage />;
@@ -289,18 +284,10 @@ function App() {
         );
 
       case 'inventory-receiving':
-        return renderPlaceholderWithPadding(
-          "Inventory Receiving (GRN)",
-          "Process goods received notes and incoming inventory.",
-          ArrowDownTrayIcon
-        );
+        return <GRNPage />;
 
       case 'transfer-inventory':
-        return renderPlaceholderWithPadding(
-          "Transfer Inventory",
-          "Transfer inventory items between locations or departments.",
-          ArrowsRightLeftIcon
-        );
+        return <TransferInventoryPage />;
 
       case 'return-inventory':
         return renderPlaceholderWithPadding(

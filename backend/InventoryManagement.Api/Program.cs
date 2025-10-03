@@ -16,6 +16,9 @@ builder.Services.AddScoped<IItemTypeService, ItemTypeServiceSP>();
 builder.Services.AddScoped<IItemUnitService, ItemUnitServiceSP>();
 builder.Services.AddScoped<IAssetAllocationService, AssetAllocationService>();
 builder.Services.AddScoped<IItemService, ItemService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IGRNService, GRNService>();
+builder.Services.AddScoped<ITransferInventoryService, TransferInventoryService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
