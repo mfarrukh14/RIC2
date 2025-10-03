@@ -376,6 +376,145 @@ namespace InventoryManagement.Api.Services
             return items;
         }
 
+        public async Task<IEnumerable<AssetAllocationReport>> GetReportAsync(AssetAllocationReportFilter filter)
+        {
+            var reports = new List<AssetAllocationReport>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("AssetAllocation_GetReport", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@StartDate", (object?)filter.StartDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@EndDate", (object?)filter.EndDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@AllocationType", filter.AllocationType);
+                command.Parameters.AddWithValue("@RoomId", (object?)filter.RoomId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@UserId", (object?)filter.UserId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@AssetId", (object?)filter.AssetId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Building", (object?)filter.Building ?? DBNull.Value);
+                command.Parameters.AddWithValue("@Floor", (object?)filter.Floor ?? DBNull.Value);
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    reports.Add(new AssetAllocationReport
+                    {
+                        Id = reader.GetInt32("Id"),
+                        AllocatedDate = reader.GetDateTime("AllocatedDate"),
+                        ReturnDate = reader.IsDBNull("ReturnDate") ? null : reader.GetDateTime("ReturnDate"),
+                        Quantity = reader.GetInt32("Quantity"),
+                        Remarks = reader.IsDBNull("Remarks") ? null : reader.GetString("Remarks"),
+                        IsReturn = reader.GetBoolean("IsReturn"),
+                        ReturnRemarks = reader.IsDBNull("ReturnRemarks") ? null : reader.GetString("ReturnRemarks"),
+                        AssetId = reader.IsDBNull("AssetId") ? null : reader.GetInt32("AssetId"),
+                        AssetName = reader.IsDBNull("AssetName") ? null : reader.GetString("AssetName"),
+                        SerialNumber = reader.IsDBNull("SerialNumber") ? null : reader.GetString("SerialNumber"),
+                        Model = reader.IsDBNull("Model") ? null : reader.GetString("Model"),
+                        UnitPrice = reader.IsDBNull("UnitPrice") ? null : reader.GetDecimal("UnitPrice"),
+                        TotalPrice = reader.IsDBNull("TotalPrice") ? null : reader.GetDecimal("TotalPrice"),
+                        UserId = reader.IsDBNull("UserId") ? null : reader.GetInt32("UserId"),
+                        UserName = reader.IsDBNull("UserName") ? null : reader.GetString("UserName"),
+                        UserEmail = reader.IsDBNull("UserEmail") ? null : reader.GetString("UserEmail"),
+                        UserDepartment = reader.IsDBNull("UserDepartment") ? null : reader.GetString("UserDepartment"),
+                        UserDesignation = reader.IsDBNull("UserDesignation") ? null : reader.GetString("UserDesignation"),
+                        RoomId = reader.IsDBNull("RoomId") ? null : reader.GetInt32("RoomId"),
+                        RoomName = reader.IsDBNull("RoomName") ? null : reader.GetString("RoomName"),
+                        Building = reader.IsDBNull("Building") ? null : reader.GetString("Building"),
+                        Floor = reader.IsDBNull("Floor") ? null : reader.GetString("Floor"),
+                        RoomDescription = reader.IsDBNull("RoomDescription") ? null : reader.GetString("RoomDescription"),
+                        DepartmentId = reader.IsDBNull("DepartmentId") ? null : reader.GetInt32("DepartmentId"),
+                        DepartmentName = reader.IsDBNull("DepartmentName") ? null : reader.GetString("DepartmentName"),
+                        SubDepartmentId = reader.IsDBNull("SubDepartmentId") ? null : reader.GetInt32("SubDepartmentId"),
+                        SubDepartmentName = reader.IsDBNull("SubDepartmentName") ? null : reader.GetString("SubDepartmentName"),
+                        BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
+                        BranchName = reader.IsDBNull("BranchName") ? null : reader.GetString("BranchName"),
+                        BrandName = reader.IsDBNull("BrandName") ? null : reader.GetString("BrandName"),
+                        ItemTypeName = reader.IsDBNull("ItemTypeName") ? null : reader.GetString("ItemTypeName"),
+                        ManufacturerName = reader.IsDBNull("ManufacturerName") ? null : reader.GetString("ManufacturerName"),
+                        AllocationNo = reader.IsDBNull("AllocationNo") ? null : reader.GetString("AllocationNo")
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving asset allocation report");
+                throw;
+            }
+
+            return reports;
+        }
+
+        public async Task<IEnumerable<string>> GetBuildingsAsync()
+        {
+            var buildings = new List<string>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Room_GetBuildings", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    if (!reader.IsDBNull(0))
+                    {
+                        buildings.Add(reader.GetString(0));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving buildings");
+                throw;
+            }
+
+            return buildings;
+        }
+
+        public async Task<IEnumerable<string>> GetFloorsByBuildingAsync(string? building)
+        {
+            var floors = new List<string>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Room_GetFloorsByBuilding", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@Building", (object?)building ?? DBNull.Value);
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    if (!reader.IsDBNull(0))
+                    {
+                        floors.Add(reader.GetString(0));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving floors");
+                throw;
+            }
+
+            return floors;
+        }
+
         private static AssetAllocation MapToAssetAllocation(SqlDataReader reader)
         {
             return new AssetAllocation

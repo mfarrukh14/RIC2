@@ -190,5 +190,50 @@ namespace InventoryManagement.Api.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
+
+        [HttpPost("report")]
+        public async Task<ActionResult<IEnumerable<AssetAllocationReport>>> GetReport([FromBody] AssetAllocationReportFilter filter)
+        {
+            try
+            {
+                var report = await _assetAllocationService.GetReportAsync(filter);
+                return Ok(report);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating asset allocation report");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("buildings")]
+        public async Task<ActionResult<IEnumerable<string>>> GetBuildings()
+        {
+            try
+            {
+                var buildings = await _assetAllocationService.GetBuildingsAsync();
+                return Ok(buildings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving buildings");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        [HttpGet("floors")]
+        public async Task<ActionResult<IEnumerable<string>>> GetFloors([FromQuery] string? building = null)
+        {
+            try
+            {
+                var floors = await _assetAllocationService.GetFloorsByBuildingAsync(building);
+                return Ok(floors);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving floors");
+                return StatusCode(500, "Internal server error");
+            }
+        }
     }
 }

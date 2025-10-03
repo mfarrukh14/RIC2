@@ -16,5 +16,10 @@ namespace InventoryManagement.Api.Services
         Task<IEnumerable<Department>> GetDepartmentsAsync();
         Task<IEnumerable<SubDepartment>> GetSubDepartmentsAsync();
         Task<IEnumerable<InventoryItem>> GetAvailableInventoryItemsAsync();
+        
+        // Report methods
+        Task<IEnumerable<AssetAllocationReport>> GetReportAsync(AssetAllocationReportFilter filter);
+        Task<IEnumerable<string>> GetBuildingsAsync();
+        Task<IEnumerable<string>> GetFloorsByBuildingAsync(string? building);
     }
 }

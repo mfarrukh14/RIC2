@@ -15,6 +15,7 @@ builder.Services.AddScoped<IPackingService, PackingServiceSP>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeServiceSP>();
 builder.Services.AddScoped<IItemUnitService, ItemUnitServiceSP>();
 builder.Services.AddScoped<IAssetAllocationService, AssetAllocationService>();
+builder.Services.AddScoped<IItemService, ItemService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
