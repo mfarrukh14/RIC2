@@ -13,22 +13,21 @@ import ItemsPage from './pages/ItemsPage';
 import InventoryListPage from './pages/InventoryListPage';
 import GRNPage from './pages/GRNPage';
 import TransferInventoryPage from './pages/TransferInventoryPage';
+import ReturnInventoryPage from './pages/ReturnInventoryPage';
+import PurchaseSummaryPage from './pages/PurchaseSummaryPage';
+import PurchaseSummaryInvoicePage from './pages/PurchaseSummaryInvoicePage';
+import SampleCollectionPage from './pages/SampleCollectionPage';
+import SurgicalGroupPage from './pages/SurgicalGroupPage';
+import ItemTypeSaleLevelPage from './pages/ItemTypeSaleLevelPage';
+import ContingentBillsPage from './pages/ContingentBillsPage';
+import ItemCategoryPage from './pages/ItemCategoryPage';
 import AssetAllocationsPage from './pages/AssetAllocationsPage';
 import AssetAllocationReportPage from './pages/AssetAllocationReportPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
-  PlusIcon,
   CubeIcon,
-  TagIcon,
   FolderIcon,
-  BuildingOfficeIcon,
-  TruckIcon,
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
-  ArrowsRightLeftIcon,
-  DocumentTextIcon,
-  ClipboardDocumentListIcon,
   BeakerIcon,
   ScaleIcon,
   DocumentIcon
@@ -244,11 +243,7 @@ function App() {
         return <ItemTypesPage />;
 
       case 'item-category':
-        return renderPlaceholderWithPadding(
-          "Item Category",
-          "Organize your inventory items into categories.",
-          FolderIcon
-        );
+        return <ItemCategoryPage />;
 
       case 'packing-types':
         return <PackingsPage />;
@@ -290,67 +285,25 @@ function App() {
         return <TransferInventoryPage />;
 
       case 'return-inventory':
-        return renderPlaceholderWithPadding(
-          "Return Inventory Wrt Items",
-          "Process inventory returns and manage returned items.",
-          ArrowUpTrayIcon
-        );
+        return <ReturnInventoryPage />;
 
       case 'purchase-summary':
-        return renderPlaceholderWithPadding(
-          "Purchase Summary",
-          "View comprehensive purchase summaries and reports.",
-          ClipboardDocumentListIcon
-        );
+        return <PurchaseSummaryPage />;
 
       case 'purchase-summary-wrt':
-        return renderPlaceholderWithPadding(
-          "Purchase Summary Wrt",
-          "Detailed purchase summaries with respect to specific criteria.",
-          DocumentTextIcon
-        );
-
-      case 'invoices':
-        return renderPlaceholderWithPadding(
-          "Invoices",
-          "Manage and track purchase invoices.",
-          DocumentIcon
-        );
+        return <PurchaseSummaryInvoicePage />;
 
       case 'sample-collection':
-        return renderPlaceholderWithPadding(
-          "Sample Collection",
-          "Manage sample collection and testing procedures.",
-          BeakerIcon
-        );
-
-      case 'consumption-item':
-        return renderPlaceholderWithPadding(
-          "Consumption Item",
-          "Track item consumption and usage patterns.",
-          CubeIcon
-        );
+        return <SampleCollectionPage />;
 
       case 'surgical-group':
-        return renderPlaceholderWithPadding(
-          "Surgical Group",
-          "Manage surgical equipment groups and procedures.",
-          BeakerIcon
-        );
+        return <SurgicalGroupPage />;
 
       case 'item-type-sale-level':
-        return renderPlaceholderWithPadding(
-          "Item Type Sale Level",
-          "Configure sale levels for different item types.",
-          ScaleIcon
-        );
+        return <ItemTypeSaleLevelPage />;
 
       case 'contingent-bill':
-        return renderPlaceholderWithPadding(
-          "Contingent Bill",
-          "Manage contingent billing and emergency purchases.",
-          DocumentIcon
-        );
+        return <ContingentBillsPage />;
 
       default:
         return (

@@ -164,6 +164,13 @@ namespace InventoryManagement.Api.Models
         public bool IsActive { get; set; }
     }
 
+    public class CategoryRequest
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
     public class SubCategory
     {
         public int Id { get; set; }

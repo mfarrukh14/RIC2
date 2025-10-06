@@ -12,6 +12,11 @@ namespace InventoryManagement.Api.Services
         
         // Lookup data methods
         Task<IEnumerable<Category>> GetCategoriesAsync();
+        Task<Category?> GetCategoryByIdAsync(int id);
+        Task<int> CreateCategoryAsync(string name, string? description, bool isActive);
+        Task<bool> UpdateCategoryAsync(int id, string name, string? description, bool isActive);
+        Task<bool> DeleteCategoryAsync(int id);
+        
         Task<IEnumerable<SubCategory>> GetSubCategoriesAsync();
         Task<IEnumerable<Price>> GetPricesAsync();
         Task<IEnumerable<TaxRate>> GetTaxRatesAsync();

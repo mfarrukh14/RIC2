@@ -137,6 +137,90 @@ namespace InventoryManagement.Api.Controllers
             }
         }
 
+        [HttpGet("categories/{id}")]
+        public async Task<ActionResult<Category>> GetCategoryById(int id)
+        {
+            try
+            {
+                var category = await _itemService.GetCategoryByIdAsync(id);
+                if (category == null)
+                {
+                    return NotFound(new { message = $"Category with ID {id} not found" });
+                }
+                return Ok(category);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving category with ID {Id}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving the category" });
+            }
+        }
+
+        [HttpPost("categories")]
+        public async Task<ActionResult<int>> CreateCategory([FromBody] CategoryRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Name))
+                {
+                    return BadRequest(new { message = "Category name is required" });
+                }
+
+                var id = await _itemService.CreateCategoryAsync(request.Name, request.Description, request.IsActive);
+                return CreatedAtAction(nameof(GetCategoryById), new { id }, new { id, message = "Category created successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating category");
+                return StatusCode(500, new { message = "An error occurred while creating the category" });
+            }
+        }
+
+        [HttpPut("categories/{id}")]
+        public async Task<ActionResult> UpdateCategory(int id, [FromBody] CategoryRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Name))
+                {
+                    return BadRequest(new { message = "Category name is required" });
+                }
+
+                var success = await _itemService.UpdateCategoryAsync(id, request.Name, request.Description, request.IsActive);
+                if (!success)
+                {
+                    return NotFound(new { message = $"Category with ID {id} not found" });
+                }
+
+                return Ok(new { message = "Category updated successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating category with ID {Id}", id);
+                return StatusCode(500, new { message = "An error occurred while updating the category" });
+            }
+        }
+
+        [HttpDelete("categories/{id}")]
+        public async Task<ActionResult> DeleteCategory(int id)
+        {
+            try
+            {
+                var success = await _itemService.DeleteCategoryAsync(id);
+                if (!success)
+                {
+                    return NotFound(new { message = $"Category with ID {id} not found" });
+                }
+
+                return Ok(new { message = "Category deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting category with ID {Id}", id);
+                return StatusCode(500, new { message = "An error occurred while deleting the category" });
+            }
+        }
+
         [HttpGet("subcategories")]
         public async Task<ActionResult<IEnumerable<SubCategory>>> GetSubCategories()
         {

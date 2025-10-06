@@ -1,4 +1,5 @@
 using InventoryManagement.Api.Services;
+using InventoryManagement.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,13 @@ builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IGRNService, GRNService>();
 builder.Services.AddScoped<ITransferInventoryService, TransferInventoryService>();
+builder.Services.AddScoped<IReturnInventoryService, ReturnInventoryService>();
+builder.Services.AddScoped<IPurchaseSummaryService, PurchaseSummaryService>();
+builder.Services.AddScoped<IPurchaseSummaryInvoiceService, PurchaseSummaryInvoiceService>();
+builder.Services.AddScoped<ISampleCollectionConsumptionItemService, SampleCollectionConsumptionItemService>();
+builder.Services.AddScoped<ISurgicalItemGroupService, SurgicalItemGroupService>();
+builder.Services.AddScoped<IItemTypeSaleLevelService, ItemTypeSaleLevelService>();
+builder.Services.AddScoped<IContingentBillService, ContingentBillService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

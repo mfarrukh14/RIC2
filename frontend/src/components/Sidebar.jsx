@@ -49,9 +49,7 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'return-inventory', title: 'Return Inventory Wrt Items', icon: ArrowUpTrayIcon },
         { id: 'purchase-summary', title: 'Purchase Summary', icon: ClipboardDocumentListIcon },
         { id: 'purchase-summary-wrt', title: 'Purchase Summary Wrt', icon: DocumentTextIcon },
-        { id: 'invoices', title: 'Invoices', icon: DocumentIcon },
         { id: 'sample-collection', title: 'Sample Collection', icon: BeakerIcon },
-        { id: 'consumption-item', title: 'Consumption Item', icon: CubeIcon },
         { id: 'surgical-group', title: 'Surgical Group', icon: BeakerIcon },
         { id: 'item-type-sale-level', title: 'Item Type Sale Level', icon: ScaleIcon },
         { id: 'contingent-bill', title: 'Contingent Bill', icon: DocumentIcon }

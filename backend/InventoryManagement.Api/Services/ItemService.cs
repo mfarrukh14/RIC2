@@ -182,6 +182,113 @@ namespace InventoryManagement.Api.Services
             return categories;
         }
 
+        public async Task<Category?> GetCategoryByIdAsync(int id)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Category_GetById", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@Id", id);
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                if (await reader.ReadAsync())
+                {
+                    return new Category
+                    {
+                        Id = reader.GetInt32("Id"),
+                        Name = reader.GetString("Name"),
+                        Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
+                        IsActive = reader.GetBoolean("IsActive")
+                    };
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving category with ID {Id}", id);
+                throw;
+            }
+        }
+
+        public async Task<int> CreateCategoryAsync(string name, string? description, bool isActive)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Category_Insert", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@Name", name);
+                command.Parameters.AddWithValue("@Description", (object?)description ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsActive", isActive);
+
+                await connection.OpenAsync();
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating category");
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateCategoryAsync(int id, string name, string? description, bool isActive)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Category_Update", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@Id", id);
+                command.Parameters.AddWithValue("@Name", name);
+                command.Parameters.AddWithValue("@Description", (object?)description ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsActive", isActive);
+
+                await connection.OpenAsync();
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                return rowsAffected > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating category with ID {Id}", id);
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteCategoryAsync(int id)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Category_Delete", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@Id", id);
+
+                await connection.OpenAsync();
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                return rowsAffected > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting category with ID {Id}", id);
+                throw;
+            }
+        }
+
         public async Task<IEnumerable<SubCategory>> GetSubCategoriesAsync()
         {
             var subCategories = new List<SubCategory>();
