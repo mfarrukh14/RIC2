@@ -23,6 +23,7 @@ import ContingentBillsPage from './pages/ContingentBillsPage';
 import ItemCategoryPage from './pages/ItemCategoryPage';
 import AssetAllocationsPage from './pages/AssetAllocationsPage';
 import AssetAllocationReportPage from './pages/AssetAllocationReportPage';
+import StockTypePage from './pages/StockTypePage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -304,6 +305,9 @@ function App() {
 
       case 'contingent-bill':
         return <ContingentBillsPage />;
+
+      case 'stock-type':
+        return <StockTypePage />;
 
       default:
         return (

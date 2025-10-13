@@ -16,7 +16,18 @@ import {
   ClipboardDocumentListIcon,
   BeakerIcon,
   ScaleIcon,
-  DocumentIcon
+  DocumentIcon,
+  ShoppingCartIcon,
+  ChartBarIcon,
+  ClockIcon,
+  ArchiveBoxIcon,
+  ArrowTrendingUpIcon,
+  CalendarIcon,
+  XCircleIcon,
+  CurrencyDollarIcon,
+  TableCellsIcon,
+  MapIcon,
+  UsersIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }) => {
@@ -54,10 +65,42 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'item-type-sale-level', title: 'Item Type Sale Level', icon: ScaleIcon },
         { id: 'contingent-bill', title: 'Contingent Bill', icon: DocumentIcon }
       ]
+    },
+    {
+      id: 'stores',
+      title: 'Stores Management',
+      icon: ShoppingCartIcon,
+      hasSubmenu: true,
+      submenu: [
+        { id: 'stock', title: 'Stock', icon: CubeIcon },
+        { id: 'stock-audit', title: 'Stock Audit', icon: ClipboardDocumentListIcon },
+        { id: 'stock-stats', title: 'Stock Stats', icon: ChartBarIcon },
+        { id: 'stock-adjustment', title: 'Stock Adjustment', icon: ArrowsRightLeftIcon },
+        { id: 'stock-consumption', title: 'Stock Consumption', icon: ArrowDownTrayIcon },
+        { id: 'stock-flow', title: 'Stock Flow', icon: ArrowTrendingUpIcon },
+        { id: 'stock-type', title: 'Stock Type', icon: TagIcon },
+        { id: 'stock-type-association', title: 'Stock Type Association', icon: ArrowsRightLeftIcon },
+        { id: 'stock-expiring', title: 'Stock Expiring', icon: ClockIcon },
+        { id: 'stock-expired', title: 'Stock Expired', icon: XCircleIcon },
+        { id: 'stock-value-wrt-items', title: 'Stock Value Wrt Items', icon: CurrencyDollarIcon },
+        { id: 'stock-detail-record', title: 'Stock Detail Record', icon: DocumentTextIcon },
+        { id: 'stock-balance-report', title: 'Stock Balance Report', icon: ChartBarIcon },
+        { id: 'sale-summary-daily', title: 'Sale Summary Daily', icon: CalendarIcon },
+        { id: 'sale-summary-wrt-items-discount', title: 'Sale Summary Wrt Items W Discount', icon: CurrencyDollarIcon },
+        { id: 'sale-summary-wrt-stock-no-discount', title: 'Sale Summary Wrt Stock WO Discount', icon: DocumentTextIcon },
+        { id: 'racks', title: 'Racks', icon: ArchiveBoxIcon },
+        { id: 'rack-drawers', title: 'Rack Drawers', icon: TableCellsIcon },
+        { id: 'rack-columns', title: 'Rack Columns', icon: TableCellsIcon },
+        { id: 'rack-rows', title: 'Rack Rows', icon: TableCellsIcon },
+        { id: 'space-allocation', title: 'Space Allocation', icon: MapIcon },
+        { id: 'stores-managements', title: 'Stores Managements', icon: BuildingOfficeIcon },
+        { id: 'stores-allocation-to-user', title: 'Stores Allocation To User', icon: UsersIcon },
+        { id: 'stock-with-least-expiry', title: 'Stock With Least Expiry', icon: ClockIcon }
+      ]
     }
   ];
 
-  const [expandedMenus, setExpandedMenus] = useState({ inventory: true });
+  const [expandedMenus, setExpandedMenus] = useState({ inventory: true, stores: false });
 
   const toggleSubmenu = (menuId) => {
     if (collapsed) return;
@@ -169,7 +212,7 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
       {!collapsed && (
         <div className="p-4 border-t border-gray-200">
           <div className="text-xs text-gray-500 text-center">
-            <p>Inventory Management System</p>
+            <p>Inventory & Store Management</p>
             <p>v1.0.0</p>
           </div>
         </div>
