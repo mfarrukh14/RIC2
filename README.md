@@ -1,53 +1,80 @@
-# RIC2 - Inventory Management System
+# RIC2 - Inventory & Store Management System
 
-A full-stack inventory management application with **fully automatic database initialization**. Just clone and run - no manual database setup required!
+**Unified system for managing inventory and store operations**
 
-## ✅ What's New - Fully Automated Setup!
+## 🚀 Quick Start
 
-🎉 **Database is now initialized automatically!** All tables, stored procedures, and sample data are created on first run.
-
-## 🚀 Quick Start (Complete Setup)
-
-### Option 1: Automated Script (Windows - PowerShell)
+### Backend (ONE Command)
 
 ```powershell
-# Clone the repository
-git clone <your-repo-url>
-cd RIC2
-
-# Run the automated setup script
-.\start-backend.ps1
+cd backend
+dotnet run --project InventoryManagement.Api
 ```
 
-### Option 2: Automated Script (Windows - CMD)
+**That's it!** API runs on http://localhost:5000 and handles EVERYTHING (Inventory + Store Management).
 
-```cmd
-# Clone the repository
-git clone <your-repo-url>
-cd RIC2
+### Frontend
 
-# Run the automated setup script
-start-backend.bat
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
 
-### Option 3: Manual Setup
+Frontend runs on http://localhost:5173
 
-#### Prerequisites
-- .NET 8.0 SDK or later - [Download](https://dotnet.microsoft.com/download)
-- SQL Server LocalDB (comes with Visual Studio) - [Setup Guide](backend/SQL_SERVER_SETUP.md)
-- Node.js 18+ for frontend - [Download](https://nodejs.org/)
+---
 
-#### Backend Setup (Automatic Database Creation)
+## What You Get
 
-```bash
-cd backend/InventoryManagement.Api
-dotnet restore
-dotnet run
+### ✅ Inventory Management
+- Vendors, Manufacturers, Brands
+- Items & Categories
+- GRN, Transfers, Returns
+- Purchase Reports
+- Asset Allocation
+
+### ✅ Store Management  
+- Stock Operations
+- Racks & Storage
+- Sales Reports
+- Space Allocation
+
+**All in ONE unified API!**
+
+---
+
+## Prerequisites
+
+- **.NET 9 SDK** - [Download](https://dotnet.microsoft.com/download)
+- **SQL Server LocalDB** (comes with Visual Studio)
+- **Node.js 18+** - [Download](https://nodejs.org/)
+
+---
+
+## Development Mode
+
+```powershell
+# Backend with auto-reload
+cd backend
+dotnet watch run --project InventoryManagement.Api
+
+# Frontend with hot reload
+cd frontend
+npm run dev
 ```
 
-**That's it!** The application automatically:
-- ✅ Creates the database if it doesn't exist  
-- ✅ Creates all 30+ tables in the correct order
+---
+
+## Access Points
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:5173 | React UI |
+| Backend API | http://localhost:5000 | REST API |
+| Swagger | http://localhost:5000/swagger | API Docs |
+
+---
 - ✅ Executes all 60+ stored procedures
 - ✅ Starts serving at `http://localhost:5000`
 

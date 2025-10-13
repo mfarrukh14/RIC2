@@ -30,6 +30,7 @@ builder.Services.AddScoped<ISampleCollectionConsumptionItemService, SampleCollec
 builder.Services.AddScoped<ISurgicalItemGroupService, SurgicalItemGroupService>();
 builder.Services.AddScoped<IItemTypeSaleLevelService, ItemTypeSaleLevelService>();
 builder.Services.AddScoped<IContingentBillService, ContingentBillService>();
+builder.Services.AddScoped<IStockTypeService, StockTypeService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
