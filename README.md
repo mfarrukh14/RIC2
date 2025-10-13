@@ -1,53 +1,100 @@
-# Inventory Management System
+# RIC2 - Inventory Management System
 
-A full-stack inventory management application built with .NET 9 Web API backend and React frontend.
+A full-stack inventory management application with **fully automatic database initialization**. Just clone and run - no manual database setup required!
 
-## Backend (.NET 9 Web API)
+## ✅ What's New - Fully Automated Setup!
 
-### Prerequisites
-- .NET 9 SDK
-- SQL Server or SQL Server Express LocalDB
-- Visual Studio Code with C# extension
+🎉 **Database is now initialized automatically!** All tables, stored procedures, and sample data are created on first run.
 
-### Setup Instructions
+## 🚀 Quick Start (Complete Setup)
 
-1. **Navigate to the backend directory:**
-   ```bash
-   cd backend/InventoryManagement.Api
-   ```
+### Option 1: Automated Script (Windows - PowerShell)
 
-2. **Restore packages:**
-   ```bash
-   dotnet restore
-   ```
+```powershell
+# Clone the repository
+git clone <your-repo-url>
+cd RIC2
 
-3. **Update database connection string (optional):**
-   Edit `appsettings.json` if you need to change the database connection string. Default is LocalDB.
+# Run the automated setup script
+.\start-backend.ps1
+```
 
-4. **Run the application:**
-   ```bash
-   dotnet run
-   ```
+### Option 2: Automated Script (Windows - CMD)
 
-The API will be available at `https://localhost:7295` and `http://localhost:5295`.
+```cmd
+# Clone the repository
+git clone <your-repo-url>
+cd RIC2
 
-### API Endpoints
+# Run the automated setup script
+start-backend.bat
+```
 
-- **GET** `/api/vendors` - Get all vendors
-- **GET** `/api/vendors/{id}` - Get vendor by ID
-- **POST** `/api/vendors` - Create new vendor
-- **PUT** `/api/vendors/{id}` - Update vendor
-- **DELETE** `/api/vendors/{id}` - Delete vendor
+### Option 3: Manual Setup
 
-### Database
+#### Prerequisites
+- .NET 8.0 SDK or later - [Download](https://dotnet.microsoft.com/download)
+- SQL Server LocalDB (comes with Visual Studio) - [Setup Guide](backend/SQL_SERVER_SETUP.md)
+- Node.js 18+ for frontend - [Download](https://nodejs.org/)
 
-The application uses Entity Framework Core with SQL Server. The database will be created automatically when you first run the application with some seed data.
+#### Backend Setup (Automatic Database Creation)
 
-### Features
+```bash
+cd backend/InventoryManagement.Api
+dotnet restore
+dotnet run
+```
 
-- Clean Architecture with Entity Framework Core
-- RESTful API design
-- Input validation with Data Annotations
+**That's it!** The application automatically:
+- ✅ Creates the database if it doesn't exist  
+- ✅ Creates all 30+ tables in the correct order
+- ✅ Executes all 60+ stored procedures
+- ✅ Starts serving at `http://localhost:5000`
+
+**First run:** ~10 seconds  
+**Subsequent runs:** ~2 seconds
+
+#### Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend available at: `http://localhost:5173`
+
+## 📖 Documentation
+
+- **[Backend Setup Guide](backend/SETUP_GUIDE.md)** - Comprehensive backend documentation
+- **[SQL Server Setup](backend/SQL_SERVER_SETUP.md)** - SQL Server LocalDB installation & troubleshooting
+- **[Backend README](backend/README.md)** - Backend architecture details
+- **[Frontend README](frontend/README.md)** - Frontend documentation
+
+## 🔧 Configuration
+
+### Database Connection
+
+Default connection (SQL Server LocalDB):
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=InventoryManagementDB_SP;Trusted_Connection=true;MultipleActiveResultSets=true"
+  }
+}
+```
+
+To use a different SQL Server, update `backend/InventoryManagement.Api/appsettings.json`
+
+### API URLs
+
+- **HTTP:** `http://localhost:5000`
+- **HTTPS:** `https://localhost:5001`  
+- **Swagger UI:** `http://localhost:5000/swagger`
+
+### Frontend URL
+
+- **Development:** `http://localhost:5173`
 - CORS enabled for all origins
 - Swagger documentation (available at `/swagger` in development)
 - Seed data with sample vendors

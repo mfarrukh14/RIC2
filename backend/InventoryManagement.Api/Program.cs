@@ -8,6 +8,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add database initialization service
+builder.Services.AddSingleton<IDatabaseInitializationService, DatabaseInitializationService>();
+
 // Add services (using stored procedures instead of Entity Framework)
 builder.Services.AddScoped<IVendorService, VendorServiceSP>();
 builder.Services.AddScoped<IManufacturerService, ManufacturerServiceSP>();
@@ -41,6 +44,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Initialize database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var dbInitService = scope.ServiceProvider.GetRequiredService<IDatabaseInitializationService>();
+    await dbInitService.InitializeDatabaseAsync();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -50,6 +60,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Enable CORS - must come before UseAuthorization
 app.UseCors("AllowAll");
 
 app.UseAuthorization();
