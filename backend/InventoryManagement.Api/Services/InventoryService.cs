@@ -341,6 +341,32 @@ namespace InventoryManagement.Api.Services
                         });
                     }
                 }
+
+                // Categories
+                if (await reader.NextResultAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        lookupData.Categories.Add(new Category
+                        {
+                            Id = reader.GetInt32("Id"),
+                            Name = reader.GetString("Name")
+                        });
+                    }
+                }
+
+                // Brands
+                if (await reader.NextResultAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        lookupData.Brands.Add(new Brand
+                        {
+                            Id = reader.GetInt32("Id"),
+                            Name = reader.GetString("Name")
+                        });
+                    }
+                }
             }
             catch (Exception ex)
             {

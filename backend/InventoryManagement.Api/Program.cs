@@ -31,6 +31,12 @@ builder.Services.AddScoped<ISurgicalItemGroupService, SurgicalItemGroupService>(
 builder.Services.AddScoped<IItemTypeSaleLevelService, ItemTypeSaleLevelService>();
 builder.Services.AddScoped<IContingentBillService, ContingentBillService>();
 builder.Services.AddScoped<IStockTypeService, StockTypeService>();
+builder.Services.AddScoped<IStockTypeAssociationService, StockTypeAssociationService>();
+builder.Services.AddScoped<IStockExpiringService, StockExpiringService>();
+builder.Services.AddScoped<IRackService, RackService>();
+builder.Services.AddScoped<IStockService, StockService>();
+builder.Services.AddScoped<IStockAuditService, StockAuditService>();
+builder.Services.AddScoped<IStockStatsService, StockStatsService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

@@ -466,5 +466,11 @@ BEGIN
     
     -- Branches
     SELECT Id, Name FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name;
+    
+    -- Categories
+    SELECT Id, Name FROM dbo.Categories WHERE IsActive = 1 ORDER BY Name;
+    
+    -- Brands
+    SELECT Id, Name FROM dbo.Brands WHERE IsActive = 1 ORDER BY Name;
 END
 GO

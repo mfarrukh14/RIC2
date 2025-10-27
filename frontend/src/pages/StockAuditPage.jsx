@@ -1,0 +1,630 @@
+import React, { useState, useEffect } from 'react';
+import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { stockAuditApi } from '../services/stockAuditApi';
+import inventoryApi from '../services/inventoryApi';
+
+const StockAuditPage = () => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // Search filters
+  const [filters, setFilters] = useState({
+    branchId: null,
+    storeId: null,
+    itemType: 'All', // All, Medicine, Disposable, Item
+    categoryId: null,
+    itemIds: '',
+    manufacturerIds: '',
+    type: 'All'
+  });
+
+  // Audit form
+  const [auditForm, setAuditForm] = useState({
+    storeId: null,
+    branchId: null,
+    stockAuditDate: new Date().toISOString().split('T')[0],
+    remarks: ''
+  });
+
+  // Lookup data
+  const [stores, setStores] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [itemList, setItemList] = useState([]);
+  const [manufacturers, setManufacturers] = useState([]);
+  
+  // Selected items and manufacturers for multi-select
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [selectedManufacturers, setSelectedManufacturers] = useState([]);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    loadLookupData();
+  }, []);
+
+  const loadLookupData = async () => {
+    try {
+      const data = await inventoryApi.getLookupData();
+      console.log('Lookup data:', data); // Debug
+      setStores(data.stores || []);
+      setItemList(data.items || []);
+      setManufacturers(data.brands || []); // Using brands as manufacturers
+      setCategories(data.categories || []);
+    } catch (err) {
+      console.error('Error loading lookup data:', err);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccessMessage('');
+    try {
+      const searchFilters = {
+        ...filters,
+        storeId: filters.storeId ? convertStoreIdToGuid(filters.storeId) : null,
+        itemIds: selectedItems.join(','),
+        manufacturerIds: selectedManufacturers.join(',')
+      };
+      const data = await stockAuditApi.searchItems(searchFilters);
+      setItems(data);
+    } catch (err) {
+      setError('Failed to generate stock audit items');
+      console.error('Error generating stock audit:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const convertStoreIdToGuid = (storeId) => {
+    if (typeof storeId === 'number' || !storeId.includes('-')) {
+      const paddedId = String(storeId).padStart(8, '0');
+      return `${paddedId}-0000-0000-0000-000000000000`;
+    }
+    return storeId;
+  };
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value === '' ? null : value
+    }));
+  };
+
+  const handleAuditFormChange = (e) => {
+    const { name, value } = e.target;
+    setAuditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleItemToggle = (itemId) => {
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        return [...prev, itemId];
+      }
+    });
+  };
+
+  const handleManufacturerToggle = (manufacturerId) => {
+    setSelectedManufacturers(prev => {
+      if (prev.includes(manufacturerId)) {
+        return prev.filter(id => id !== manufacturerId);
+      } else {
+        return [...prev, manufacturerId];
+      }
+    });
+  };
+
+  const handleQtyChange = (itemId, qty) => {
+    setItems(prev => prev.map(item => {
+      if (item.itemId === itemId) {
+        const qtyOnShelf = parseFloat(qty) || 0;
+        const difference = qtyOnShelf - item.totalItems;
+        return { ...item, qtyOnShelf, difference };
+      }
+      return item;
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!filters.storeId) {
+      setError('Please select a store from the filters above');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setSuccessMessage('');
+
+    try {
+      const auditData = {
+        storeId: convertStoreIdToGuid(filters.storeId),
+        branchId: convertStoreIdToGuid(filters.branchId || 1),
+        stockAuditDate: new Date(auditForm.stockAuditDate).toISOString(),
+        remarks: auditForm.remarks
+      };
+
+      await stockAuditApi.createAudit(auditData);
+      setSuccessMessage('Stock audit created successfully');
+      
+      // Reset form
+      setAuditForm({
+        storeId: null,
+        branchId: null,
+        stockAuditDate: new Date().toISOString().split('T')[0],
+        remarks: ''
+      });
+      setItems([]);
+      setSelectedItems([]);
+      setSelectedManufacturers([]);
+    } catch (err) {
+      setError(err.message || 'Failed to create stock audit');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter items by search term
+  const filteredItems = items.filter(item =>
+    item.itemName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Pagination
+  const indexOfLastEntry = currentPage * entriesPerPage;
+  const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
+  const currentItems = filteredItems.slice(indexOfFirstEntry, indexOfLastEntry);
+  const totalPages = Math.ceil(filteredItems.length / entriesPerPage);
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Stock Audit</h1>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+          {successMessage}
+        </div>
+      )}
+
+      {/* Filters Section */}
+      <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {/* Branch */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Branch
+            </label>
+            <select
+              name="branchId"
+              value={filters.branchId || ''}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Rawalpindi Institute of Cardiology</option>
+              <option value="1">Rawalpindi Institute of Cardiology</option>
+            </select>
+          </div>
+
+          {/* Store */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Store
+            </label>
+            <select
+              name="storeId"
+              value={filters.storeId || ''}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">ED OPD Store</option>
+              {stores.map((store) => (
+                <option key={store.storeId} value={store.storeId}>
+                  {store.storeName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item Type with Radio Buttons */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Item Type
+            </label>
+            <div className="flex items-center gap-4 mt-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="itemType"
+                  value="All"
+                  checked={filters.itemType === 'All'}
+                  onChange={handleFilterChange}
+                  className="mr-1"
+                />
+                <span className="text-sm">All</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="itemType"
+                  value="Medicine"
+                  checked={filters.itemType === 'Medicine'}
+                  onChange={handleFilterChange}
+                  className="mr-1"
+                />
+                <span className="text-sm">Medicine()</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="itemType"
+                  value="Disposable"
+                  checked={filters.itemType === 'Disposable'}
+                  onChange={handleFilterChange}
+                  className="mr-1"
+                />
+                <span className="text-sm">Disposable()</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="itemType"
+                  value="Item"
+                  checked={filters.itemType === 'Item'}
+                  onChange={handleFilterChange}
+                  className="mr-1"
+                />
+                <span className="text-sm">Item(s)</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Category(s):
+            </label>
+            <select
+              name="categoryId"
+              value={filters.categoryId || ''}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Please Select</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          {/* Item(s) Multi-select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Item(s)
+            </label>
+            <select
+              multiple
+              size="1"
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                setSelectedItems(selected);
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              {itemList.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type
+            </label>
+            <select
+              name="type"
+              value={filters.type}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="All">All</option>
+              <option value="Type1">Type 1</option>
+              <option value="Type2">Type 2</option>
+            </select>
+          </div>
+
+          {/* Manufacturer(s) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Manufacturer(s)
+            </label>
+            <select
+              multiple
+              size="1"
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                setSelectedManufacturers(selected);
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              {manufacturers.map((mfg) => (
+                <option key={mfg.brandId} value={mfg.brandId}>
+                  {mfg.brandName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+          >
+            {loading ? 'Generating...' : 'Generate'}
+          </button>
+        </div>
+      </div>
+
+      {/* Results Table */}
+      {items.length > 0 && (
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Show</span>
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 border border-gray-300 rounded-md text-sm"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span className="text-sm text-gray-700">entries</span>
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <input type="checkbox" className="rounded" />
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Stock Type
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Items (Transition)
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Qty on Shelf
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Difference
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    MPL
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Sale Price
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Quantity Per Packet
+                  </th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Modified On
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {currentItems.map((item, index) => (
+                  <React.Fragment key={item.itemId}>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <input type="checkbox" className="rounded" />
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.itemName}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.stockType}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.totalItems}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <input
+                          type="text"
+                          placeholder="Qty On Shelf"
+                          value={item.qtyOnShelf || ''}
+                          onChange={(e) => handleQtyChange(item.itemId, e.target.value)}
+                          className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap">
+                        <input
+                          type="text"
+                          placeholder="Difference"
+                          value={item.difference || ''}
+                          readOnly
+                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
+                        />
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.mpl}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.salePrice}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.quantityPerPacket}
+                      </td>
+                      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.modifiedOn ? new Date(item.modifiedOn).toLocaleDateString() : '-'}
+                      </td>
+                    </tr>
+                    {/* Additional row for totals - show after each item */}
+                    <tr className="bg-gray-50">
+                      <td colSpan="3" className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-sm font-medium text-green-600">
+                        Total Sale:
+                      </td>
+                      <td className="px-3 py-2 text-sm font-medium text-green-600">
+                        Total Buy:
+                      </td>
+                      <td colSpan="2" className="px-3 py-2">
+                        <input
+                          type="text"
+                          placeholder="70"
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-sm">MPL</td>
+                      <td colSpan="2" className="px-3 py-2 text-sm">Quantity Per Packet</td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-between items-center mt-4">
+            <div className="text-sm text-gray-700">
+              Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredItems.length)} of {filteredItems.length} entries
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+              >
+                Previous
+              </button>
+              {[...Array(totalPages)].map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`px-3 py-1 border rounded-md text-sm ${
+                    currentPage === i + 1
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Form Section */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stock Audit
+              </label>
+              <input
+                type="text"
+                name="stockAuditName"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder=""
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stock Audit Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="stockAuditDate"
+                value={auditForm.stockAuditDate}
+                onChange={handleAuditFormChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Remarks
+            </label>
+            <textarea
+              name="remarks"
+              value={auditForm.remarks}
+              onChange={handleAuditFormChange}
+              rows="3"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Please Enter Remarks"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-8 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-medium"
+            >
+              {loading ? 'Submitting...' : 'Submit'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default StockAuditPage;

@@ -170,6 +170,45 @@ namespace InventoryManagement.Api.Models
         public string? Description { get; set; }
     }
 
+    public class StockTypeAssociation
+    {
+        public int Id { get; set; }
+        public int PharmacyStoreId { get; set; }
+        public string? StoreName { get; set; }
+        public int StockTypes { get; set; }
+        public string? StockTypeName { get; set; }
+        public int PatientTypes { get; set; }
+        public DateTime CreatedOn { get; set; }
+    }
+
+    public class StockTypeAssociationRequest
+    {
+        public int PharmacyStoreId { get; set; }
+        public int StockTypes { get; set; }
+        public int PatientTypes { get; set; }
+    }
+
+    public class StockExpiringItem
+    {
+        public int Id { get; set; }
+        public string ItemName { get; set; } = string.Empty;
+        public string? StockType { get; set; }
+        public string? BatchNo { get; set; }
+        public DateTime? MfgDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public int TotalItems { get; set; }
+        public int? StoreId { get; set; }
+        public string? StoreName { get; set; }
+    }
+
+    public class StockExpiringRequest
+    {
+        public int? StoreId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? ItemIds { get; set; } // Comma-separated list
+    }
+
     public class InventoryLookupData
     {
         public List<Vendor> Vendors { get; set; } = new();
@@ -178,5 +217,146 @@ namespace InventoryManagement.Api.Models
         public List<Item> Items { get; set; } = new();
         public List<Manufacturer> Manufacturers { get; set; } = new();
         public List<Branch> Branches { get; set; } = new();
+        public List<Category> Categories { get; set; } = new();
+        public List<Brand> Brands { get; set; } = new();
+    }
+
+    // Rack models
+    public class Rack
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public Guid StoreId { get; set; }
+        public string? StoreName { get; set; }
+        public string? Description { get; set; }
+        public string? Location { get; set; }
+        public int NumberOfRows { get; set; }
+        public int NumberOfCols { get; set; }
+        public int NumberOfDraws { get; set; }
+        public Guid BranchId { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? CreatedOn { get; set; }
+    }
+
+    public class RackRequest
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public Guid StoreId { get; set; }
+        public string? Description { get; set; }
+        public string? Location { get; set; }
+        public int NumberOfRows { get; set; }
+        public int NumberOfCols { get; set; }
+        public int NumberOfDraws { get; set; }
+        public Guid BranchId { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+    // Stock models
+    public class Stock
+    {
+        public int Id { get; set; }
+        public int ItemId { get; set; }
+        public string ItemName { get; set; } = string.Empty;
+        public string? StockType { get; set; }
+        public int? TotalItems { get; set; }
+        public int? MinimumPanicLevel { get; set; }
+        public Guid StoreId { get; set; }
+        public Guid BranchId { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? ModifiedOn { get; set; }
+        public int? ItemTypeId { get; set; }
+        public string? ItemTypeName { get; set; }
+        public string? CategoryName { get; set; }
+        public bool? IsFridgeItem { get; set; }
+        public bool? IsConsumptionItem { get; set; }
+    }
+
+    public class StockSearchRequest
+    {
+        public Guid? BranchId { get; set; }
+        public Guid? StoreId { get; set; }
+        public int? ItemTypeId { get; set; }
+        public int? ItemId { get; set; }
+        public string? CategoryIds { get; set; }
+        public int? StockTypeId { get; set; }
+        public string? GeneralType { get; set; }
+        public int? MedicineTypeId { get; set; }
+        public string? StockAvailability { get; set; }
+        public bool? IsVaccine { get; set; }
+        public bool MinimumPanicLevelOnly { get; set; } = false;
+    }
+
+    // Stock Audit models
+    public class StockAudit
+    {
+        public Guid Id { get; set; }
+        public Guid StoreId { get; set; }
+        public Guid BranchId { get; set; }
+        public DateTime StockAuditDate { get; set; }
+        public string? Remarks { get; set; }
+        public bool IsActive { get; set; }
+        public Guid? CreatedById { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public Guid? ModifiedById { get; set; }
+        public DateTime? ModifiedOn { get; set; }
+        public bool? IsDeleted { get; set; }
+    }
+
+    public class StockAuditRequest
+    {
+        public Guid StoreId { get; set; }
+        public Guid BranchId { get; set; }
+        public DateTime StockAuditDate { get; set; }
+        public string? Remarks { get; set; }
+        public Guid? CreatedById { get; set; }
+    }
+
+    public class StockAuditSearchRequest
+    {
+        public Guid? BranchId { get; set; }
+        public Guid? StoreId { get; set; }
+        public int? ItemTypeId { get; set; }
+        public string? ItemIds { get; set; }
+        public string? ManufacturerIds { get; set; }
+    }
+
+    public class StockAuditItem
+    {
+        public int ItemId { get; set; }
+        public string? ItemName { get; set; }
+        public string? StockType { get; set; }
+        public double TotalItems { get; set; }
+        public double QtyOnShelf { get; set; }
+        public double Difference { get; set; }
+        public double MPL { get; set; }
+        public decimal SalePrice { get; set; }
+        public double QuantityPerPacket { get; set; }
+        public DateTime? ModifiedOn { get; set; }
+    }
+
+    // Stock Stats models
+    public class StockStatsSearchRequest
+    {
+        public int? BranchId { get; set; }
+        public int? StoreId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string ItemType { get; set; } = "All";
+        public string? ItemIds { get; set; }
+        public int? StockTypeId { get; set; }
+        public string Type { get; set; } = "All";
+        public string SaleType { get; set; } = "OverAll";
+    }
+
+    public class StockStatsItem
+    {
+        public int ItemId { get; set; }
+        public string? ItemName { get; set; }
+        public string? StockType { get; set; }
+        public double Opening { get; set; }
+        public double Received { get; set; }
+        public double Issued { get; set; }
+        public double Balance { get; set; }
     }
 }
+

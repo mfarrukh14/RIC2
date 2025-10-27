@@ -24,6 +24,12 @@ import ItemCategoryPage from './pages/ItemCategoryPage';
 import AssetAllocationsPage from './pages/AssetAllocationsPage';
 import AssetAllocationReportPage from './pages/AssetAllocationReportPage';
 import StockTypePage from './pages/StockTypePage';
+import StockTypeAssociationPage from './pages/StockTypeAssociationPage';
+import StockExpiringPage from './pages/StockExpiringPage';
+import RackPage from './pages/RackPage';
+import StockPage from './pages/StockPage';
+import StockAuditPage from './pages/StockAuditPage';
+import StockStatsPage from './pages/StockStatsPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -308,6 +314,24 @@ function App() {
 
       case 'stock-type':
         return <StockTypePage />;
+
+      case 'stock-type-association':
+        return <StockTypeAssociationPage />;
+
+      case 'stock-expiring':
+        return <StockExpiringPage />;
+
+      case 'racks':
+        return <RackPage />;
+
+      case 'stock':
+        return <StockPage />;
+
+      case 'stock-audit':
+        return <StockAuditPage />;
+
+      case 'stock-stats':
+        return <StockStatsPage />;
 
       default:
         return (
