@@ -30,6 +30,14 @@ import RackPage from './pages/RackPage';
 import StockPage from './pages/StockPage';
 import StockAuditPage from './pages/StockAuditPage';
 import StockStatsPage from './pages/StockStatsPage';
+import StockAdjustmentPage from './pages/StockAdjustmentPage';
+import StockConsumptionPage from './pages/StockConsumptionPage';
+import StockFlowPage from './pages/StockFlowPage';
+import ExpiredStockPage from './pages/ExpiredStockPage';
+import StockValueWRTItemsPage from './pages/StockValueWRTItemsPage';
+import StockDetailRecordPage from './pages/StockDetailRecordPage';
+import StockBalanceReportPage from './pages/StockBalanceReportPage';
+import SaleSummaryDailyPage from './pages/SaleSummaryDailyPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -332,6 +340,30 @@ function App() {
 
       case 'stock-stats':
         return <StockStatsPage />;
+
+      case 'stock-adjustment':
+        return <StockAdjustmentPage />;
+
+      case 'stock-consumption':
+        return <StockConsumptionPage />;
+
+      case 'stock-flow':
+        return <StockFlowPage />;
+
+      case 'stock-expired':
+        return <ExpiredStockPage />;
+
+      case 'stock-value-wrt-items':
+        return <StockValueWRTItemsPage />;
+
+      case 'stock-detail-record':
+        return <StockDetailRecordPage />;
+
+      case 'stock-balance-report':
+        return <StockBalanceReportPage />;
+
+      case 'sale-summary-daily':
+        return <SaleSummaryDailyPage />;
 
       default:
         return (

@@ -154,12 +154,21 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public int StoreId { get; set; }
+        public string StoreName { get; set; } = string.Empty;
+        public string? StoreCode { get; set; }
+        public string? Description { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public DateTime? ModifiedOn { get; set; }
     }
 
     public class StockType
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public int StockTypeId { get; set; }
+        public string StockTypeName { get; set; } = string.Empty;
         public string? Description { get; set; }
         public bool IsActive { get; set; }
     }

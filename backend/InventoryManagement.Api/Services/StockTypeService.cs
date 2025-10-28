@@ -33,10 +33,15 @@ namespace InventoryManagement.Api.Services
 
                 while (await reader.ReadAsync())
                 {
+                    var stockTypeId = reader.GetInt32(reader.GetOrdinal("Id"));
+                    var stockTypeName = reader.GetString(reader.GetOrdinal("Name"));
+                    
                     stockTypes.Add(new StockType
                     {
-                        Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                        Name = reader.GetString(reader.GetOrdinal("Name")),
+                        Id = stockTypeId,
+                        Name = stockTypeName,
+                        StockTypeId = stockTypeId,
+                        StockTypeName = stockTypeName,
                         Description = reader.IsDBNull(reader.GetOrdinal("Description"))
                             ? null
                             : reader.GetString(reader.GetOrdinal("Description")),

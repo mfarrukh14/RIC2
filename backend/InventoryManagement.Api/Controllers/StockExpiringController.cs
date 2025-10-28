@@ -19,8 +19,35 @@ namespace InventoryManagement.Api.Controllers
             _logger = logger;
         }
 
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<StockExpiringItem>>> GetExpiringStock(
+            [FromQuery] int? storeId,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] string? itemIds)
+        {
+            try
+            {
+                var request = new StockExpiringRequest
+                {
+                    StoreId = storeId,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    ItemIds = itemIds
+                };
+                
+                var items = await _stockExpiringService.GetExpiringStockAsync(request);
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving expiring stock");
+                return StatusCode(500, "An error occurred while retrieving expiring stock");
+            }
+        }
+        
         [HttpPost("search")]
-        public async Task<ActionResult<IEnumerable<StockExpiringItem>>> GetExpiringStock([FromBody] StockExpiringRequest request)
+        public async Task<ActionResult<IEnumerable<StockExpiringItem>>> SearchExpiringStock([FromBody] StockExpiringRequest request)
         {
             try
             {
