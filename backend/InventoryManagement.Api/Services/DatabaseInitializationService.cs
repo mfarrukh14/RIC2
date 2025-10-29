@@ -164,7 +164,10 @@ namespace InventoryManagement.Api.Services
                 }
             }
 
-            // Phase 4: Execute stored procedure scripts
+            // Phase 4: Execute ALTER table scripts (schema modifications)
+            await ExecuteAlterScriptsAsync(connection, scriptsPath);
+
+            // Phase 5: Execute stored procedure scripts
             await ExecuteStoredProcedureScriptsAsync(connection, scriptsPath);
         }
 
@@ -194,7 +197,14 @@ namespace InventoryManagement.Api.Services
                 "CreatePurchaseSummaryTable.sql",
                 "CreatePurchaseSummaryInvoiceTable.sql",
                 "CreateReturnInventoryTable.sql",
-                "CreateContingentBillsTable.sql"
+                "CreateContingentBillsTable.sql",
+                "CreateRacksTable.sql",
+                "CreateRackDrawersTable.sql",
+                "CreateSpaceAllocationsTable.sql",
+                "CreateStocksTable.sql",
+                "CreateStockAuditsTable.sql",
+                "CreateStoreAllocationToUserTable.sql",
+                "StockTypeAssociations.sql"
             };
 
             foreach (var scriptFile in tableScriptFiles)
@@ -216,6 +226,37 @@ namespace InventoryManagement.Api.Services
                 else
                 {
                     _logger.LogWarning($"Table script not found: {scriptPath}");
+                }
+            }
+        }
+
+        private async Task ExecuteAlterScriptsAsync(SqlConnection connection, string scriptsPath)
+        {
+            var tablesPath = Path.Combine(scriptsPath, "Tables");
+            if (!Directory.Exists(tablesPath))
+            {
+                _logger.LogWarning($"Tables directory not found at: {tablesPath}");
+                return;
+            }
+
+            _logger.LogInformation($"Phase 4: Executing ALTER table scripts...");
+            
+            // Execute all ALTER scripts in the Tables directory
+            var alterScripts = Directory.GetFiles(tablesPath, "Alter*.sql");
+            
+            foreach (var scriptPath in alterScripts)
+            {
+                var fileName = Path.GetFileName(scriptPath);
+                _logger.LogInformation($"Executing ALTER script: {fileName}");
+                try
+                {
+                    await ExecuteSqlScriptAsync(connection, scriptPath);
+                    _logger.LogInformation($"Successfully executed: {fileName}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error executing ALTER script {fileName}");
+                    // Continue with other scripts even if one fails
                 }
             }
         }
@@ -306,6 +347,14 @@ namespace InventoryManagement.Api.Services
                         if (ex.Number == 2714 || ex.Number == 2715 || ex.Number == 2716) // Object already exists
                         {
                             _logger.LogDebug($"Object already exists (continuing): {ex.Message}");
+                        }
+                        else if (ex.Number == 4902) // Cannot find column - already dropped or doesn't exist
+                        {
+                            _logger.LogDebug($"Column operation skipped (already applied or N/A): {ex.Message}");
+                        }
+                        else if (ex.Number == 2705) // Column names must be unique - already exists
+                        {
+                            _logger.LogDebug($"Column already exists (continuing): {ex.Message}");
                         }
                         else if (ex.Number == 1767 || ex.Number == 547) // FK constraint errors - referenced table may not exist yet
                         {

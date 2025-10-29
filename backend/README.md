@@ -1,53 +1,184 @@
 # RIC2 Management System - Backend
 
-**Unified API for Inventory & Store Management**
+**Unified API for Inventory & Store Management with Automatic Database Setup**
 
-## Quick Start
+## 🚀 Quick Start
 
 Run everything with ONE command:
 
 ```powershell
-cd backend
-dotnet run --project InventoryManagement.Api
+cd backend\InventoryManagement.Api
+dotnet run
 ```
 
-**That's it!** The API runs on http://localhost:5000 and handles both Inventory AND Store Management.
+**That's it!** On first run, the API will automatically:
+- ✅ Create database if it doesn't exist
+- ✅ Create all 30+ tables
+- ✅ Apply all schema modifications
+- ✅ Install 60+ stored procedures
+- ✅ Start serving at http://localhost:5000
+
+**First run:** ~15-20 seconds  
+**Subsequent runs:** ~2-3 seconds
 
 ### Development Mode (Auto-reload)
 
 ```powershell
-cd backend
-dotnet watch run --project InventoryManagement.Api
+cd backend\InventoryManagement.Api
+dotnet watch run
 ```
 
-## Access Points
+## 📚 Complete Documentation
+
+See **[Main README](../README.md)** for:
+- Complete setup instructions
+- Project structure
+- API endpoints
+- Troubleshooting guide
+- Testing procedures
+
+## 🔧 Quick Configuration
+
+### Using Different SQL Server
+
+Edit `InventoryManagement.Api/appsettings.json`:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=YOUR_SERVER;Database=InventoryManagementDB_SP;Trusted_Connection=true;MultipleActiveResultSets=true"
+  }
+}
+```
+
+Then just run `dotnet run` - database setup is automatic!
+
+## 🌐 Access Points
 
 - **API**: http://localhost:5000
 - **Swagger Documentation**: http://localhost:5000/swagger
 
-## What This API Handles
+## 🏗️ Architecture
 
-This is a **unified API** that manages everything:
+### Automatic Database Initialization
+
+The `DatabaseInitializationService` handles complete database setup:
+
+1. **Database Creation**: Checks and creates database if needed
+2. **Core Tables**: Manufacturers, Brands, Packings, Item Types, etc.
+3. **Feature Tables**: Stores, Items, Inventories, Racks, Stocks, etc.
+4. **Schema Modifications**: Applies all ALTER scripts
+5. **Dependencies**: GRN and Transfer tables (depend on Stores/StockTypes)
+6. **Stored Procedures**: Installs all 60+ procedures
+
+### Service Layer Pattern
+
+```
+Controllers → Services → Stored Procedures → Database
+```
+
+All database operations use stored procedures (no Entity Framework).
+
+## 📦 What This API Manages
 
 ### ✅ Inventory Management
-- Vendors, Manufacturers, Brands
-- Items, Item Types, Categories, Units
-- Inventory Receiving (GRN)
-- Transfer & Return Inventory
-- Purchase Summaries
-- Sample Collection
-- Surgical Groups
-- Contingent Bills
+- Vendors, Manufacturers, Brands, Packings
+- Items, Item Types, Item Units, Item Categories
+- Inventory Operations (GRN, Transfer, Return)
+- Purchase Summaries & Invoices
 - Asset Allocation
+- Sample Collection & Surgical Items
+- Contingent Bills
 
 ### ✅ Store Management
-- Stock Operations
-- Racks & Storage
-- Sales Reports
-- Space Allocation
-- Store Allocations
+- Branches & Store Hierarchy
+- Stock Operations & Tracking
+- Stock Types & Associations
+- Racks & Space Allocation
+- Stock Audits & Adjustments
+- Stock Consumption
+- Store Allocation to Users
 
-**No separate services needed** - everything runs in one unified API!
+### ✅ Reports & Analytics
+- Stock with Least Expiry (MPL)
+- Expired Stock Reports
+- Stock Flow & Balance Reports
+- Stock Value Reports
+- Sales Summary Reports
+
+## 🔍 Key Features
+
+- **Automatic Setup**: No manual SQL script execution needed
+- **Idempotent**: Safe to run multiple times
+- **CORS Enabled**: Works with frontend on different port
+- **Swagger**: Interactive API documentation
+- **Logging**: Comprehensive initialization logging
+- **Error Handling**: Graceful handling of existing objects
+
+## 📁 Database Scripts Location
+
+```
+backend/
+├── Database/
+│   ├── CreateDatabase.sql              # Database creation
+│   ├── Create*.sql                     # Root-level table scripts
+│   ├── Tables/                         # Feature tables
+│   │   ├── Create*.sql                 # Table creation scripts
+│   │   └── Alter*.sql                  # Schema modification scripts
+│   └── StoredProcedures/               # All stored procedures
+│       └── *.sql                       # 60+ procedure files
+```
+
+All scripts are executed automatically on first run!
+
+## 🛠️ Technology Stack
+
+- **.NET 9**: Latest framework
+- **ASP.NET Core Web API**: REST API
+- **Microsoft.Data.SqlClient**: Direct SQL access
+- **SQL Server LocalDB**: Default database
+- **Stored Procedures**: All data operations
+
+## 🧪 Testing
+
+### Quick Health Check
+```powershell
+# Check if API is running
+curl http://localhost:5000/api/Branch
+
+# Or visit Swagger
+start http://localhost:5000/swagger
+```
+
+### Verify Database
+```powershell
+sqlcmd -S "(localdb)\MSSQLLocalDB" -d InventoryManagementDB_SP -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'"
+```
+
+Should show 30+ tables.
+
+## 🔄 Reset Database
+
+If you need to start fresh:
+```powershell
+# Stop the API, then:
+sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "DROP DATABASE InventoryManagementDB_SP"
+
+# Run API again - database will be recreated
+dotnet run
+```
+
+## 📝 Adding New Features
+
+### To Add a New Table:
+1. Create `CreateYourTable.sql` in `Database/Tables/`
+2. Add to `DatabaseInitializationService.cs` table script list
+3. Run `dotnet run` - table is created automatically
+
+### To Add a New Stored Procedure:
+1. Create `YourProcedure.sql` in `Database/StoredProcedures/`
+2. Run `dotnet run` - procedure is installed automatically
+
+No manual SQL execution needed!
 ├── StoreManagement.Api/              # Store Management API (Future)
 │   ├── Controllers/
 │   ├── Models/
