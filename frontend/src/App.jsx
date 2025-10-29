@@ -27,6 +27,11 @@ import StockTypePage from './pages/StockTypePage';
 import StockTypeAssociationPage from './pages/StockTypeAssociationPage';
 import StockExpiringPage from './pages/StockExpiringPage';
 import RackPage from './pages/RackPage';
+import RackDrawersPage from './pages/RackDrawersPage';
+import RackColumnsPage from './pages/RackColumnsPage';
+import RackRowsPage from './pages/RackRowsPage';
+import SpaceAllocationsPage from './pages/SpaceAllocationsPage';
+import StoreManagementPage from './pages/StoreManagementPage';
 import StockPage from './pages/StockPage';
 import StockAuditPage from './pages/StockAuditPage';
 import StockStatsPage from './pages/StockStatsPage';
@@ -38,6 +43,10 @@ import StockValueWRTItemsPage from './pages/StockValueWRTItemsPage';
 import StockDetailRecordPage from './pages/StockDetailRecordPage';
 import StockBalanceReportPage from './pages/StockBalanceReportPage';
 import SaleSummaryDailyPage from './pages/SaleSummaryDailyPage';
+import SaleSummaryItemDiscountPage from './pages/SaleSummaryItemDiscountPage';
+import SaleSummaryStockNoDiscountPage from './pages/SaleSummaryStockNoDiscountPage';
+import StoreAllocationToUserPage from './pages/StoreAllocationToUserPage';
+import StockWithExpiryPage from './pages/StockWithExpiryPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -332,6 +341,27 @@ function App() {
       case 'racks':
         return <RackPage />;
 
+      case 'rack-drawers':
+        return <RackDrawersPage />;
+
+      case 'rack-columns':
+        return <RackColumnsPage />;
+
+      case 'rack-rows':
+        return <RackRowsPage />;
+
+      case 'space-allocation':
+        return <SpaceAllocationsPage />;
+
+      case 'store-management':
+        return <StoreManagementPage />;
+
+      case 'stores-allocation-to-user':
+        return <StoreAllocationToUserPage />;
+
+      case 'stock-with-least-expiry':
+        return <StockWithExpiryPage />;
+
       case 'stock':
         return <StockPage />;
 
@@ -364,6 +394,12 @@ function App() {
 
       case 'sale-summary-daily':
         return <SaleSummaryDailyPage />;
+
+      case 'sale-summary-wrt-items-discount':
+        return <SaleSummaryItemDiscountPage />;
+
+      case 'sale-summary-wrt-stock-no-discount':
+        return <SaleSummaryStockNoDiscountPage />;
 
       default:
         return (

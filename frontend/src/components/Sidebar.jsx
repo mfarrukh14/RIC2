@@ -93,7 +93,7 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'rack-columns', title: 'Rack Columns', icon: TableCellsIcon },
         { id: 'rack-rows', title: 'Rack Rows', icon: TableCellsIcon },
         { id: 'space-allocation', title: 'Space Allocation', icon: MapIcon },
-        { id: 'stores-managements', title: 'Stores Managements', icon: BuildingOfficeIcon },
+        { id: 'store-management', title: 'Store Management', icon: BuildingOfficeIcon },
         { id: 'stores-allocation-to-user', title: 'Stores Allocation To User', icon: UsersIcon },
         { id: 'stock-with-least-expiry', title: 'Stock With Least Expiry', icon: ClockIcon }
       ]
