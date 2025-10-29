@@ -150,18 +150,7 @@ namespace InventoryManagement.Api.Models
     }
 
     // Lookup models
-    public class Store
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int StoreId { get; set; }
-        public string StoreName { get; set; } = string.Empty;
-        public string? StoreCode { get; set; }
-        public string? Description { get; set; }
-        public bool IsActive { get; set; }
-        public DateTime CreatedOn { get; set; }
-        public DateTime? ModifiedOn { get; set; }
-    }
+    // Note: Store model moved to Models/Store.cs
 
     public class StockType
     {
@@ -260,6 +249,8 @@ namespace InventoryManagement.Api.Models
         public Guid BranchId { get; set; }
         public bool IsActive { get; set; } = true;
     }
+
+    // Rack Row models
     // Stock models
     public class Stock
     {

@@ -46,6 +46,15 @@ builder.Services.AddScoped<IStockValueItemService, StockValueItemService>();
 builder.Services.AddScoped<IStockDetailRecordService, StockDetailRecordService>();
 builder.Services.AddScoped<IStockBalanceReportService, StockBalanceReportService>();
 builder.Services.AddScoped<ISaleSummaryDailyService, SaleSummaryDailyService>();
+builder.Services.AddScoped<ISaleSummaryItemDiscountService, SaleSummaryItemDiscountService>();
+builder.Services.AddScoped<ISaleSummaryStockNoDiscountService, SaleSummaryStockNoDiscountService>();
+builder.Services.AddScoped<IRackDrawerService, RackDrawerService>();
+builder.Services.AddScoped<IRackColumnService, RackColumnService>();
+builder.Services.AddScoped<IRackRowService, RackRowService>();
+builder.Services.AddScoped<ISpaceAllocationService, SpaceAllocationService>();
+builder.Services.AddScoped<IStoreAllocationToUserService, StoreAllocationToUserService>();
+builder.Services.AddScoped<IStockWithExpiryService, StockWithExpiryService>();
+builder.Services.AddScoped<IBranchService, BranchService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

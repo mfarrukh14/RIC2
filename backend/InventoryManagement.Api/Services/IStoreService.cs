@@ -6,5 +6,8 @@ namespace InventoryManagement.Api.Services
     {
         Task<IEnumerable<Store>> GetAllAsync();
         Task<Store?> GetByIdAsync(int id);
+        Task<Store> CreateAsync(StoreCreateRequest request);
+        Task UpdateAsync(int id, StoreUpdateRequest request);
+        Task DeleteAsync(int id);
     }
 }

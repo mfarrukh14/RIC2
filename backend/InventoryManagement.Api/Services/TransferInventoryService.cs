@@ -184,8 +184,8 @@ namespace InventoryManagement.Api.Services
                 {
                     lookupData.Stores.Add(new Store
                     {
-                        Id = reader.GetInt32("Id"),
-                        Name = reader.GetString("Name")
+                        StoreId = reader.GetInt32("Id"),
+                        StoreName = reader.GetString("Name")
                     });
                 }
 
