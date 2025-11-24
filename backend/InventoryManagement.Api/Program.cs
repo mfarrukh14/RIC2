@@ -3,6 +3,12 @@ using InventoryManagement.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Expose Kestrel on all interfaces so other hosts can reach port 5000
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(5000);
+});
+
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -82,8 +88,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-app.UseHttpsRedirection();
 
 // Enable CORS - must come before UseAuthorization
 app.UseCors("AllowAll");
