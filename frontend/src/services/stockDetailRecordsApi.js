@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/stockdetailrecords';
+const API_URL = 'http://10.10.10.68:5000/api/stockdetailrecords';
 
 export const stockDetailRecordsApi = {
   getAll: async (params) => {
