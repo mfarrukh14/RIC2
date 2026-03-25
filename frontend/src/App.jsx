@@ -47,6 +47,13 @@ import SaleSummaryItemDiscountPage from './pages/SaleSummaryItemDiscountPage';
 import SaleSummaryStockNoDiscountPage from './pages/SaleSummaryStockNoDiscountPage';
 import StoreAllocationToUserPage from './pages/StoreAllocationToUserPage';
 import StockWithExpiryPage from './pages/StockWithExpiryPage';
+import PlaceDemandPage from './pages/PlaceDemandPage';
+import PendingDemandsPage from './pages/PendingDemandsPage';
+import ApprovedDemandsPage from './pages/ApprovedDemandsPage';
+import ReceiveStockPage from './pages/ReceiveStockPage';
+import ReceivedStockStatusPage from './pages/ReceivedStockStatusPage';
+import DemandRequestStatusPage from './pages/DemandRequestStatusPage';
+import StockTransitionsPage from './pages/StockTransitionsPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import {
   HomeIcon,
@@ -282,16 +289,6 @@ function App() {
           </div>
         );
 
-      case 'item-types':
-        return (
-          <div className="p-6">
-            <ItemTypeList
-              onEdit={handleEditItemType}
-              onAdd={handleAddItemType}
-            />
-          </div>
-        );
-
       case 'manufacturers':
         return (
           <div className="p-6">
@@ -400,6 +397,27 @@ function App() {
 
       case 'sale-summary-wrt-stock-no-discount':
         return <SaleSummaryStockNoDiscountPage />;
+
+      case 'place-demand':
+        return <PlaceDemandPage />;
+
+      case 'pending-demands':
+        return <PendingDemandsPage />;
+
+      case 'approved-demands':
+        return <ApprovedDemandsPage />;
+
+      case 'receive-stock':
+        return <ReceiveStockPage />;
+
+      case 'received-stock-status':
+        return <ReceivedStockStatusPage />;
+
+      case 'demand-request-status':
+        return <DemandRequestStatusPage />;
+
+      case 'stock-transitions':
+        return <StockTransitionsPage />;
 
       default:
         return (

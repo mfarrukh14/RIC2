@@ -1,0 +1,126 @@
+using InventoryManagement.Api.Models;
+using InventoryManagement.Api.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace InventoryManagement.Api.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class DemandRequestsController : ControllerBase
+    {
+        private readonly IDemandRequestService _demandRequestService;
+        private readonly ILogger<DemandRequestsController> _logger;
+
+        public DemandRequestsController(IDemandRequestService demandRequestService, ILogger<DemandRequestsController> logger)
+        {
+            _demandRequestService = demandRequestService;
+            _logger = logger;
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<DemandRequestSummary>>> GetAll([FromQuery] DemandRequestFilter filter)
+        {
+            try
+            {
+                var results = await _demandRequestService.GetAllAsync(filter);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving demand requests");
+                return StatusCode(500, new { message = "An error occurred while retrieving demand requests." });
+            }
+        }
+
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<DemandRequestDetails>> GetById(int id)
+        {
+            try
+            {
+                var demandRequest = await _demandRequestService.GetByIdAsync(id);
+                if (demandRequest == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(demandRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving the demand request." });
+            }
+        }
+
+        [HttpGet("{id:int}/lifecycle")]
+        public async Task<ActionResult<IReadOnlyList<DemandRequestLifeCycleEntry>>> GetLifeCycle(int id)
+        {
+            try
+            {
+                var demandRequest = await _demandRequestService.GetByIdAsync(id);
+                if (demandRequest == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                var entries = await _demandRequestService.GetLifeCycleAsync(id);
+                return Ok(entries);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving demand life cycle for ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving the demand life cycle." });
+            }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<DemandRequestDetails>> Create([FromBody] DemandRequestCreateRequest request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                if (request.DateTo < request.DateFrom)
+                {
+                    return BadRequest(new { message = "DateTo must be greater than or equal to DateFrom." });
+                }
+
+                if (request.Items == null || request.Items.Count == 0)
+                {
+                    return BadRequest(new { message = "At least one demand item is required." });
+                }
+
+                var created = await _demandRequestService.CreateAsync(request);
+                return CreatedAtAction(nameof(GetById), new { id = created.DemandRequestId }, created);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating demand request");
+                return StatusCode(500, new { message = "An error occurred while creating the demand request." });
+            }
+        }
+
+        [HttpPost("{id:int}/receive")]
+        public async Task<ActionResult<DemandRequestDetails>> Receive(int id, [FromBody] DemandRequestReceiveRequest request)
+        {
+            try
+            {
+                var updated = await _demandRequestService.ReceiveAsync(id, request);
+                if (updated == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error receiving demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while receiving the demand request." });
+            }
+        }
+    }
+}

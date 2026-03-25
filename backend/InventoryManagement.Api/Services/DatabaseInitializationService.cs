@@ -81,7 +81,14 @@ namespace InventoryManagement.Api.Services
 
         private async Task ExecuteInitializationScriptsAsync()
         {
-            var scriptsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Database");
+            var baseDir = AppContext.BaseDirectory;
+            var scriptsPath = Path.Combine(baseDir, "Database");
+
+            if (!Directory.Exists(scriptsPath))
+            {
+                // Fallback for local dev when scripts are not copied to output yet.
+                scriptsPath = Path.Combine(baseDir, "..", "..", "..", "..", "Database");
+            }
             
             if (!Directory.Exists(scriptsPath))
             {
@@ -94,8 +101,10 @@ namespace InventoryManagement.Api.Services
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            // Phase 1: Execute root-level scripts (core tables without complex FK dependencies)
-            var rootScriptFiles = new List<string>
+            var executedRootScripts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Phase 1: Execute root-level scripts in a preferred order (core tables first)
+            var orderedRootScripts = new List<string>
             {
                 "CreateDatabase.sql",
                 "CreateItemLookupTables.sql",
@@ -105,11 +114,10 @@ namespace InventoryManagement.Api.Services
                 "CreateItemTypesTable.sql",
                 "CreateItemUnitsTable.sql",
                 "CreateAssetAllocationsTable.sql"
-                // Note: CreateGRNTables.sql and CreateTransferInventoryTable.sql moved to Phase 3
             };
 
-            _logger.LogInformation("Phase 1: Creating core tables...");
-            foreach (var scriptFile in rootScriptFiles)
+            _logger.LogInformation("Phase 1: Executing ordered root scripts...");
+            foreach (var scriptFile in orderedRootScripts)
             {
                 var scriptPath = Path.Combine(scriptsPath, scriptFile);
                 if (File.Exists(scriptPath))
@@ -118,6 +126,7 @@ namespace InventoryManagement.Api.Services
                     try
                     {
                         await ExecuteSqlScriptAsync(connection, scriptPath);
+                        executedRootScripts.Add(scriptFile);
                         _logger.LogInformation($"Successfully executed: {scriptFile}");
                     }
                     catch (Exception ex)
@@ -134,23 +143,25 @@ namespace InventoryManagement.Api.Services
             // Phase 2: Execute scripts from Tables subdirectory (includes prerequisite tables)
             await ExecuteTablesScriptsAsync(connection, scriptsPath);
 
-            // Phase 3: Execute root scripts that depend on Tables/* scripts
-            var dependentRootScripts = new List<string>
-            {
-                "CreateGRNTables.sql", // Depends on StockTypes and Stores
-                "CreateTransferInventoryTable.sql" // Depends on Stores
-            };
+            // Phase 3: Execute any remaining root-level scripts to avoid misses
+            var remainingRootScripts = Directory.GetFiles(scriptsPath, "*.sql", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
+                .Where(fileName => !executedRootScripts.Contains(fileName!))
+                .OrderBy(fileName => fileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            _logger.LogInformation("Phase 3: Creating dependent tables...");
-            foreach (var scriptFile in dependentRootScripts)
+            _logger.LogInformation("Phase 3: Executing remaining root scripts...");
+            foreach (var scriptFile in remainingRootScripts)
             {
-                var scriptPath = Path.Combine(scriptsPath, scriptFile);
+                var scriptPath = Path.Combine(scriptsPath, scriptFile!);
                 if (File.Exists(scriptPath))
                 {
                     _logger.LogInformation($"Executing script: {scriptFile}");
                     try
                     {
                         await ExecuteSqlScriptAsync(connection, scriptPath);
+                        executedRootScripts.Add(scriptFile!);
                         _logger.LogInformation($"Successfully executed: {scriptFile}");
                     }
                     catch (Exception ex)
@@ -190,6 +201,7 @@ namespace InventoryManagement.Api.Services
                 "CreateStockTypesTable.sql", // MUST be before GRN and Inventories
                 "CreateItemCategoriesTable.sql",
                 "CreateItemsTable.sql",
+                "CreateDemandRequestsTables.sql",
                 "CreateInventoryTables.sql", // Now Stores and StockTypes exist
                 "CreateItemTypeSaleLevelsTable.sql",
                 "CreateSurgicalItemGroupsTable.sql",
@@ -322,6 +334,7 @@ namespace InventoryManagement.Api.Services
         private async Task ExecuteSqlScriptAsync(SqlConnection connection, string scriptPath)
         {
             var sqlScript = await File.ReadAllTextAsync(scriptPath);
+            sqlScript = NormalizeScriptForSharedDatabase(sqlScript);
             
             // Split by GO statements (case-insensitive)
             var batches = System.Text.RegularExpressions.Regex.Split(
@@ -368,6 +381,28 @@ namespace InventoryManagement.Api.Services
                     }
                 }
             }
+        }
+
+        private string NormalizeScriptForSharedDatabase(string script)
+        {
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            var configuredDatabaseName = builder.InitialCatalog;
+
+            var normalized = script;
+
+            if (!string.IsNullOrWhiteSpace(configuredDatabaseName))
+            {
+                normalized = normalized.Replace("InventoryManagementDB_SP", configuredDatabaseName, StringComparison.OrdinalIgnoreCase);
+            }
+
+            normalized = normalized.Replace("dbo.Users", "dbo.StoreUsers", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("name='Users'", "name='StoreUsers'", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("name = 'Users'", "name = 'StoreUsers'", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("CREATE TABLE Users", "CREATE TABLE StoreUsers", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("INSERT INTO Users", "INSERT INTO StoreUsers", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("REFERENCES Users(", "REFERENCES StoreUsers(", StringComparison.OrdinalIgnoreCase);
+
+            return normalized;
         }
     }
 }

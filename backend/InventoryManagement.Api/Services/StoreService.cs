@@ -165,6 +165,94 @@ namespace InventoryManagement.Api.Services
             }
         }
 
+        public async Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request)
+        {
+            var items = new List<DropdownItem>();
+            var storeId = request.PharmacyStoreId.HasValue && request.PharmacyStoreId > 0
+                ? request.PharmacyStoreId
+                : null;
+            var stockType = request.StockType.HasValue && request.StockType > 0
+                ? request.StockType
+                : null;
+            var patientType = request.PatientType.HasValue && request.PatientType > 0
+                ? request.PatientType
+                : null;
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand(@"
+SELECT DISTINCT
+    s.StoreId,
+    s.StoreName
+FROM dbo.Stores s
+LEFT JOIN dbo.StockTypeAssociations sta
+    ON s.StoreId = sta.PharmacyStoreId
+    AND sta.IsDeleted = 0
+WHERE s.IsActive = 1
+  AND (@StoreId IS NULL OR s.StoreId = @StoreId)
+  AND (@StockType IS NULL OR sta.StockTypes = @StockType)
+  AND (@PatientType IS NULL OR sta.PatientTypes = @PatientType)
+ORDER BY s.StoreName;", connection)
+                {
+                    CommandType = CommandType.Text
+                };
+
+                                command.Parameters.AddWithValue("@StoreId", (object?)storeId ?? DBNull.Value);
+                                command.Parameters.AddWithValue("@StockType", (object?)stockType ?? DBNull.Value);
+                                command.Parameters.AddWithValue("@PatientType", (object?)patientType ?? DBNull.Value);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        items.Add(new DropdownItem
+                        {
+                            Value = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                            Text = reader.GetString(reader.GetOrdinal("StoreName"))
+                        });
+                    }
+                }
+
+                if (items.Count == 0)
+                {
+                    using var fallbackCommand = new SqlCommand(@"
+SELECT
+    s.StoreId,
+    s.StoreName
+FROM dbo.Stores s
+WHERE s.IsActive = 1
+  AND (@StoreId IS NULL OR s.StoreId = @StoreId)
+ORDER BY s.StoreName;", connection)
+                    {
+                        CommandType = CommandType.Text
+                    };
+
+                    fallbackCommand.Parameters.AddWithValue("@StoreId", (object?)storeId ?? DBNull.Value);
+
+                    using (var fallbackReader = await fallbackCommand.ExecuteReaderAsync())
+                    {
+                        while (await fallbackReader.ReadAsync())
+                        {
+                            items.Add(new DropdownItem
+                            {
+                                Value = fallbackReader.GetInt32(fallbackReader.GetOrdinal("StoreId")),
+                                Text = fallbackReader.GetString(fallbackReader.GetOrdinal("StoreName"))
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pharmacy store dropdown");
+                throw;
+            }
+
+            return items;
+        }
+
         private Store MapReaderToStore(SqlDataReader reader)
         {
             return new Store

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://10.10.10.68:5000/api/StockWithExpiry';
+const API_URL = 'http://localhost:5100/api/StockWithExpiry';
 
 export const stockWithExpiryApi = {
     getAll: async (filters = {}) => {

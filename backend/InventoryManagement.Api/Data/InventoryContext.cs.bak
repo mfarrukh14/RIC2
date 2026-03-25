@@ -157,7 +157,7 @@ namespace InventoryManagement.Api.Data
                     BankName = "Tech Bank",
                     AccountNumber = "1234567890",
                     RoutingNumber = "987654321",
-                    CreditLimit = "50000",
+                    CreditLimit = "51000",
                     PaymentTerms = "NET 30",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
@@ -183,7 +183,7 @@ namespace InventoryManagement.Api.Data
                     BankName = "Business Bank",
                     AccountNumber = "0987654321",
                     RoutingNumber = "123456789",
-                    CreditLimit = "25000",
+                    CreditLimit = "25100",
                     PaymentTerms = "NET 15",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow

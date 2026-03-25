@@ -97,10 +97,25 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'stores-allocation-to-user', title: 'Stores Allocation To User', icon: UsersIcon },
         { id: 'stock-with-least-expiry', title: 'Stock With Least Expiry', icon: ClockIcon }
       ]
+    },
+    {
+      id: 'supply-chain',
+      title: 'Supply Chain',
+      icon: ClipboardDocumentListIcon,
+      hasSubmenu: true,
+      submenu: [
+        { id: 'place-demand', title: 'Place Demand', icon: DocumentTextIcon },
+        { id: 'pending-demands', title: 'Pending Demands', icon: ClipboardDocumentListIcon },
+        { id: 'approved-demands', title: 'Approved Demands', icon: ClipboardDocumentListIcon },
+        { id: 'receive-stock', title: 'Receive Stock', icon: ClipboardDocumentListIcon },
+        { id: 'received-stock-status', title: 'Received Stock Status', icon: ClipboardDocumentListIcon },
+        { id: 'demand-request-status', title: 'Demand Request Status', icon: ClipboardDocumentListIcon },
+        { id: 'stock-transitions', title: 'Stock Transitions', icon: ClipboardDocumentListIcon }
+      ]
     }
   ];
 
-  const [expandedMenus, setExpandedMenus] = useState({ inventory: true, stores: false });
+  const [expandedMenus, setExpandedMenus] = useState({ inventory: true, stores: false, 'supply-chain': true });
 
   const toggleSubmenu = (menuId) => {
     if (collapsed) return;

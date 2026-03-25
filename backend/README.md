@@ -16,7 +16,7 @@ dotnet run
 - ✅ Create all 30+ tables
 - ✅ Apply all schema modifications
 - ✅ Install 60+ stored procedures
-- ✅ Start serving at http://localhost:5000
+- ✅ Start serving at http://localhost:5100
 
 **First run:** ~15-20 seconds  
 **Subsequent runs:** ~2-3 seconds
@@ -54,8 +54,8 @@ Then just run `dotnet run` - database setup is automatic!
 
 ## 🌐 Access Points
 
-- **API**: http://localhost:5000
-- **Swagger Documentation**: http://localhost:5000/swagger
+- **API**: http://localhost:5100
+- **Swagger Documentation**: http://localhost:5100/swagger
 
 ## 🏗️ Architecture
 
@@ -143,10 +143,10 @@ All scripts are executed automatically on first run!
 ### Quick Health Check
 ```powershell
 # Check if API is running
-curl http://localhost:5000/api/Branch
+curl http://localhost:5100/api/Branch
 
 # Or visit Swagger
-start http://localhost:5000/swagger
+start http://localhost:5100/swagger
 ```
 
 ### Verify Database
@@ -269,7 +269,7 @@ dotnet watch run --project InventoryManagement.Api/InventoryManagement.Api.cspro
    dotnet run
    ```
 
-4. Access Swagger UI: `http://localhost:5000/swagger`
+4. Access Swagger UI: `http://localhost:5100/swagger`
 
 ### Frontend Setup
 1. Navigate to frontend directory:

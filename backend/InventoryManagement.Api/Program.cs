@@ -3,10 +3,10 @@ using InventoryManagement.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Expose Kestrel on all interfaces so other hosts can reach port 5000
+// Expose Kestrel on all interfaces so other hosts can reach port 5100
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(5000);
+    options.ListenAnyIP(5100);
 });
 
 // Add services to the container.
@@ -61,6 +61,8 @@ builder.Services.AddScoped<ISpaceAllocationService, SpaceAllocationService>();
 builder.Services.AddScoped<IStoreAllocationToUserService, StoreAllocationToUserService>();
 builder.Services.AddScoped<IStockWithExpiryService, StockWithExpiryService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
+builder.Services.AddScoped<IDemandRequestService, DemandRequestService>();
+builder.Services.AddScoped<IDemandRequestStatusService, DemandRequestStatusService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

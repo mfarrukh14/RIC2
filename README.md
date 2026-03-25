@@ -42,7 +42,7 @@ dotnet run
 - ✅ Create all 30+ tables with proper relationships
 - ✅ Execute all ALTER scripts for schema modifications
 - ✅ Install all 60+ stored procedures
-- ✅ Start serving at `http://localhost:5000`
+- ✅ Start serving at `http://localhost:5100`
 
 **First run:** ~15-20 seconds (database creation)  
 **Subsequent runs:** ~2-3 seconds
@@ -160,7 +160,7 @@ Installs 60+ stored procedures for all CRUD operations and reports
 3. Run `dotnet run` - database setup is automatic!
 
 ### Frontend API Configuration
-Frontend automatically connects to `http://localhost:5000/api`
+Frontend automatically connects to `http://localhost:5100/api`
 
 ---
 
@@ -169,8 +169,8 @@ Frontend automatically connects to `http://localhost:5000/api`
 | Service | URL | Description |
 |---------|-----|-------------|
 | Frontend | http://localhost:5173 | React UI |
-| Backend API | http://localhost:5000 | REST API |
-| Swagger Docs | http://localhost:5000/swagger | Interactive API documentation |
+| Backend API | http://localhost:5100 | REST API |
+| Swagger Docs | http://localhost:5100/swagger | Interactive API documentation |
 
 ---
 
@@ -281,7 +281,7 @@ Solution: Ensure SQL Server LocalDB is installed
 - Standalone: Download "SQL Server Express LocalDB"
 ```
 
-**Issue:** Port 5000 already in use
+**Issue:** Port 5100 already in use
 ```powershell
 Solution: Change port in Properties/launchSettings.json
 ```
@@ -290,7 +290,7 @@ Solution: Change port in Properties/launchSettings.json
 
 **Issue:** API calls failing
 ```
-Solution: Ensure backend is running on http://localhost:5000
+Solution: Ensure backend is running on http://localhost:5100
 Check browser console for CORS errors
 ```
 
@@ -322,7 +322,7 @@ dotnet run
 After starting both backend and frontend:
 
 1. **Check Backend Health:**
-   - Visit http://localhost:5000/swagger
+   - Visit http://localhost:5100/swagger
    - Try the `/api/Branch/` GET endpoint
    - Should return list of branches
 
@@ -345,7 +345,7 @@ After starting both backend and frontend:
 - **[SETUP_VERIFICATION.md](SETUP_VERIFICATION.md)** - Step-by-step verification guide
 - **[Backend Architecture](backend/README.md)** - Detailed backend documentation
 - **[Database Schema](backend/Database/README.md)** - Database structure
-- **[API Documentation](http://localhost:5000/swagger)** - Interactive API docs (when running)
+- **[API Documentation](http://localhost:5100/swagger)** - Interactive API docs (when running)
 
 ---
 

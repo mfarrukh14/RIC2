@@ -130,5 +130,33 @@ namespace InventoryManagement.Api.Controllers
                 return StatusCode(500, new { message = "An error occurred while deleting the store" });
             }
         }
+
+        [HttpPost("pharmacy-store-dropdown")]
+        public async Task<ActionResult<PharmacyStoreDropdownResponse>> GetPharmacyStoreDropdown(
+            [FromBody] PharmacyStoreDropdownRequest? request)
+        {
+            try
+            {
+                var payload = request ?? new PharmacyStoreDropdownRequest();
+                var items = await _storeService.GetPharmacyStoreDropdownAsync(payload);
+
+                var response = new PharmacyStoreDropdownResponse
+                {
+                    Data = new List<DropdownItem>(items)
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving pharmacy store dropdown");
+                return StatusCode(500, new PharmacyStoreDropdownResponse
+                {
+                    Status = "Error",
+                    StatusCode = 500,
+                    Message = "An error occurred while retrieving pharmacy store dropdown."
+                });
+            }
+        }
     }
 }

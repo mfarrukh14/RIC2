@@ -1,0 +1,645 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowDownTrayIcon,
+  ClipboardDocumentListIcon,
+  EyeIcon,
+  InformationCircleIcon,
+  PencilSquareIcon,
+  PrinterIcon,
+  Squares2X2Icon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
+import demandRequestApi from '../services/demandRequestApi';
+import { branchApi } from '../services/branchApi';
+import { getAllStores } from '../services/storeApi';
+import stockTypesApi from '../services/stockTypesApi';
+
+function formatDateTime(value) {
+  if (!value) {
+    return '-';
+  }
+
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
+
+function statusClasses(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'pending':
+      return 'text-amber-700';
+    case 'approved':
+      return 'text-emerald-700';
+    case 'issued':
+      return 'text-blue-700';
+    default:
+      return 'text-slate-700';
+  }
+}
+
+const PendingDemandsPage = () => {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [lifeCycleEntries, setLifeCycleEntries] = useState([]);
+  const [lifeCycleLoading, setLifeCycleLoading] = useState(false);
+  const [showLifeCycleModal, setShowLifeCycleModal] = useState(false);
+  const [lifeCycleRequest, setLifeCycleRequest] = useState(null);
+  const [lifeCycleSearchTerm, setLifeCycleSearchTerm] = useState('');
+  const [lifeCycleEntriesPerPage, setLifeCycleEntriesPerPage] = useState(10);
+  const [lifeCyclePage, setLifeCyclePage] = useState(1);
+  const [lookups, setLookups] = useState({
+    branches: [],
+    stores: [],
+    stockTypes: []
+  });
+  const [filters, setFilters] = useState({
+    branchId: '',
+    requestedStoreId: '',
+    stockTypeId: ''
+  });
+
+  useEffect(() => {
+    loadLookups();
+    loadRequests();
+  }, []);
+
+  const loadLookups = async () => {
+    try {
+      const [branches, stores, stockTypes] = await Promise.all([
+        branchApi.getAll(),
+        getAllStores(),
+        stockTypesApi.getAllStockTypes()
+      ]);
+
+      setLookups({ branches, stores, stockTypes });
+    } catch (lookupError) {
+      console.error('Error loading pending demand lookups:', lookupError);
+      setError('Failed to load filter options.');
+    }
+  };
+
+  const loadRequests = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await demandRequestApi.getAll();
+      setRequests(data);
+    } catch (requestError) {
+      console.error('Error loading pending demands:', requestError);
+      setError('Failed to load pending demands.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredRequests = useMemo(() => {
+    const pendingOnly = requests.filter((request) => (request.status || '').toLowerCase() === 'pending');
+
+    return pendingOnly.filter((request) => {
+      const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
+      const matchesStore = !filters.requestedStoreId || String(request.requestedStoreId) === String(filters.requestedStoreId);
+      const matchesStockType = !filters.stockTypeId || String(request.stockTypeId) === String(filters.stockTypeId);
+      const matchesSearch = !searchTerm.trim() || [
+        request.drNo,
+        request.indentNo,
+        request.stockTypeName,
+        request.requestingBranchName,
+        request.itemSummary,
+        request.status
+      ].some((value) => (value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()));
+
+      return matchesBranch && matchesStore && matchesStockType && matchesSearch;
+    });
+  }, [filters.branchId, filters.requestedStoreId, filters.stockTypeId, requests, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entriesPerPage, filters.branchId, filters.requestedStoreId, filters.stockTypeId, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const pageItems = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
+
+  const handleFilterChange = (event) => {
+    const { name, value } = event.target;
+    setFilters((current) => ({
+      ...current,
+      [name]: value
+    }));
+  };
+
+  const exportCsv = () => {
+    const rows = filteredRequests.map((request) => [
+      `${request.drNo} / ${request.indentNo || ''}`,
+      request.stockTypeName || '',
+      request.requestingBranchName,
+      request.itemSummary || '',
+      formatDateTime(request.createdOn),
+      request.status
+    ]);
+
+    const csv = [
+      ['DR-NO. / INDENT NO.', 'Stock Type', 'Requesting Store', 'Items', 'Date & Time', 'Status'],
+      ...rows
+    ]
+      .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pending-demands.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openDetailsModal = async (requestId) => {
+    setShowDetailsModal(true);
+    setDetailsLoading(true);
+
+    try {
+      const details = await demandRequestApi.getById(requestId);
+      setSelectedRequest(details);
+    } catch (detailsError) {
+      console.error('Error loading pending demand details:', detailsError);
+      setSelectedRequest(null);
+      setError('Failed to load demand details.');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedRequest(null);
+  };
+
+  const openLifeCycleModal = async (request) => {
+    setShowLifeCycleModal(true);
+    setLifeCycleLoading(true);
+    setLifeCycleRequest(request);
+    setLifeCycleSearchTerm('');
+    setLifeCyclePage(1);
+
+    try {
+      const entries = await demandRequestApi.getLifeCycle(request.demandRequestId);
+      setLifeCycleEntries(entries);
+    } catch (lifeCycleError) {
+      console.error('Error loading demand life cycle:', lifeCycleError);
+      setLifeCycleEntries([]);
+      setError('Failed to load demand life cycle.');
+    } finally {
+      setLifeCycleLoading(false);
+    }
+  };
+
+  const closeLifeCycleModal = () => {
+    setShowLifeCycleModal(false);
+    setLifeCycleEntries([]);
+    setLifeCycleRequest(null);
+    setLifeCycleSearchTerm('');
+    setLifeCyclePage(1);
+  };
+
+  const filteredLifeCycleEntries = useMemo(() => {
+    const normalizedSearch = lifeCycleSearchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return lifeCycleEntries;
+    }
+
+    return lifeCycleEntries.filter((entry) => [entry.status, entry.actionBy, formatDateTime(entry.createdOn)]
+      .some((value) => (value || '').toLowerCase().includes(normalizedSearch)));
+  }, [lifeCycleEntries, lifeCycleSearchTerm]);
+
+  useEffect(() => {
+    setLifeCyclePage(1);
+  }, [lifeCycleEntriesPerPage, lifeCycleSearchTerm, showLifeCycleModal]);
+
+  const lifeCycleTotalPages = Math.max(1, Math.ceil(filteredLifeCycleEntries.length / lifeCycleEntriesPerPage));
+  const lifeCycleStartIndex = (lifeCyclePage - 1) * lifeCycleEntriesPerPage;
+  const currentLifeCycleEntries = filteredLifeCycleEntries.slice(lifeCycleStartIndex, lifeCycleStartIndex + lifeCycleEntriesPerPage);
+  const lifeCycleShowingFrom = filteredLifeCycleEntries.length === 0 ? 0 : lifeCycleStartIndex + 1;
+  const lifeCycleShowingTo = Math.min(lifeCycleStartIndex + lifeCycleEntriesPerPage, filteredLifeCycleEntries.length);
+
+  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
+      <div className="space-y-3">
+        <section className="rounded-md border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-3">
+            <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
+              Pending Demands
+              <InformationCircleIcon className="h-5 w-5 text-indigo-500" />
+            </h1>
+          </div>
+
+          <div className="grid grid-cols-1 gap-x-4 gap-y-6 px-6 py-5 lg:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Branch</label>
+              <select
+                name="branchId"
+                value={filters.branchId}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+              >
+                <option value="">All</option>
+                {lookups.branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Store</label>
+              <select
+                name="requestedStoreId"
+                value={filters.requestedStoreId}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+              >
+                <option value="">All</option>
+                {lookups.stores.map((store) => (
+                  <option key={store.storeId} value={store.storeId}>
+                    {store.storeName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Stock Type</label>
+              <select
+                name="stockTypeId"
+                value={filters.stockTypeId}
+                onChange={handleFilterChange}
+                className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+              >
+                <option value="">All</option>
+                {lookups.stockTypes.map((stockType) => (
+                  <option key={stockType.id} value={stockType.id}>
+                    {stockType.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-md border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
+              <ClipboardDocumentListIcon className="h-5 w-5 text-indigo-500" />
+              Pending Demands
+            </h2>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <ArrowDownTrayIcon className="h-4 w-4 text-indigo-500" />
+                Export
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <span>Show</span>
+              <select
+                value={entriesPerPage}
+                onChange={(event) => setEntriesPerPage(Number(event.target.value))}
+                className="rounded-md border border-slate-200 px-2 py-1 text-sm"
+              >
+                {[10, 25, 50].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <span>entries</span>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <span>Search:</span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 md:w-60"
+              />
+            </label>
+          </div>
+
+          {error ? (
+            <div className="px-4 pb-4 text-sm text-rose-600">{error}</div>
+          ) : loading ? (
+            <div className="px-4 pb-4 text-sm text-slate-500">Loading pending demands...</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto px-4">
+                <table className="min-w-full border-separate border-spacing-0 text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-700">
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">DR-NO. / Indent NO.</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Stock Type</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Requesting Store</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Items</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Date &amp; Time</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Status</th>
+                      <th className="border-y border-slate-200 bg-white px-6 py-4 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="border-b border-slate-200 px-4 py-12 text-center text-slate-500">
+                          No data available in table
+                        </td>
+                      </tr>
+                    ) : (
+                      pageItems.map((request) => (
+                        <tr key={request.demandRequestId} className="text-slate-700">
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle text-center">
+                            <div className="text-base text-sky-700">{request.drNo} /</div>
+                            <div className="text-base text-slate-700">{request.indentNo || '-'}</div>
+                          </td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">{request.stockTypeName || 'All'}</td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">{request.requestingBranchName}</td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">
+                            <div className="max-w-[620px] truncate" title={request.itemSummary || ''}>
+                              {request.itemSummary || `${request.itemsCount} item${request.itemsCount === 1 ? '' : 's'}`}
+                            </div>
+                          </td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">{formatDateTime(request.createdOn)}</td>
+                          <td className={`border-b border-slate-200 px-6 py-8 align-middle font-medium ${statusClasses(request.status)}`}>
+                            {request.status}
+                          </td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">
+                            <div className="flex flex-col items-center gap-3 text-indigo-400">
+                              <button type="button" className="transition hover:text-indigo-600" title="Edit">
+                                <PencilSquareIcon className="h-5 w-5" />
+                              </button>
+                              <button type="button" className="text-emerald-600 transition hover:text-emerald-700" title="Print">
+                                <PrinterIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openLifeCycleModal(request)}
+                                className="transition hover:text-indigo-600"
+                                title="Demand Life Cycle"
+                              >
+                                <Squares2X2Icon className="h-5 w-5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDetailsModal(request.demandRequestId)}
+                                className="transition hover:text-indigo-600"
+                                title="Open"
+                              >
+                                <EyeIcon className="h-5 w-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="text-left text-slate-700">
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">DR-NO. / Indent NO.</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Stock Type</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Requesting Store</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Items</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Date &amp; Time</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Status</th>
+                      <th className="border-b border-slate-200 bg-white px-6 py-4 font-semibold">Action</th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                <div>Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ‹
+                  </button>
+                  <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      {showDetailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Pending Demand Details</h3>
+                <p className="text-sm text-slate-500">Review the demand header and requested items.</p>
+              </div>
+              <button type="button" onClick={closeDetailsModal} className="rounded-md p-2 text-slate-500 hover:bg-slate-100">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(90vh-72px)] overflow-y-auto px-6 py-5">
+              {detailsLoading ? (
+                <div className="text-sm text-slate-500">Loading demand details...</div>
+              ) : !selectedRequest ? (
+                <div className="text-sm text-slate-500">Demand details are unavailable.</div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">DR-No.</div>
+                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.drNo}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Indent No.</div>
+                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.indentNo || '-'}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Branch</div>
+                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.requestingBranchName}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">Store</div>
+                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.requestedStoreName}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200">
+                    <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800">Requested Items</div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-slate-50 text-left text-slate-600">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold">Item</th>
+                            <th className="px-4 py-3 font-semibold">Requested Qty</th>
+                            <th className="px-4 py-3 font-semibold">Approved Qty</th>
+                            <th className="px-4 py-3 font-semibold">Issued Qty</th>
+                            <th className="px-4 py-3 font-semibold">Remaining Qty</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedRequest.items.map((item) => (
+                            <tr key={item.id} className="border-t border-slate-100">
+                              <td className="px-4 py-3">{item.itemName || 'Unassigned Item'}</td>
+                              <td className="px-4 py-3">{item.requestedQuantity}</td>
+                              <td className="px-4 py-3">{item.approvedQuantity ?? '-'}</td>
+                              <td className="px-4 py-3">{item.issuedQuantity ?? '-'}</td>
+                              <td className="px-4 py-3">{item.remainingQuantity ?? '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLifeCycleModal && (
+        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-slate-900/40 p-4 pt-6">
+          <div className="w-full max-w-7xl overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h3 className="text-[18px] font-medium text-slate-700">Demand Life Cycle</h3>
+                {lifeCycleRequest && (
+                  <p className="text-sm text-slate-500">{lifeCycleRequest.drNo} / {lifeCycleRequest.indentNo || '-'}</p>
+                )}
+              </div>
+              <button type="button" onClick={closeLifeCycleModal} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-4">
+              <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Show</span>
+                  <select
+                    value={lifeCycleEntriesPerPage}
+                    onChange={(event) => setLifeCycleEntriesPerPage(Number(event.target.value))}
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none"
+                  >
+                    {[10, 25, 50].map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                  <span>entries</span>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <span>Search:</span>
+                  <input
+                    type="text"
+                    value={lifeCycleSearchTerm}
+                    onChange={(event) => setLifeCycleSearchTerm(event.target.value)}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 md:w-56"
+                  />
+                </label>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-white text-slate-900">
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Status</th>
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Action By</th>
+                      <th className="border-b border-slate-200 px-6 py-4 text-center font-semibold">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lifeCycleLoading ? (
+                      <tr>
+                        <td colSpan="3" className="px-6 py-10 text-center text-slate-500">Loading demand life cycle...</td>
+                      </tr>
+                    ) : currentLifeCycleEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan="3" className="px-6 py-10 text-center text-slate-500">No lifecycle entries found.</td>
+                      </tr>
+                    ) : (
+                      currentLifeCycleEntries.map((entry) => (
+                        <tr key={entry.id} className="odd:bg-slate-50/60">
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center text-[28px] leading-none text-slate-700">
+                            <span className="text-base">{entry.status}</span>
+                          </td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center text-base text-slate-700">{entry.actionBy}</td>
+                          <td className="border-b border-slate-200 px-6 py-4 text-center text-base text-slate-700">{formatDateTime(entry.createdOn)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+                <div>Showing {lifeCycleShowingFrom} to {lifeCycleShowingTo} of {filteredLifeCycleEntries.length} entries</div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLifeCyclePage((page) => Math.max(page - 1, 1))}
+                    disabled={lifeCyclePage === 1}
+                    className="rounded bg-slate-100 px-3 py-2 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ‹
+                  </button>
+                  <span className="rounded bg-indigo-500 px-3 py-2 text-white">{lifeCyclePage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setLifeCyclePage((page) => Math.min(page + 1, lifeCycleTotalPages))}
+                    disabled={lifeCyclePage === lifeCycleTotalPages}
+                    className="rounded bg-slate-100 px-3 py-2 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PendingDemandsPage;
