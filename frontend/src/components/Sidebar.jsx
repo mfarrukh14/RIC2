@@ -104,6 +104,11 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
       icon: ClipboardDocumentListIcon,
       hasSubmenu: true,
       submenu: [
+        { id: 'demand-wise-value', title: 'Demand Wise Value', icon: ClipboardDocumentListIcon },
+        { id: 'estimated-purchase-order', title: 'Estimated Purchase Order', icon: ClipboardDocumentListIcon },
+        { id: 'purchase-order', title: 'Purchase Order', icon: ClipboardDocumentListIcon },
+        { id: 'purchase-order-type', title: 'Purchase Order Type', icon: ClipboardDocumentListIcon },
+        { id: 'purchase-order-status', title: 'Purchase Order Status', icon: ClipboardDocumentListIcon },
         { id: 'place-demand', title: 'Place Demand', icon: DocumentTextIcon },
         { id: 'pending-demands', title: 'Pending Demands', icon: ClipboardDocumentListIcon },
         { id: 'approved-demands', title: 'Approved Demands', icon: ClipboardDocumentListIcon },

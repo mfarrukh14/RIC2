@@ -48,6 +48,11 @@ import SaleSummaryStockNoDiscountPage from './pages/SaleSummaryStockNoDiscountPa
 import StoreAllocationToUserPage from './pages/StoreAllocationToUserPage';
 import StockWithExpiryPage from './pages/StockWithExpiryPage';
 import PlaceDemandPage from './pages/PlaceDemandPage';
+import DemandWiseValuePage from './pages/DemandWiseValuePage';
+import EstimatedPurchaseOrderPage from './pages/EstimatedPurchaseOrderPage';
+import PurchaseOrderPage from './pages/PurchaseOrderPage';
+import PurchaseOrderTypePage from './pages/PurchaseOrderTypePage';
+import PurchaseOrderStatusPage from './pages/PurchaseOrderStatusPage';
 import PendingDemandsPage from './pages/PendingDemandsPage';
 import ApprovedDemandsPage from './pages/ApprovedDemandsPage';
 import ReceiveStockPage from './pages/ReceiveStockPage';
@@ -400,6 +405,21 @@ function App() {
 
       case 'place-demand':
         return <PlaceDemandPage />;
+
+      case 'demand-wise-value':
+        return <DemandWiseValuePage />;
+
+      case 'estimated-purchase-order':
+        return <EstimatedPurchaseOrderPage />;
+
+      case 'purchase-order':
+        return <PurchaseOrderPage />;
+
+      case 'purchase-order-type':
+        return <PurchaseOrderTypePage />;
+
+      case 'purchase-order-status':
+        return <PurchaseOrderStatusPage />;
 
       case 'pending-demands':
         return <PendingDemandsPage />;

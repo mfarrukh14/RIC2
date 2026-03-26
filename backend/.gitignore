@@ -59,6 +59,7 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+InventoryManagement.Api/temp-build-validation*/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

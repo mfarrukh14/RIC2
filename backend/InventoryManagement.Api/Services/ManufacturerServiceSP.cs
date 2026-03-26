@@ -127,7 +127,7 @@ namespace InventoryManagement.Api.Services
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
                 RegisteredOwner = reader.IsDBNull("RegisteredOwner") ? null : reader.GetString("RegisteredOwner"),
                 IsActive = reader.GetBoolean("IsActive"),
-                CreatedById = reader.GetInt32("CreatedById"),
+                CreatedById = reader.IsDBNull("CreatedById") ? null : reader.GetInt32("CreatedById"),
                 CreatedOn = reader.GetDateTime("CreatedOn"),
                 ModifiedById = reader.IsDBNull("ModifiedById") ? null : reader.GetInt32("ModifiedById"),
                 ModifiedOn = reader.IsDBNull("ModifiedOn") ? null : reader.GetDateTime("ModifiedOn"),

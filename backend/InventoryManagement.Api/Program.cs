@@ -63,6 +63,11 @@ builder.Services.AddScoped<IStockWithExpiryService, StockWithExpiryService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<IDemandRequestService, DemandRequestService>();
 builder.Services.AddScoped<IDemandRequestStatusService, DemandRequestStatusService>();
+builder.Services.AddScoped<IDemandWiseValueService, DemandWiseValueService>();
+builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+builder.Services.AddScoped<IPurchaseOrderTypeService, PurchaseOrderTypeService>();
+builder.Services.AddScoped<IPurchaseOrderStatusService, PurchaseOrderStatusService>();
+builder.Services.AddScoped<IEstimatedPurchaseOrderService, EstimatedPurchaseOrderService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -77,9 +82,15 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Initialize database on startup
-using (var scope = app.Services.CreateScope())
+// Initialize database on startup unless explicitly skipped for local recovery runs.
+var skipDatabaseInitialization = string.Equals(
+    Environment.GetEnvironmentVariable("SKIP_DB_INIT"),
+    "1",
+    StringComparison.OrdinalIgnoreCase);
+
+if (!skipDatabaseInitialization)
 {
+    using var scope = app.Services.CreateScope();
     var dbInitService = scope.ServiceProvider.GetRequiredService<IDatabaseInitializationService>();
     await dbInitService.InitializeDatabaseAsync();
 }
