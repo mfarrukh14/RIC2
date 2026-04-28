@@ -19,7 +19,7 @@ BEGIN
         r.Location,
         r.NumberOfRows,
         r.NumberOfCols,
-        r.NumberOfDraws,
+        r.NumberOfDrawrs,
         r.BranchId,
         r.IsActive,
         r.CreatedOn
@@ -47,7 +47,7 @@ BEGIN
         r.Location,
         r.NumberOfRows,
         r.NumberOfCols,
-        r.NumberOfDraws,
+        r.NumberOfDrawrs,
         r.BranchId,
         r.IsActive,
         r.CreatedOn
@@ -61,14 +61,14 @@ GO
 -- =============================================
 CREATE OR ALTER PROCEDURE Rack_Insert
     @Name NVARCHAR(MAX),
-    @StoreId UNIQUEIDENTIFIER,
+    @StoreId INT,
     @Description NVARCHAR(MAX) = NULL,
     @Location NVARCHAR(MAX) = NULL,
     @NumberOfRows INT,
     @NumberOfCols INT,
-    @NumberOfDraws INT,
-    @BranchId UNIQUEIDENTIFIER,
-    @CreatedById UNIQUEIDENTIFIER,
+    @NumberOfDrawrs INT,
+    @BranchId INT,
+    @CreatedById INT,
     @IsActive BIT = 1
 AS
 BEGIN
@@ -81,7 +81,7 @@ BEGIN
         Location,
         NumberOfRows,
         NumberOfCols,
-        NumberOfDraws,
+        NumberOfDrawrs,
         BranchId,
         IsActive,
         CreatedById,
@@ -94,7 +94,7 @@ BEGIN
         @Location,
         @NumberOfRows,
         @NumberOfCols,
-        @NumberOfDraws,
+        @NumberOfDrawrs,
         @BranchId,
         @IsActive,
         @CreatedById,
@@ -111,13 +111,13 @@ GO
 CREATE OR ALTER PROCEDURE Rack_Update
     @Id INT,
     @Name NVARCHAR(MAX),
-    @StoreId UNIQUEIDENTIFIER,
+    @StoreId INT,
     @Description NVARCHAR(MAX) = NULL,
     @Location NVARCHAR(MAX) = NULL,
     @NumberOfRows INT,
     @NumberOfCols INT,
-    @NumberOfDraws INT,
-    @ModifiedById UNIQUEIDENTIFIER,
+    @NumberOfDrawrs INT,
+    @ModifiedById INT,
     @IsActive BIT = 1
 AS
 BEGIN
@@ -131,7 +131,7 @@ BEGIN
         Location = @Location,
         NumberOfRows = @NumberOfRows,
         NumberOfCols = @NumberOfCols,
-        NumberOfDraws = @NumberOfDraws,
+        NumberOfDrawrs = @NumberOfDrawrs,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,
         ModifiedOn = GETDATE()
@@ -146,7 +146,7 @@ GO
 -- =============================================
 CREATE OR ALTER PROCEDURE Rack_Delete
     @Id INT,
-    @ModifiedById UNIQUEIDENTIFIER
+    @ModifiedById INT
 AS
 BEGIN
     SET NOCOUNT ON;

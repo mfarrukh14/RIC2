@@ -110,7 +110,6 @@ namespace InventoryManagement.Api.Services
                 Id = reader.GetInt32("Id"),
                 Name = reader.GetString("Name"),
                 Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
-                Value = reader.IsDBNull("Value") ? null : reader.GetInt32("Value"),
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
                 IsActive = reader.GetBoolean("IsActive"),
                 CreatedById = reader.GetInt32("CreatedById"),
@@ -128,7 +127,6 @@ namespace InventoryManagement.Api.Services
                 case CreateItemTypeRequest createRequest:
                     command.Parameters.AddWithValue("@Name", createRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)createRequest.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Value", (object?)createRequest.Value ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)createRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@CreatedById", createRequest.CreatedById);
                     break;
@@ -136,7 +134,6 @@ namespace InventoryManagement.Api.Services
                 case UpdateItemTypeRequest updateRequest:
                     command.Parameters.AddWithValue("@Name", updateRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)updateRequest.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Value", (object?)updateRequest.Value ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)updateRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@IsActive", updateRequest.IsActive);
                     command.Parameters.AddWithValue("@ModifiedById", updateRequest.ModifiedById);

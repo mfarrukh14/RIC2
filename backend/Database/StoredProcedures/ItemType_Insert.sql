@@ -6,7 +6,6 @@
 CREATE PROCEDURE [dbo].[ItemType_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
-    @Value INT = NULL,
     @BranchId INT = NULL,
     @CreatedById INT,
     @IsActive BIT = 1
@@ -17,11 +16,11 @@ BEGIN
     DECLARE @NewId INT;
     
     INSERT INTO dbo.ItemTypes (
-        Name, Description, Value, BranchId,
+        Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )
     VALUES (
-        @Name, @Description, @Value, @BranchId,
+        @Name, @Description, @BranchId,
         @IsActive, @CreatedById, GETUTCDATE()
     );
     

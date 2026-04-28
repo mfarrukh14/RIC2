@@ -34,36 +34,7 @@ namespace InventoryManagement.Api.Services
                         {
                             while (await reader.ReadAsync())
                             {
-                                rows.Add(new RackRow
-                                {
-                                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                                    Name = reader.GetString(reader.GetOrdinal("Name")),
-                                    Description = reader.IsDBNull(reader.GetOrdinal("Description"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("Description")),
-                                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
-                                    RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                                    BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("BranchId")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("CreatedById")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
-                                        ? null
-                                        : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("StoreName")),
-                                    RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RackName"))
-                                });
+                                rows.Add(MapRackRow(reader));
                             }
                         }
                     }
@@ -78,7 +49,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<RackRow?> GetRackRowByIdAsync(Guid id)
+        public async Task<RackRow?> GetRackRowByIdAsync(int id)
         {
             try
             {
@@ -95,36 +66,7 @@ namespace InventoryManagement.Api.Services
                         {
                             if (await reader.ReadAsync())
                             {
-                                return new RackRow
-                                {
-                                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                                    Name = reader.GetString(reader.GetOrdinal("Name")),
-                                    Description = reader.IsDBNull(reader.GetOrdinal("Description"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("Description")),
-                                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
-                                    RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                                    BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("BranchId")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("CreatedById")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
-                                        ? null
-                                        : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("StoreName")),
-                                    RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RackName"))
-                                };
+                                return MapRackRow(reader);
                             }
                         }
                     }
@@ -158,36 +100,7 @@ namespace InventoryManagement.Api.Services
                         {
                             while (await reader.ReadAsync())
                             {
-                                rows.Add(new RackRow
-                                {
-                                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                                    Name = reader.GetString(reader.GetOrdinal("Name")),
-                                    Description = reader.IsDBNull(reader.GetOrdinal("Description"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("Description")),
-                                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
-                                    RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                                    BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("BranchId")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("CreatedById")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
-                                        ? null
-                                        : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("StoreName")),
-                                    RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RackName"))
-                                });
+                                rows.Add(MapRackRow(reader));
                             }
                         }
                     }
@@ -206,8 +119,6 @@ namespace InventoryManagement.Api.Services
         {
             try
             {
-                var newId = Guid.NewGuid();
-
                 using (var connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -216,7 +127,6 @@ namespace InventoryManagement.Api.Services
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@Id", newId);
                         command.Parameters.AddWithValue("@Name", request.Name);
                         command.Parameters.AddWithValue("@Description", (object?)request.Description ?? DBNull.Value);
                         command.Parameters.AddWithValue("@StoreId", request.StoreId);
@@ -225,12 +135,13 @@ namespace InventoryManagement.Api.Services
                         command.Parameters.AddWithValue("@IsActive", request.IsActive);
                         command.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
 
-                        await command.ExecuteNonQueryAsync();
+                        var result = await command.ExecuteScalarAsync();
+                        var newId = Convert.ToInt32(result);
+
+                        var createdRow = await GetRackRowByIdAsync(newId);
+                        return createdRow ?? throw new Exception("Failed to retrieve created rack row");
                     }
                 }
-
-                var createdRow = await GetRackRowByIdAsync(newId);
-                return createdRow ?? throw new Exception("Failed to retrieve created rack row");
             }
             catch (Exception ex)
             {
@@ -239,7 +150,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> UpdateRackRowAsync(Guid id, RackRowUpdateRequest request)
+        public async Task<bool> UpdateRackRowAsync(int id, RackRowUpdateRequest request)
         {
             try
             {
@@ -272,7 +183,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteRackRowAsync(Guid id)
+        public async Task<bool> DeleteRackRowAsync(int id)
         {
             try
             {
@@ -295,6 +206,40 @@ namespace InventoryManagement.Api.Services
                 _logger.LogError(ex, "Error deleting rack row: {Id}", id);
                 throw;
             }
+        }
+
+        private static RackRow MapRackRow(SqlDataReader reader)
+        {
+            return new RackRow
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                Name = reader.GetString(reader.GetOrdinal("Name")),
+                Description = reader.IsDBNull(reader.GetOrdinal("Description"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("Description")),
+                StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
+                BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("BranchId")),
+                IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("CreatedById")),
+                CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
+                ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
+                StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("StoreName")),
+                RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("RackName"))
+            };
         }
     }
 }

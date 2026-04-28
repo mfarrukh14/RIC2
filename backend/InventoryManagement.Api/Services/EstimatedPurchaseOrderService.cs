@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<EstimatedPurchaseOrderService> _logger;
+        private readonly string _schemaPrefix;
 
         public EstimatedPurchaseOrderService(IConfiguration configuration, ILogger<EstimatedPurchaseOrderService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IEnumerable<EstimatedPurchaseOrderItem>> GetEstimatedPurchaseOrdersAsync(EstimatedPurchaseOrderSearchRequest request)
         {
@@ -114,7 +119,7 @@ LEFT JOIN LatestReceipt lr ON lr.StoreId = rt.StoreId AND lr.ItemId = rt.ItemId 
 LEFT JOIN dbo.Vendors v ON v.Id = lr.VendorId
 LEFT JOIN dbo.Manufacturers m ON m.Id = lr.ManufacturerId
 LEFT JOIN ConsumptionTotals ct ON ct.StoreId = rt.StoreId AND ct.ItemId = rt.ItemId
-LEFT JOIN dbo.ItemTypeSaleLevels levels ON levels.ItemTypeId = itm.ItemTypeId AND levels.IsDeleted = 0 AND levels.IsActive = 1
+LEFT JOIN dbo.ItemTypeSaleLevels levels ON levels.ItemTypeId = itm.ItemTypeId AND levels.IsActive = 1
 WHERE (@StoreId IS NULL OR rt.StoreId = @StoreId)
   AND (@VendorId IS NULL OR lr.VendorId = @VendorId)
   AND (@ManufacturerId IS NULL OR lr.ManufacturerId = @ManufacturerId)
@@ -126,7 +131,7 @@ ORDER BY
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(query, connection)
+                using var command = new SqlCommand(NormalizeSql(query), connection)
                 {
                     CommandType = CommandType.Text
                 };

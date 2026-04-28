@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<DemandWiseValueService> _logger;
+        private readonly string _schemaPrefix;
 
         public DemandWiseValueService(IConfiguration configuration, ILogger<DemandWiseValueService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<DemandWiseValueResponse> GetAsync(DemandWiseValueFilter filter)
         {
@@ -23,52 +28,43 @@ namespace InventoryManagement.Api.Services
             const string sql = @"
 WITH IssuedEntries AS (
     SELECT
-        dr.DemandRequestId,
-        dr.DRNo,
-        dr.Status,
+        dr.Id AS DemandRequestId,
+        dr.DemandRequestNumber AS DRNo,
+        COALESCE(drs.Name, 'Unknown') AS Status,
         dr.BranchId,
         b.Name AS BranchName,
-        dr.RequestedStoreId AS StoreId,
+        dr.RequestedToStoreId AS StoreId,
         s.StoreName,
         dri.ItemId,
         COALESCE(i.Name, 'Unassigned Item') AS ItemName,
-        CAST(COALESCE(NULLIF(dri.IssuedQuantity, 0), NULLIF(dri.IssuingQuantity, 0), NULLIF(dri.ApprovedQuantity, 0), dri.RequestedQuantity, 0) AS INT) AS IssuedQty,
-        COALESCE(
-            (
-                SELECT TOP 1 drlc.CreatedOn
-                FROM dbo.DemandRequestLifeCycles drlc
-                INNER JOIN dbo.DemandRequestStatuses drs ON drs.DemandRequestStatusId = drlc.DemandRequestStatusId
-                WHERE drlc.DemandRequestId = dr.DemandRequestId
-                  AND drs.StatusName IN ('Issued', 'Issue', 'Partial Issued')
-                ORDER BY drlc.CreatedOn DESC, drlc.Id DESC
-            ),
-            dr.ModifiedOn,
-            dr.CreatedOn
-        ) AS IssuedDate,
+        CAST(COALESCE(NULLIF(dri.IssuedQuantity, 0), NULLIF(dri.ApprovedQuantity, 0), dri.RequestedQuantity, 0) AS INT) AS IssuedQty,
+        COALESCE(dr.IssuedDate, dr.ModifiedOn, dr.CreatedOn) AS IssuedDate,
         CASE
             WHEN COALESCE(it.Name, '') LIKE '%medicine%' OR i.Name LIKE 'Solution %' THEN 'Medicine(s)'
             WHEN i.Name LIKE '%Syringe%' OR i.Name LIKE '%Cannula%' OR i.Name LIKE '%Electrode%' OR i.Name LIKE '%Mask%' OR i.Name LIKE '%Gloves%' OR i.Name LIKE '%Gauze%' OR i.Name LIKE '%Pads%' OR i.Name LIKE '%Kit%' THEN 'Disposable(s)'
             ELSE 'Item(s)'
         END AS ItemType
     FROM dbo.DemandRequests dr
-    INNER JOIN dbo.DemandRequestItems dri ON dri.DemandRequestId = dr.DemandRequestId AND dri.IsActive = 1
+    INNER JOIN dbo.DemandRequestItems dri ON dri.DemandRequestId = dr.Id AND dri.IsActive = 1
     INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
-    INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedStoreId
+    INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedToStoreId
     LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
     LEFT JOIN dbo.ItemTypes it ON it.Id = i.ItemTypeId
+    LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
     WHERE dr.IsActive = 1
-      AND dr.Status IN ('Issued', 'Received', 'Approved')
+      AND drs.Name IN ('Issued', 'Received', 'Approved')
 ),
 LatestValue AS (
     SELECT
-        ps.StoreId,
-        ps.ItemId,
-        ps.BatchNo,
-        CAST(ISNULL(ps.Amount, 0) AS DECIMAL(18, 2)) AS UnitBuyingPrice,
-        CAST(ISNULL(ps.TotalPrice, 0) AS DECIMAL(18, 2)) AS PurchaseTotal,
-        ROW_NUMBER() OVER (PARTITION BY ps.StoreId, ps.ItemId ORDER BY ps.PurchaseDate DESC, ps.Id DESC) AS RowNum
-    FROM dbo.PurchaseSummary ps
-    WHERE ps.IsActive = 1
+        inv.StoreId,
+        det.ItemId,
+        CAST(NULL AS NVARCHAR(100)) AS BatchNo,
+        CAST(ISNULL(det.UnitBuyingPrice, 0) AS DECIMAL(18, 2)) AS UnitBuyingPrice,
+        CAST(ISNULL(det.TotalBuyingPrice, 0) AS DECIMAL(18, 2)) AS PurchaseTotal,
+        ROW_NUMBER() OVER (PARTITION BY inv.StoreId, det.ItemId ORDER BY inv.CreatedOn DESC, inv.Id DESC, det.Id DESC) AS RowNum
+    FROM dbo.Inventories inv
+    INNER JOIN dbo.InventoryDetails det ON det.InventoryId = inv.Id
+    WHERE inv.IsActive = 1
 )
 SELECT
     ie.ItemName,
@@ -107,7 +103,7 @@ ORDER BY ie.IssuedDate DESC, ie.DRNo DESC;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection)
+                using var command = new SqlCommand(NormalizeSql(sql), connection)
                 {
                     CommandType = CommandType.Text
                 };

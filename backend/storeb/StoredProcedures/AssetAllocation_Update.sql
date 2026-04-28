@@ -30,60 +30,21 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Get the current InventoryItemId before update
-    DECLARE @CurrentInventoryItemId INT;
-    SELECT @CurrentInventoryItemId = InventoryItemId 
-    FROM dbo.AssetAllocations 
-    WHERE Id = @Id;
-    
     UPDATE dbo.AssetAllocations
     SET
-        Remarks = @Remarks,
+        Notes = @Remarks,
         AllocatedDate = @AllocatedDate,
-        ReturnDate = @ReturnDate,
         UserId = @UserId,
         DepartmentId = @DepartmentId,
         SubDepartmentId = @SubDepartmentId,
         RoomId = @RoomId,
         ItemId = @ItemId,
         BranchId = @BranchId,
-        IsReturn = @IsReturn,
-        ReturnRemarks = @ReturnRemarks,
         Quantity = @Quantity,
-        InventoryItemId = @InventoryItemId,
-        SysBatchNo = @SysBatchNo,
-        BatchNo = @BatchNo,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,
         ModifiedOn = GETUTCDATE()
     WHERE Id = @Id;
-    
-    -- Update inventory item status based on return status
-    IF @InventoryItemId IS NOT NULL
-    BEGIN
-        IF @IsReturn = 1
-        BEGIN
-            -- Item is being returned
-            UPDATE dbo.InventoryItems 
-            SET Status = 'Available', ModifiedOn = GETUTCDATE()
-            WHERE Id = @InventoryItemId;
-        END
-        ELSE
-        BEGIN
-            -- Item is still allocated
-            UPDATE dbo.InventoryItems 
-            SET Status = 'Allocated', ModifiedOn = GETUTCDATE()
-            WHERE Id = @InventoryItemId;
-        END
-    END
-    
-    -- If the inventory item changed, update the previous item status
-    IF @CurrentInventoryItemId IS NOT NULL AND @CurrentInventoryItemId != @InventoryItemId
-    BEGIN
-        UPDATE dbo.InventoryItems 
-        SET Status = 'Available', ModifiedOn = GETUTCDATE()
-        WHERE Id = @CurrentInventoryItemId;
-    END
     
     SELECT @@ROWCOUNT as AffectedRows;
 END

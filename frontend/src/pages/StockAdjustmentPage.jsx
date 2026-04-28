@@ -4,6 +4,22 @@ import stockAdjustmentApi from '../services/stockAdjustmentApi';
 import inventoryApi from '../services/inventoryApi';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
 
+const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
+  (items || [])
+    .map((item, index) => {
+      const id = idKeys.map((key) => item?.[key]).find((value) => value !== null && value !== undefined && value !== '');
+      if (id === null || id === undefined || id === '') {
+        return null;
+      }
+
+      const name = nameKeys.map((key) => item?.[key]).find((value) => value !== null && value !== undefined && value !== '');
+      return {
+        id,
+        name: name ?? `${fallbackLabel} ${index + 1}`,
+      };
+    })
+    .filter(Boolean);
+
 const StockAdjustmentPage = () => {
   const [stockAdjustments, setStockAdjustments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,8 +52,8 @@ const StockAdjustmentPage = () => {
   const loadLookupData = async () => {
     try {
       const data = await inventoryApi.getLookupData();
-      setStores(data.stores || []);
-      setBranches(data.branches || []);
+      setStores(normalizeLookupOptions(data.stores, ['id', 'storeId'], ['name', 'storeName'], 'Store'));
+      setBranches(normalizeLookupOptions(data.branches, ['id', 'branchId'], ['name', 'branchName'], 'Branch'));
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }

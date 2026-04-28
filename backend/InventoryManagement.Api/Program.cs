@@ -1,13 +1,29 @@
 using InventoryManagement.Api.Services;
 using InventoryManagement.API.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 
-var builder = WebApplication.CreateBuilder(args);
+var preferredContentRoot = File.Exists(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+    ? AppContext.BaseDirectory
+    : Directory.GetCurrentDirectory();
 
-// Expose Kestrel on all interfaces so other hosts can reach port 5100
-builder.WebHost.ConfigureKestrel(options =>
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
-    options.ListenAnyIP(5100);
+    Args = args,
+    ContentRootPath = preferredContentRoot
 });
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+
+var explicitUrls = builder.Configuration["ASPNETCORE_URLS"] ?? builder.Configuration["urls"];
+
+if (string.IsNullOrWhiteSpace(explicitUrls))
+{
+    // Default to port 5100, but allow ASPNETCORE_URLS/urls to override it for local side-by-side runs.
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(5100);
+    });
+}
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -74,6 +90,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
+        if (corsOrigins is { Length: > 0 })
+        {
+            policy.WithOrigins(corsOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            return;
+        }
+
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();
@@ -83,12 +107,13 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Initialize database on startup unless explicitly skipped for local recovery runs.
+var databaseInitializationEnabled = builder.Configuration.GetValue("DatabaseInitialization:Enabled", builder.Environment.IsDevelopment());
 var skipDatabaseInitialization = string.Equals(
     Environment.GetEnvironmentVariable("SKIP_DB_INIT"),
     "1",
     StringComparison.OrdinalIgnoreCase);
 
-if (!skipDatabaseInitialization)
+if (databaseInitializationEnabled && !skipDatabaseInitialization)
 {
     using var scope = app.Services.CreateScope();
     var dbInitService = scope.ServiceProvider.GetRequiredService<IDatabaseInitializationService>();
@@ -104,6 +129,58 @@ if (app.Environment.IsDevelopment())
 
 // Enable CORS - must come before UseAuthorization
 app.UseCors("AllowAll");
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception exception)
+    {
+        if (context.Response.HasStarted)
+        {
+            throw;
+        }
+
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("UnhandledException");
+
+        logger.LogError(
+            exception,
+            "Unhandled exception while processing {Method} {Path}",
+            context.Request.Method,
+            context.Request.Path);
+
+        var (statusCode, title, detail) = exception switch
+        {
+            SqlException => (
+                StatusCodes.Status503ServiceUnavailable,
+                "Database connectivity failure",
+                "The API could not reach its SQL Server dependency from this host."),
+            _ => (
+                StatusCodes.Status500InternalServerError,
+                "Unhandled server error",
+                "The request failed before the API could produce a response.")
+        };
+
+        context.Response.Clear();
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Instance = context.Request.Path
+        };
+
+        problem.Extensions["traceId"] = context.TraceIdentifier;
+
+        await context.Response.WriteAsJsonAsync(problem);
+    }
+});
 
 app.UseAuthorization();
 

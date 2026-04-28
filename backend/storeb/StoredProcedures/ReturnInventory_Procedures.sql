@@ -1,14 +1,14 @@
-USE InventoryManagementDB_SP;
+﻿USE InventoryManagementDB_SP;
 GO
 
 -- =============================================
--- 1. ReturnInventory_GetAll - Get all return inventory records with filters
+-- 1. ReturnInventory_GetAll
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_GetAll
     @BranchId INT = NULL,
     @StoreId INT = NULL,
     @ItemTypeId INT = NULL,
-    @ItemType NVARCHAR(50) = NULL, -- 'Medicine', 'Disposable', 'Item', or NULL for All
+    @ItemType NVARCHAR(50) = NULL,
     @StartDate DATETIME = NULL,
     @EndDate DATETIME = NULL,
     @PurchaseOrderNo NVARCHAR(50) = NULL,
@@ -20,19 +20,19 @@ BEGIN
     
     SELECT 
         ri.Id,
-        ri.InventoryNo,
-        ri.PurchaseOrderNo,
+        ri.ReturnNumber AS InventoryNo,
+        NULL AS PurchaseOrderNo,
         ri.BranchId,
         b.Name AS BranchName,
         ri.StoreId,
         s.StoreName AS StoreName,
-        ri.ItemTypeId,
-        it.Name AS ItemTypeName,
-        ri.ItemId,
-        ri.ItemName,
-        ri.ReturnQuantity,
-        ri.StockTypeId,
-        st.StockTypeName AS StockTypeName,
+        NULL AS ItemTypeId,
+        NULL AS ItemTypeName,
+        NULL AS ItemId,
+        NULL AS ItemName,
+        ISNULL((SELECT SUM(rii.Quantity) FROM dbo.ReturnInventoryItems rii WHERE rii.ReturnInventoryId = ri.Id AND rii.IsActive = 1), 0) AS ReturnQuantity,
+        NULL AS StockTypeId,
+        NULL AS StockTypeName,
         ri.VendorId,
         v.Name AS VendorName,
         ri.ReturnDate,
@@ -43,28 +43,21 @@ BEGIN
         ri.CreatedOn,
         ri.ModifiedById,
         ri.ModifiedOn
-    FROM ReturnInventory ri
-    LEFT JOIN Branches b ON ri.BranchId = b.Id
-    LEFT JOIN Stores s ON ri.StoreId = s.StoreId
-    LEFT JOIN ItemTypes it ON ri.ItemTypeId = it.Id
-    LEFT JOIN StockTypes st ON ri.StockTypeId = st.StockTypeId
-    LEFT JOIN Vendors v ON ri.VendorId = v.Id
+    FROM dbo.ReturnInventory ri
+    LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
+    LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
+    LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
     WHERE ri.IsActive = 1
         AND (@BranchId IS NULL OR ri.BranchId = @BranchId)
         AND (@StoreId IS NULL OR ri.StoreId = @StoreId)
-        AND (@ItemTypeId IS NULL OR ri.ItemTypeId = @ItemTypeId)
-        AND (@ItemType IS NULL OR it.Name = @ItemType)
         AND (@StartDate IS NULL OR ri.ReturnDate >= @StartDate)
         AND (@EndDate IS NULL OR ri.ReturnDate <= @EndDate)
-        AND (@PurchaseOrderNo IS NULL OR ri.PurchaseOrderNo LIKE '%' + @PurchaseOrderNo + '%')
-        AND (@ItemId IS NULL OR ri.ItemId = @ItemId)
-        AND (@InventoryNo IS NULL OR ri.InventoryNo LIKE '%' + @InventoryNo + '%')
     ORDER BY ri.CreatedOn DESC;
 END
 GO
 
 -- =============================================
--- 2. ReturnInventory_GetById - Get a single return inventory record by ID
+-- 2. ReturnInventory_GetById
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_GetById
     @Id INT
@@ -74,19 +67,19 @@ BEGIN
     
     SELECT 
         ri.Id,
-        ri.InventoryNo,
-        ri.PurchaseOrderNo,
+        ri.ReturnNumber AS InventoryNo,
+        NULL AS PurchaseOrderNo,
         ri.BranchId,
         b.Name AS BranchName,
         ri.StoreId,
         s.StoreName AS StoreName,
-        ri.ItemTypeId,
-        it.Name AS ItemTypeName,
-        ri.ItemId,
-        ri.ItemName,
-        ri.ReturnQuantity,
-        ri.StockTypeId,
-        st.StockTypeName AS StockTypeName,
+        NULL AS ItemTypeId,
+        NULL AS ItemTypeName,
+        NULL AS ItemId,
+        NULL AS ItemName,
+        ISNULL((SELECT SUM(rii.Quantity) FROM dbo.ReturnInventoryItems rii WHERE rii.ReturnInventoryId = ri.Id AND rii.IsActive = 1), 0) AS ReturnQuantity,
+        NULL AS StockTypeId,
+        NULL AS StockTypeName,
         ri.VendorId,
         v.Name AS VendorName,
         ri.ReturnDate,
@@ -97,18 +90,16 @@ BEGIN
         ri.CreatedOn,
         ri.ModifiedById,
         ri.ModifiedOn
-    FROM ReturnInventory ri
-    LEFT JOIN Branches b ON ri.BranchId = b.Id
-    LEFT JOIN Stores s ON ri.StoreId = s.StoreId
-    LEFT JOIN ItemTypes it ON ri.ItemTypeId = it.Id
-    LEFT JOIN StockTypes st ON ri.StockTypeId = st.StockTypeId
-    LEFT JOIN Vendors v ON ri.VendorId = v.Id
+    FROM dbo.ReturnInventory ri
+    LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
+    LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
+    LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
     WHERE ri.Id = @Id;
 END
 GO
 
 -- =============================================
--- 3. ReturnInventory_Insert - Insert a new return inventory record
+-- 3. ReturnInventory_Insert
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_Insert
     @InventoryNo NVARCHAR(50) = NULL,
@@ -116,9 +107,9 @@ CREATE OR ALTER PROCEDURE ReturnInventory_Insert
     @BranchId INT = NULL,
     @StoreId INT = NULL,
     @ItemTypeId INT = NULL,
-    @ItemId INT,
-    @ItemName NVARCHAR(MAX),
-    @ReturnQuantity INT,
+    @ItemId INT = NULL,
+    @ItemName NVARCHAR(MAX) = NULL,
+    @ReturnQuantity INT = 0,
     @StockTypeId INT = NULL,
     @VendorId INT = NULL,
     @ReturnDate DATETIME = NULL,
@@ -129,53 +120,41 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Set default return date if not provided
     IF @ReturnDate IS NULL
         SET @ReturnDate = GETDATE();
     
-    INSERT INTO ReturnInventory (
-        InventoryNo,
-        PurchaseOrderNo,
-        BranchId,
-        StoreId,
-        ItemTypeId,
-        ItemId,
-        ItemName,
-        ReturnQuantity,
-        StockTypeId,
-        VendorId,
-        ReturnDate,
-        Reason,
-        Notes,
-        IsActive,
-        CreatedById,
-        CreatedOn
+    IF @InventoryNo IS NULL
+    BEGIN
+        DECLARE @NextId INT;
+        SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM dbo.ReturnInventory;
+        SET @InventoryNo = 'RET-' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
+    END
+    
+    INSERT INTO dbo.ReturnInventory (
+        ReturnNumber, BranchId, StoreId, VendorId,
+        ReturnDate, Reason, Notes, Status,
+        IsActive, CreatedById, CreatedOn
     )
     VALUES (
-        @InventoryNo,
-        @PurchaseOrderNo,
-        @BranchId,
-        @StoreId,
-        @ItemTypeId,
-        @ItemId,
-        @ItemName,
-        @ReturnQuantity,
-        @StockTypeId,
-        @VendorId,
-        @ReturnDate,
-        @Reason,
-        @Notes,
-        1,
-        @CreatedById,
-        GETDATE()
+        @InventoryNo, @BranchId, @StoreId, @VendorId,
+        @ReturnDate, @Reason, @Notes, 'Pending',
+        1, @CreatedById, GETDATE()
     );
     
-    SELECT SCOPE_IDENTITY() AS Id;
+    DECLARE @NewId INT = SCOPE_IDENTITY();
+    
+    IF @ItemId IS NOT NULL
+    BEGIN
+        INSERT INTO dbo.ReturnInventoryItems (ItemId, ReturnInventoryId, Quantity, Reason, Notes, IsActive, CreatedOn)
+        VALUES (@ItemId, @NewId, @ReturnQuantity, @Reason, @Notes, 1, GETDATE());
+    END
+    
+    SELECT @NewId AS Id;
 END
 GO
 
 -- =============================================
--- 4. ReturnInventory_Update - Update an existing return inventory record
+-- 4. ReturnInventory_Update
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_Update
     @Id INT,
@@ -184,12 +163,12 @@ CREATE OR ALTER PROCEDURE ReturnInventory_Update
     @BranchId INT = NULL,
     @StoreId INT = NULL,
     @ItemTypeId INT = NULL,
-    @ItemId INT,
-    @ItemName NVARCHAR(MAX),
-    @ReturnQuantity INT,
+    @ItemId INT = NULL,
+    @ItemName NVARCHAR(MAX) = NULL,
+    @ReturnQuantity INT = 0,
     @StockTypeId INT = NULL,
     @VendorId INT = NULL,
-    @ReturnDate DATETIME,
+    @ReturnDate DATETIME = NULL,
     @Reason NVARCHAR(MAX) = NULL,
     @Notes NVARCHAR(MAX) = NULL,
     @ModifiedById INT = 1
@@ -197,17 +176,10 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE ReturnInventory
+    UPDATE dbo.ReturnInventory
     SET 
-        InventoryNo = @InventoryNo,
-        PurchaseOrderNo = @PurchaseOrderNo,
         BranchId = @BranchId,
         StoreId = @StoreId,
-        ItemTypeId = @ItemTypeId,
-        ItemId = @ItemId,
-        ItemName = @ItemName,
-        ReturnQuantity = @ReturnQuantity,
-        StockTypeId = @StockTypeId,
         VendorId = @VendorId,
         ReturnDate = @ReturnDate,
         Reason = @Reason,
@@ -221,7 +193,7 @@ END
 GO
 
 -- =============================================
--- 5. ReturnInventory_Delete - Soft delete a return inventory record
+-- 5. ReturnInventory_Delete
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_Delete
     @Id INT,
@@ -230,7 +202,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE ReturnInventory
+    UPDATE dbo.ReturnInventory
     SET 
         IsActive = 0,
         ModifiedById = @ModifiedById,
@@ -242,49 +214,21 @@ END
 GO
 
 -- =============================================
--- 6. ReturnInventory_GetLookupData - Get all lookup data for dropdowns
+-- 6. ReturnInventory_GetLookupData
 -- =============================================
 CREATE OR ALTER PROCEDURE ReturnInventory_GetLookupData
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Get Branches
-    SELECT Id, Name
-    FROM Branches
-    WHERE IsActive = 1
-    ORDER BY Name;
-    
-    -- Get Stores
-    SELECT StoreId AS Id, StoreName AS Name
-    FROM Stores
-    WHERE IsActive = 1
-    ORDER BY StoreName;
-    
-    -- Get Item Types
-    SELECT Id, Name
-    FROM ItemTypes
-    WHERE IsActive = 1
-    ORDER BY Name;
-    
-    -- Get Stock Types
-    SELECT StockTypeId AS Id, StockTypeName AS Name
-    FROM StockTypes
-    WHERE IsActive = 1
-    ORDER BY StockTypeName;
-    
-    -- Get Vendors
-    SELECT Id, Name
-    FROM Vendors
-    WHERE IsActive = 1
-    ORDER BY Name;
-    
-    -- Get Items
-    SELECT Id, Name
-    FROM Items
-    WHERE IsActive = 1
-    ORDER BY Name;
+    SELECT Id, Name FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name;
+    SELECT StoreId AS Id, StoreName AS Name FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreName;
+    SELECT Id, Name FROM dbo.ItemTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM dbo.Vendors WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM dbo.Items WHERE IsActive = 1 ORDER BY Name;
 END
 GO
 
-PRINT 'All ReturnInventory stored procedures created successfully';
+PRINT 'All dbo.ReturnInventory stored procedures created successfully';
+

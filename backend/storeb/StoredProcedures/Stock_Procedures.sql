@@ -2,8 +2,8 @@
 -- Stock Search Stored Procedure
 -- =============================================
 CREATE OR ALTER PROCEDURE Stock_Search
-    @BranchId UNIQUEIDENTIFIER = NULL,
-    @StoreId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
+    @StoreId INT = NULL,
     @ItemTypeId INT = NULL,
     @ItemId INT = NULL,
     @CategoryIds NVARCHAR(MAX) = NULL, -- Comma-separated
@@ -32,7 +32,7 @@ BEGIN
         s.Id,
         i.Id AS ItemId,
         i.Name AS ItemName,
-        'Regular' AS StockType, -- StockType not directly linked to Items
+        'Regular' AS StockType,
         s.TotalItems,
         s.MinimumPanicLevel,
         s.StoreId,
@@ -46,7 +46,7 @@ BEGIN
         i.IsFridgeItem,
         i.IsConsumptionItem
     FROM dbo.Stocks s
-    INNER JOIN dbo.Items i ON CAST(s.ItemId AS NVARCHAR(36)) = CAST(i.Id AS NVARCHAR(36))
+    INNER JOIN dbo.Items i ON s.ItemId = i.Id
     LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN dbo.ItemCategories ic ON i.CategoryId = ic.Id
     WHERE s.IsActive = 1

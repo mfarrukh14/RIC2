@@ -60,7 +60,11 @@ const StockPage = () => {
     try {
       const searchFilters = {
         ...filters,
-        storeId: filters.storeId ? convertStoreIdToGuid(filters.storeId) : null,
+        branchId: filters.branchId ? Number(filters.branchId) : null,
+        storeId: filters.storeId ? Number(filters.storeId) : null,
+        itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
+        itemId: filters.itemId ? Number(filters.itemId) : null,
+        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
         categoryIds: selectedCategories.join(',')
       };
       const data = await stockApi.searchStocks(searchFilters);
@@ -71,14 +75,6 @@ const StockPage = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const convertStoreIdToGuid = (storeId) => {
-    if (typeof storeId === 'number' || !storeId.includes('-')) {
-      const paddedId = String(storeId).padStart(8, '0');
-      return `${paddedId}-0000-0000-0000-000000000000`;
-    }
-    return storeId;
   };
 
   const handleFilterChange = (e) => {
@@ -135,7 +131,7 @@ const StockPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Please Select</option>
-              <option value="00000000-0000-0000-0000-000000000001">Main Branch</option>
+              <option value="1">Main Branch</option>
             </select>
           </div>
 
@@ -151,11 +147,16 @@ const StockPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Store</option>
-              {stores.map(store => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
+              {stores.map((store, index) => {
+                const storeId = store.storeId ?? store.id ?? '';
+                const storeName = store.storeName ?? store.name ?? `Store ${index + 1}`;
+
+                return (
+                <option key={`store-${storeId || index}`} value={storeId}>
+                  {storeName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
 
@@ -189,11 +190,16 @@ const StockPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Item</option>
-              {items.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
+              {items.map((item, index) => {
+                const itemId = item.id ?? item.itemId ?? '';
+                const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+
+                return (
+                <option key={`item-${itemId || index}`} value={itemId}>
+                  {itemName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
 
@@ -229,11 +235,16 @@ const StockPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Stock Type</option>
-              {stockTypes.map(st => (
-                <option key={st.id} value={st.id}>
-                  {st.name}
+              {stockTypes.map((stockType, index) => {
+                const stockTypeId = stockType.id ?? stockType.stockTypeId ?? '';
+                const stockTypeName = stockType.name ?? stockType.stockTypeName ?? `Stock Type ${index + 1}`;
+
+                return (
+                <option key={`stock-type-${stockTypeId || index}`} value={stockTypeId}>
+                  {stockTypeName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
 

@@ -1,4 +1,4 @@
--- =============================================
+﻿-- =============================================
 -- Stored Procedures for ItemTypeSaleLevels
 -- =============================================
 
@@ -22,15 +22,15 @@ BEGIN
         itsl.BranchId,
         b.Name AS BranchName,
         itsl.IsActive,
-        itsl.CreatedById,
+        CAST(itsl.CreatedById AS NVARCHAR(450)) AS CreatedById,
         itsl.CreatedOn,
-        itsl.ModifiedById,
+        CAST(itsl.ModifiedById AS NVARCHAR(450)) AS ModifiedById,
         itsl.ModifiedOn,
-        itsl.IsDeleted
+        CAST(0 AS BIT) AS IsDeleted
     FROM dbo.ItemTypeSaleLevels itsl
     LEFT JOIN dbo.ItemTypes it ON itsl.ItemTypeId = it.Id
     LEFT JOIN dbo.Branches b ON itsl.BranchId = b.Id
-    WHERE itsl.IsDeleted = 0 AND itsl.IsActive = 1
+    WHERE itsl.IsActive = 1
     ORDER BY itsl.CreatedOn DESC;
 END
 GO
@@ -56,15 +56,15 @@ BEGIN
         itsl.BranchId,
         b.Name AS BranchName,
         itsl.IsActive,
-        itsl.CreatedById,
+        CAST(itsl.CreatedById AS NVARCHAR(450)) AS CreatedById,
         itsl.CreatedOn,
-        itsl.ModifiedById,
+        CAST(itsl.ModifiedById AS NVARCHAR(450)) AS ModifiedById,
         itsl.ModifiedOn,
-        itsl.IsDeleted
+        CAST(0 AS BIT) AS IsDeleted
     FROM dbo.ItemTypeSaleLevels itsl
     LEFT JOIN dbo.ItemTypes it ON itsl.ItemTypeId = it.Id
     LEFT JOIN dbo.Branches b ON itsl.BranchId = b.Id
-    WHERE itsl.Id = @Id AND itsl.IsDeleted = 0;
+    WHERE itsl.Id = @Id;
 END
 GO
 
@@ -92,7 +92,6 @@ BEGIN
         BranchId,
         CreatedById,
         CreatedOn,
-        IsDeleted,
         IsActive
     )
     VALUES (
@@ -101,9 +100,8 @@ BEGIN
         @SlowMovingLevel,
         @DeadLevel,
         @BranchId,
-        @CreatedById,
+        CASE WHEN @CreatedById IS NOT NULL THEN TRY_CAST(@CreatedById AS INT) ELSE NULL END,
         GETDATE(),
-        0,
         1
     );
 
@@ -135,9 +133,9 @@ BEGIN
         SlowMovingLevel = @SlowMovingLevel,
         DeadLevel = @DeadLevel,
         BranchId = @BranchId,
-        ModifiedById = @ModifiedById,
+        ModifiedById = CASE WHEN @ModifiedById IS NOT NULL THEN TRY_CAST(@ModifiedById AS INT) ELSE NULL END,
         ModifiedOn = GETDATE()
-    WHERE Id = @Id AND IsDeleted = 0;
+    WHERE Id = @Id;
 
     SELECT @@ROWCOUNT AS RowsAffected;
 END
@@ -156,7 +154,6 @@ BEGIN
 
     UPDATE dbo.ItemTypeSaleLevels
     SET 
-        IsDeleted = 1,
         IsActive = 0,
         ModifiedOn = GETDATE()
     WHERE Id = @Id;

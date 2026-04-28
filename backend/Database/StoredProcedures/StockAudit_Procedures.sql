@@ -10,8 +10,8 @@ IF OBJECT_ID('dbo.StockAudit_Search', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.StockAudit_Search
-    @BranchId UNIQUEIDENTIFIER = NULL,
-    @StoreId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
+    @StoreId INT = NULL,
     @ItemTypeId INT = NULL,
     @ItemIds NVARCHAR(MAX) = NULL, -- Comma-separated INTs
     @ManufacturerIds NVARCHAR(MAX) = NULL -- Comma-separated INTs
@@ -45,7 +45,7 @@ BEGIN
     SELECT DISTINCT
         i.Id AS ItemId,
         i.Name AS ItemName,
-        st.StockTypeName AS StockType,
+        st.Name AS StockType,
         CAST(0 AS FLOAT) AS TotalItems,
         CAST(0 AS FLOAT) AS QtyOnShelf,
         CAST(0 AS FLOAT) AS Difference,
@@ -54,7 +54,7 @@ BEGIN
         ISNULL(i.QuantityPerPacket, 0) AS QuantityPerPacket,
         i.ModifiedOn
     FROM dbo.Items i
-    LEFT JOIN dbo.StockTypes st ON i.ItemTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON i.ItemTypeId = st.Id
     WHERE 
         (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
         AND (NOT EXISTS(SELECT 1 FROM #ItemIds) OR i.Id IN (SELECT ItemId FROM #ItemIds))
@@ -74,52 +74,47 @@ IF OBJECT_ID('dbo.StockAudit_Insert', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.StockAudit_Insert
-    @StoreId UNIQUEIDENTIFIER,
-    @BranchId UNIQUEIDENTIFIER,
-    @StockAuditDate DATETIME,
-    @Remarks NVARCHAR(MAX) = NULL,
-    @CreatedById UNIQUEIDENTIFIER = NULL
+    @StoreId INT,
+    @BranchId INT,
+    @AuditDate DATETIME,
+    @Notes NVARCHAR(MAX) = NULL,
+    @CreatedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    DECLARE @NewId UNIQUEIDENTIFIER = NEWID();
-    
     INSERT INTO dbo.StockAudits (
-        Id,
         StoreId,
         BranchId,
-        StockAuditDate,
-        Remarks,
+        AuditDate,
+        Notes,
         IsActive,
         CreatedById,
-        CreatedOn,
-        IsDeleted
+        CreatedOn
     )
     VALUES (
-        @NewId,
         @StoreId,
         @BranchId,
-        @StockAuditDate,
-        @Remarks,
+        @AuditDate,
+        @Notes,
         1,
         @CreatedById,
-        GETDATE(),
-        0
+        GETDATE()
     );
+    
+    DECLARE @NewId INT = SCOPE_IDENTITY();
     
     SELECT 
         Id,
         StoreId,
         BranchId,
-        StockAuditDate,
-        Remarks,
+        AuditDate,
+        Notes,
         IsActive,
         CreatedById,
         CreatedOn,
         ModifiedById,
-        ModifiedOn,
-        IsDeleted
+        ModifiedOn
     FROM dbo.StockAudits
     WHERE Id = @NewId;
 END

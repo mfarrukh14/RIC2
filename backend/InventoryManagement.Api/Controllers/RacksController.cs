@@ -55,8 +55,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                // Using a system user ID for now
-                var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+                var userId = 1;
                 var id = await _rackService.CreateRackAsync(request, userId);
                 return CreatedAtAction(nameof(GetById), new { id }, new { id });
             }
@@ -73,7 +72,7 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 request.Id = id;
-                var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+                var userId = 1;
                 await _rackService.UpdateRackAsync(request, userId);
                 return NoContent();
             }
@@ -89,7 +88,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+                var userId = 1;
                 await _rackService.DeleteRackAsync(id, userId);
                 return NoContent();
             }

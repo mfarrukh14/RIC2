@@ -28,7 +28,7 @@ BEGIN
     SELECT 
         id.Id,
         i.Name AS ItemName,
-        st.StockTypeName AS StockType,
+        st.Name AS StockType,
         CAST(id.Id AS NVARCHAR(50)) AS BatchNo, -- Using ID as batch number since no BatchNo column
         id.MfgDate,
         id.ExpiryDate,
@@ -39,7 +39,7 @@ BEGIN
     INNER JOIN dbo.Inventories inv ON id.InventoryId = inv.Id
     INNER JOIN dbo.Items i ON id.ItemId = i.Id
     LEFT JOIN dbo.Stores s ON inv.StoreId = s.StoreId
-    LEFT JOIN dbo.StockTypes st ON inv.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON inv.StockTypeId = st.Id
     WHERE id.TotalItems > 0
         AND id.ExpiryDate IS NOT NULL
         AND id.ExpiryDate >= GETDATE() -- Only non-expired items

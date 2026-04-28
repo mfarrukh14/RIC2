@@ -12,16 +12,15 @@ BEGIN
     
     SELECT 
         sta.Id,
-        sta.PharmacyStoreId,
+        sta.StoreId,
         s.StoreName AS StoreName,
-        sta.StockTypes,
-        st.StockTypeName AS StockTypeName,
-        sta.PatientTypes,
+        sta.StockTypeId,
+        st.Name AS StockTypeName,
         sta.CreatedOn
     FROM dbo.StockTypeAssociations sta
-    LEFT JOIN dbo.Stores s ON sta.PharmacyStoreId = s.StoreId
-    LEFT JOIN dbo.StockTypes st ON sta.StockTypes = st.StockTypeId
-    WHERE sta.IsDeleted = 0
+    LEFT JOIN dbo.Stores s ON sta.StoreId = s.StoreId
+    LEFT JOIN dbo.StockTypes st ON sta.StockTypeId = st.Id
+    WHERE sta.IsActive = 1
     ORDER BY sta.CreatedOn DESC;
 END
 GO
@@ -37,16 +36,15 @@ BEGIN
     
     SELECT 
         sta.Id,
-        sta.PharmacyStoreId,
+        sta.StoreId,
         s.StoreName AS StoreName,
-        sta.StockTypes,
-        st.StockTypeName AS StockTypeName,
-        sta.PatientTypes,
+        sta.StockTypeId,
+        st.Name AS StockTypeName,
         sta.CreatedOn
     FROM dbo.StockTypeAssociations sta
-    LEFT JOIN dbo.Stores s ON sta.PharmacyStoreId = s.StoreId
-    LEFT JOIN dbo.StockTypes st ON sta.StockTypes = st.StockTypeId
-    WHERE sta.Id = @Id AND sta.IsDeleted = 0;
+    LEFT JOIN dbo.Stores s ON sta.StoreId = s.StoreId
+    LEFT JOIN dbo.StockTypes st ON sta.StockTypeId = st.Id
+    WHERE sta.Id = @Id AND sta.IsActive = 1;
 END
 GO
 
@@ -54,32 +52,27 @@ GO
 -- Insert Stock Type Association
 -- =============================================
 CREATE OR ALTER PROCEDURE StockTypeAssociation_Insert
-    @PharmacyStoreId INT,
-    @StockTypes INT,
-    @PatientTypes INT,
-    @CreatedById UNIQUEIDENTIFIER
+    @StoreId INT,
+    @StockTypeId INT,
+    @CreatedById INT
 AS
 BEGIN
     SET NOCOUNT ON;
     
     BEGIN TRY
         INSERT INTO dbo.StockTypeAssociations (
-            PharmacyStoreId,
-            StockTypes,
-            PatientTypes,
+            StoreId,
+            StockTypeId,
+            IsActive,
             CreatedById,
-            CreatedOn,
-            IsDeleted,
-            IsActive
+            CreatedOn
         )
         VALUES (
-            @PharmacyStoreId,
-            @StockTypes,
-            @PatientTypes,
+            @StoreId,
+            @StockTypeId,
+            1,
             @CreatedById,
-            GETDATE(),
-            0,
-            1
+            GETDATE()
         );
         
         SELECT SCOPE_IDENTITY() AS Id;
@@ -95,10 +88,9 @@ GO
 -- =============================================
 CREATE OR ALTER PROCEDURE StockTypeAssociation_Update
     @Id INT,
-    @PharmacyStoreId INT,
-    @StockTypes INT,
-    @PatientTypes INT,
-    @ModifiedById UNIQUEIDENTIFIER
+    @StoreId INT,
+    @StockTypeId INT,
+    @ModifiedById INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -106,12 +98,11 @@ BEGIN
     BEGIN TRY
         UPDATE dbo.StockTypeAssociations
         SET 
-            PharmacyStoreId = @PharmacyStoreId,
-            StockTypes = @StockTypes,
-            PatientTypes = @PatientTypes,
+            StoreId = @StoreId,
+            StockTypeId = @StockTypeId,
             ModifiedById = @ModifiedById,
             ModifiedOn = GETDATE()
-        WHERE Id = @Id AND IsDeleted = 0;
+        WHERE Id = @Id AND IsActive = 1;
         
         SELECT @@ROWCOUNT AS RowsAffected;
     END TRY
@@ -132,7 +123,7 @@ BEGIN
     
     BEGIN TRY
         UPDATE dbo.StockTypeAssociations
-        SET IsDeleted = 1
+        SET IsActive = 0
         WHERE Id = @Id;
         
         SELECT @@ROWCOUNT AS RowsAffected;

@@ -17,15 +17,15 @@ BEGIN
         s.StoreName,
         i.Name AS ItemName,
         CAST(scd.Type AS NVARCHAR(50)) AS Type,
-        st.StockTypeName AS StockType,
+        st.Name AS StockType,
         scd.Quantity,
         ISNULL(u.Name, '') AS CreatedBy,
         sc.CreatedOn
     FROM dbo.StockConsumptionDetails scd
     INNER JOIN dbo.StockConsumptions sc ON scd.StockConsumptionId = sc.Id
     LEFT JOIN dbo.Stores s ON CAST(sc.StoreId AS NVARCHAR(50)) = CAST(s.StoreId AS NVARCHAR(50))
-    LEFT JOIN dbo.InventoryItems i ON scd.ItemId = i.Id
-    LEFT JOIN dbo.StockTypes st ON scd.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.Items i ON scd.ItemId = i.Id
+    LEFT JOIN dbo.StockTypes st ON scd.StockTypeId = st.Id
     LEFT JOIN dbo.Users u ON CAST(sc.CreatedById AS NVARCHAR(50)) = CAST(u.Id AS NVARCHAR(50))
     WHERE sc.IsDeleted = 0
         AND scd.IsDeleted = 0
@@ -77,7 +77,7 @@ BEGIN
         i.Name AS ItemName,
         scd.Type,
         scd.StockTypeId,
-        st.StockTypeName,
+        st.Name AS StockTypeName,
         scd.Quantity,
         scd.BranchId,
         scd.InventoryItemId,
@@ -91,8 +91,8 @@ BEGIN
         scd.IsDeleted
     FROM dbo.StockConsumptionDetails scd
     LEFT JOIN dbo.Stores s ON CAST(scd.StoreId AS NVARCHAR(50)) = CAST(s.StoreId AS NVARCHAR(50))
-    LEFT JOIN dbo.InventoryItems i ON scd.ItemId = i.Id
-    LEFT JOIN dbo.StockTypes st ON scd.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.Items i ON scd.ItemId = i.Id
+    LEFT JOIN dbo.StockTypes st ON scd.StockTypeId = st.Id
     WHERE scd.StockConsumptionId = @Id AND scd.IsDeleted = 0;
 END
 GO

@@ -5,6 +5,21 @@ import RackForm from '../components/RackForm';
 import racksApi from '../services/racksApi';
 import inventoryApi from '../services/inventoryApi';
 
+const normalizeStores = (stores) =>
+  (stores || [])
+    .map((store, index) => {
+      const id = store?.id ?? store?.storeId;
+      if (id === null || id === undefined || id === '') {
+        return null;
+      }
+
+      return {
+        id,
+        name: store?.name ?? store?.storeName ?? `Store ${index + 1}`,
+      };
+    })
+    .filter(Boolean);
+
 const RackPage = () => {
   const [racks, setRacks] = useState([]);
   const [stores, setStores] = useState([]);
@@ -34,9 +49,7 @@ const RackPage = () => {
 
   // Enrich racks with store names from the stores list
   const enrichedRacks = racks.map(rack => {
-    // Extract store ID from the GUID format (first 8 characters before the dash)
-    const storeIdFromGuid = rack.storeId ? parseInt(rack.storeId.split('-')[0], 10) : null;
-    const store = stores.find(s => s.id === storeIdFromGuid);
+    const store = stores.find(s => Number(s.id) === Number(rack.storeId));
     
     return {
       ...rack,
@@ -47,7 +60,7 @@ const RackPage = () => {
   const loadStores = async () => {
     try {
       const data = await inventoryApi.getLookupData();
-      setStores(data.stores || []);
+      setStores(normalizeStores(data.stores));
     } catch (err) {
       console.error('Error loading stores:', err);
     }

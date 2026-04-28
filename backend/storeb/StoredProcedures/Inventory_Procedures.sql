@@ -28,7 +28,7 @@ BEGIN
         i.ModifiedOn,
         i.IsFinalized,
         i.StockTypeId,
-        st.StockTypeName,
+        st.Name as StockTypeName,
         i.VendorInvoiceNumber,
         i.VendorInvoiceTimestamp,
         i.Amount,
@@ -58,7 +58,7 @@ BEGIN
     LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
     LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
     LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.IsActive = 1
     ORDER BY i.CreatedOn DESC;
 END
@@ -96,7 +96,7 @@ BEGIN
         i.ModifiedOn,
         i.IsFinalized,
         i.StockTypeId,
-        st.StockTypeName,
+        st.Name as StockTypeName,
         i.VendorInvoiceNumber,
         i.VendorInvoiceTimestamp,
         i.Amount,
@@ -126,7 +126,7 @@ BEGIN
     LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
     LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
     LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.Id = @Id;
     
     -- Get details
@@ -456,7 +456,7 @@ BEGIN
     SELECT StoreId as Id, StoreName as Name FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreName;
     
     -- Stock Types
-    SELECT StockTypeId as Id, StockTypeName as Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY StockTypeName;
+    SELECT Id, Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY Name;
     
     -- Items
     SELECT Id, Name FROM dbo.Items WHERE IsActive = 1 ORDER BY Name;

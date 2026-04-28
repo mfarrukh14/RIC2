@@ -224,14 +224,14 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        public Guid StoreId { get; set; }
+        public int StoreId { get; set; }
         public string? StoreName { get; set; }
         public string? Description { get; set; }
         public string? Location { get; set; }
         public int NumberOfRows { get; set; }
         public int NumberOfCols { get; set; }
         public int NumberOfDraws { get; set; }
-        public Guid BranchId { get; set; }
+        public int BranchId { get; set; }
         public bool IsActive { get; set; }
         public DateTime? CreatedOn { get; set; }
     }
@@ -240,13 +240,13 @@ namespace InventoryManagement.Api.Models
     {
         public int? Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        public Guid StoreId { get; set; }
+        public int StoreId { get; set; }
         public string? Description { get; set; }
         public string? Location { get; set; }
         public int NumberOfRows { get; set; }
         public int NumberOfCols { get; set; }
         public int NumberOfDraws { get; set; }
-        public Guid BranchId { get; set; }
+        public int BranchId { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -260,8 +260,8 @@ namespace InventoryManagement.Api.Models
         public string? StockType { get; set; }
         public int? TotalItems { get; set; }
         public int? MinimumPanicLevel { get; set; }
-        public Guid StoreId { get; set; }
-        public Guid BranchId { get; set; }
+        public int StoreId { get; set; }
+        public int BranchId { get; set; }
         public bool IsActive { get; set; }
         public DateTime? ModifiedOn { get; set; }
         public int? ItemTypeId { get; set; }
@@ -273,8 +273,8 @@ namespace InventoryManagement.Api.Models
 
     public class StockSearchRequest
     {
-        public Guid? BranchId { get; set; }
-        public Guid? StoreId { get; set; }
+        public int? BranchId { get; set; }
+        public int? StoreId { get; set; }
         public int? ItemTypeId { get; set; }
         public int? ItemId { get; set; }
         public string? CategoryIds { get; set; }

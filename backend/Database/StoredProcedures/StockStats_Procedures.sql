@@ -41,13 +41,13 @@ BEGIN
         SELECT 
             i.Id AS ItemId,
             i.Name AS ItemName,
-            st.StockTypeName AS StockType,
+            st.Name AS StockType,
             -- Opening: Stock at start date (would need historical data)
             CAST(0 AS FLOAT) AS Opening,
             -- Received: Sum of inventory received in date range
             ISNULL(SUM(CASE 
                 WHEN inv.CreatedOn >= @StartDate AND inv.CreatedOn <= @EndDate 
-                THEN invd.Quantity 
+                THEN invd.TotalItems 
                 ELSE 0 
             END), 0) AS Received,
             -- Issued: Would come from dispensing/sales records (not implemented yet)
@@ -55,7 +55,7 @@ BEGIN
             -- Balance: Opening + Received - Issued
             CAST(0 AS FLOAT) AS Balance
         FROM dbo.Items i
-        LEFT JOIN dbo.StockTypes st ON i.ItemTypeId = st.StockTypeId
+        LEFT JOIN dbo.StockTypes st ON i.ItemTypeId = st.Id
         LEFT JOIN dbo.InventoryDetails invd ON i.Id = invd.ItemId
         LEFT JOIN dbo.Inventories inv ON invd.InventoryId = inv.Id
         WHERE 
@@ -63,7 +63,7 @@ BEGIN
             AND (@StockTypeId IS NULL OR i.ItemTypeId = @StockTypeId)
             AND (NOT EXISTS(SELECT 1 FROM #ItemIds) OR i.Id IN (SELECT ItemId FROM #ItemIds))
             AND i.IsActive = 1
-        GROUP BY i.Id, i.Name, st.StockTypeName
+        GROUP BY i.Id, i.Name, st.Name
     )
     SELECT 
         ItemId,

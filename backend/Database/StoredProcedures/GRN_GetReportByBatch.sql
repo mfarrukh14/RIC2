@@ -11,28 +11,30 @@ BEGIN
         grn.InvoiceNo AS InventoryNo,
         'System' AS EnteredBy,
         grn.DateAndTime,
-        CAST(grn.PurchaseOrderId AS NVARCHAR(50)) AS PONumber,
+        COALESCE(po.PONumber, CAST(grn.PurchaseOrderId AS NVARCHAR(50))) AS PONumber,
         '' AS PODate,
-        '' AS ManualPONumber,
-        st.StockTypeName AS StockType,
+        COALESCE(po.ManualPONumber, '') AS ManualPONumber,
+        st.Name AS StockType,
         'Regular' AS Regular,
-        s.StoreName AS StoreName,
+        COALESCE(s.StoreName, 'Unassigned Store') AS StoreName,
         v.Name AS VendorName,
         v.Address AS VendorAddress,
         v.Email AS VendorEmail,
         v.CNo AS VendorContactNo
     FROM 
-        GoodsReceivingNotes grn
+        dbo.GoodsReceivingNotes grn
     INNER JOIN 
-        GRNItems gi ON grn.Id = gi.GRNId
+        dbo.GRNItems gi ON grn.Id = gi.GRNId
     INNER JOIN 
-        Items i ON gi.ItemId = i.Id
+        dbo.Items i ON gi.ItemId = i.Id
+    LEFT JOIN
+        dbo.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN 
-        StockTypes st ON grn.StockTypeId = st.StockTypeId
+        dbo.StockTypes st ON grn.StockTypeId = st.Id
     LEFT JOIN 
-        Stores s ON grn.StockTypeId = s.StoreId
+        dbo.Stores s ON po.StoreId = s.StoreId
     LEFT JOIN 
-        Vendors v ON grn.VendorId = v.Id
+        dbo.Vendors v ON grn.VendorId = v.Id
     WHERE 
         gi.BatchNo = @BatchNo
         AND i.Name = @ItemName;
@@ -54,21 +56,21 @@ BEGIN
         gi.AdvanceTaxPercentage AS AdvanceTax,
         gi.AdvanceTaxAmount,
         gi.UnitSellingPrice AS UnitSalePrice,
-        gi.RetailCharges,
+        CAST(CASE WHEN gi.RetailCharges = 1 THEN 1 ELSE 0 END AS DECIMAL(18, 2)) AS RetailCharges,
         gi.RetailChargesAmount,
-        gi.GSTCharges,
+        CAST(CASE WHEN gi.GSTCharges = 1 THEN 1 ELSE 0 END AS DECIMAL(18, 2)) AS GSTCharges,
         gi.GSTChargesAmount,
         gi.TotalSellingPrice AS TotalSalePrice,
         gi.ProfitMarginPerItem AS Margin,
         gi.TotalBuyingPrice AS Amount,
-        gi.Discount,
+        CAST(COALESCE(gi.DiscountAmount, 0) AS DECIMAL(18, 2)) AS Discount,
         (gi.TotalBuyingPrice - gi.DiscountAmount) AS Total
     FROM 
-        GRNItems gi
+        dbo.GRNItems gi
     INNER JOIN 
-        Items i ON gi.ItemId = i.Id
+        dbo.Items i ON gi.ItemId = i.Id
     LEFT JOIN 
-        Manufacturers m ON gi.ManufacturerId = m.Id
+        dbo.Manufacturers m ON gi.ManufacturerId = m.Id
     WHERE 
         gi.BatchNo = @BatchNo
         AND i.Name = @ItemName;

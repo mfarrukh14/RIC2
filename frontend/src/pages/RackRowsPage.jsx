@@ -53,18 +53,7 @@ const RackRowsPage = () => {
   const fetchRacksByStore = async (storeId) => {
     try {
       const allRacks = await racksApi.getAllRacks();
-      console.log('All racks:', allRacks);
-      console.log('Selected storeId:', storeId, 'type:', typeof storeId);
-      
-      const storeIdGuid = String(storeId).padStart(8, '0') + '-0000-0000-0000-000000000000';
-      console.log('Converted to GUID:', storeIdGuid);
-      
-      const filteredRacks = allRacks.filter(rack => {
-        console.log('Comparing rack.storeId:', rack.storeId, 'with:', storeIdGuid);
-        return rack.storeId.toLowerCase() === storeIdGuid.toLowerCase();
-      });
-      
-      console.log('Filtered racks:', filteredRacks);
+      const filteredRacks = allRacks.filter(rack => Number(rack.storeId) === Number(storeId));
       setRacks(filteredRacks);
     } catch (error) {
       console.error('Error fetching racks for store:', error);
@@ -109,6 +98,7 @@ const RackRowsPage = () => {
         ...formData,
         storeId: parseInt(formData.storeId),
         rackId: parseInt(formData.rackId),
+        branchId: formData.branchId ? parseInt(formData.branchId, 10) : null,
       };
 
       if (editMode) {
@@ -267,7 +257,7 @@ const RackRowsPage = () => {
                   <option value="">Select Rack</option>
                   {racks.map(rack => (
                     <option key={rack.id} value={rack.id}>
-                      {rack.rackName}
+                      {rack.name}
                     </option>
                   ))}
                 </select>

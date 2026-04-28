@@ -45,7 +45,7 @@ namespace InventoryManagement.Api.Services
             return rackColumns;
         }
 
-        public async Task<RackColumn?> GetRackColumnByIdAsync(Guid id)
+        public async Task<RackColumn?> GetRackColumnByIdAsync(int id)
         {
             try
             {
@@ -103,10 +103,8 @@ namespace InventoryManagement.Api.Services
             return rackColumns;
         }
 
-        public async Task<Guid> CreateRackColumnAsync(RackColumnCreateRequest request, Guid userId)
+        public async Task<int> CreateRackColumnAsync(RackColumnCreateRequest request)
         {
-            var newId = Guid.NewGuid();
-
             try
             {
                 using var connection = new SqlConnection(_connectionString);
@@ -115,7 +113,6 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
 
-                command.Parameters.AddWithValue("@Id", newId);
                 command.Parameters.AddWithValue("@Name", request.Name);
                 command.Parameters.AddWithValue("@Description", (object?)request.Description ?? DBNull.Value);
                 command.Parameters.AddWithValue("@StoreId", request.StoreId);
@@ -124,9 +121,9 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@IsActive", request.IsActive);
 
                 await connection.OpenAsync();
-                await command.ExecuteNonQueryAsync();
+                var result = await command.ExecuteScalarAsync();
 
-                return newId;
+                return Convert.ToInt32(result);
             }
             catch (Exception ex)
             {
@@ -135,7 +132,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> UpdateRackColumnAsync(RackColumnUpdateRequest request, Guid userId)
+        public async Task<bool> UpdateRackColumnAsync(RackColumnUpdateRequest request)
         {
             try
             {
@@ -165,7 +162,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteRackColumnAsync(Guid id)
+        public async Task<bool> DeleteRackColumnAsync(int id)
         {
             try
             {
@@ -192,16 +189,16 @@ namespace InventoryManagement.Api.Services
         {
             return new RackColumn
             {
-                Id = reader.GetGuid(reader.GetOrdinal("Id")),
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 Name = reader.GetString(reader.GetOrdinal("Name")),
                 Description = reader.IsDBNull(reader.GetOrdinal("Description")) ? null : reader.GetString(reader.GetOrdinal("Description")),
                 StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId")) ? null : reader.GetGuid(reader.GetOrdinal("BranchId")),
+                BranchId = reader.IsDBNull(reader.GetOrdinal("BranchId")) ? null : reader.GetInt32(reader.GetOrdinal("BranchId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetGuid(reader.GetOrdinal("CreatedById")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
                 ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
                 RackName = reader.IsDBNull(reader.GetOrdinal("RackName")) ? null : reader.GetString(reader.GetOrdinal("RackName"))

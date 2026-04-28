@@ -17,7 +17,7 @@ BEGIN
     -- Get items that have already expired (ExpDate < GETDATE())
     SELECT 
         i.Name,
-        st.StockTypeName AS StockType,
+        st.Name AS StockType,
         grni.BatchNo,
         grni.MfgDate,
         grni.ExpiryDate AS ExpDate,
@@ -25,7 +25,7 @@ BEGIN
     FROM dbo.GRNItems grni
     INNER JOIN dbo.GoodsReceivingNotes grn ON grni.GRNId = grn.Id
     INNER JOIN dbo.Items i ON grni.ItemId = i.Id
-    LEFT JOIN dbo.StockTypes st ON grn.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON grn.StockTypeId = st.Id
     WHERE grni.ExpiryDate < GETDATE()
         AND grni.RemainingQuantity > 0
         AND (@StartDate IS NULL OR grni.ExpiryDate >= @StartDate)

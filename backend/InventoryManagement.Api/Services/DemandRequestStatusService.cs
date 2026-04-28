@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<DemandRequestStatusService> _logger;
+        private readonly string _schemaPrefix;
 
         public DemandRequestStatusService(IConfiguration configuration, ILogger<DemandRequestStatusService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IReadOnlyList<DemandRequestStatusDto>> GetAllAsync()
         {
@@ -22,18 +27,18 @@ namespace InventoryManagement.Api.Services
 
             const string sql = @"
 SELECT
-    DemandRequestStatusId,
-    StatusName,
+    Id AS DemandRequestStatusId,
+    Name AS StatusName,
     Description,
     IsActive,
     CreatedOn
 FROM dbo.DemandRequestStatuses
-ORDER BY StatusName ASC;";
+ORDER BY Name ASC;";
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
@@ -55,18 +60,18 @@ ORDER BY StatusName ASC;";
         {
             const string sql = @"
 SELECT
-    DemandRequestStatusId,
-    StatusName,
+    Id AS DemandRequestStatusId,
+    Name AS StatusName,
     Description,
     IsActive,
     CreatedOn
 FROM dbo.DemandRequestStatuses
-WHERE DemandRequestStatusId = @DemandRequestStatusId;";
+WHERE Id = @DemandRequestStatusId;";
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@DemandRequestStatusId", id);
 
                 await connection.OpenAsync();
@@ -90,7 +95,7 @@ WHERE DemandRequestStatusId = @DemandRequestStatusId;";
             const string sql = @"
 INSERT INTO dbo.DemandRequestStatuses
 (
-    StatusName,
+    Name,
     Description,
     IsActive,
     CreatedOn
@@ -108,7 +113,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@StatusName", request.Name.Trim());
                 command.Parameters.AddWithValue("@Description", (object?)request.Description ?? DBNull.Value);
                 command.Parameters.AddWithValue("@IsActive", request.IsActive);
@@ -129,15 +134,15 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             const string sql = @"
 UPDATE dbo.DemandRequestStatuses
 SET
-    StatusName = @StatusName,
+    Name = @StatusName,
     Description = @Description,
     IsActive = @IsActive
-WHERE DemandRequestStatusId = @DemandRequestStatusId;";
+WHERE Id = @DemandRequestStatusId;";
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@DemandRequestStatusId", id);
                 command.Parameters.AddWithValue("@StatusName", request.Name.Trim());
                 command.Parameters.AddWithValue("@Description", (object?)request.Description ?? DBNull.Value);

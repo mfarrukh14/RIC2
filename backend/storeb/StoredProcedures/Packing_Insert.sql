@@ -6,9 +6,6 @@
 CREATE PROCEDURE [dbo].[Packing_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
-    @Pack INT = NULL,
-    @Leaf INT = NULL,
-    @NumberOfItems INT = NULL,
     @BranchId INT = NULL,
     @CreatedById INT,
     @IsActive BIT = 1
@@ -19,11 +16,11 @@ BEGIN
     DECLARE @NewId INT;
     
     INSERT INTO dbo.Packings (
-        Name, Description, Pack, Leaf, NumberOfItems, BranchId,
+        Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )
     VALUES (
-        @Name, @Description, @Pack, @Leaf, @NumberOfItems, @BranchId,
+        @Name, @Description, @BranchId,
         @IsActive, @CreatedById, GETUTCDATE()
     );
     

@@ -77,16 +77,16 @@ namespace InventoryManagement.Api.Services
                 Quantity = reader.GetInt32(reader.GetOrdinal("Quantity")),
                 StockType = reader.GetString(reader.GetOrdinal("StockType")),
                 
-                RackId = reader.IsDBNull(reader.GetOrdinal("RackId")) ? null : reader.GetGuid(reader.GetOrdinal("RackId")),
+                RackId = reader.IsDBNull(reader.GetOrdinal("RackId")) ? null : reader.GetInt32(reader.GetOrdinal("RackId")),
                 RackName = reader.IsDBNull(reader.GetOrdinal("RackName")) ? null : reader.GetString(reader.GetOrdinal("RackName")),
-                RackRowId = reader.IsDBNull(reader.GetOrdinal("RackRowId")) ? null : reader.GetGuid(reader.GetOrdinal("RackRowId")),
+                RackRowId = reader.IsDBNull(reader.GetOrdinal("RackRowId")) ? null : reader.GetInt32(reader.GetOrdinal("RackRowId")),
                 RowNumber = reader.IsDBNull(reader.GetOrdinal("RowNumber")) ? null : reader.GetString(reader.GetOrdinal("RowNumber")),
-                RackColumnId = reader.IsDBNull(reader.GetOrdinal("RackColumnId")) ? null : reader.GetGuid(reader.GetOrdinal("RackColumnId")),
+                RackColumnId = reader.IsDBNull(reader.GetOrdinal("RackColumnId")) ? null : reader.GetInt32(reader.GetOrdinal("RackColumnId")),
                 ColumnNumber = reader.IsDBNull(reader.GetOrdinal("ColumnNumber")) ? null : reader.GetString(reader.GetOrdinal("ColumnNumber")),
-                RackDrawerId = reader.IsDBNull(reader.GetOrdinal("RackDrawerId")) ? null : reader.GetGuid(reader.GetOrdinal("RackDrawerId")),
+                RackDrawerId = reader.IsDBNull(reader.GetOrdinal("RackDrawerId")) ? null : reader.GetInt32(reader.GetOrdinal("RackDrawerId")),
                 DrawerNumber = reader.IsDBNull(reader.GetOrdinal("DrawerNumber")) ? null : reader.GetString(reader.GetOrdinal("DrawerNumber")),
                 
-                MPL = reader.IsDBNull(reader.GetOrdinal("MPL")) ? 0 : reader.GetDouble(reader.GetOrdinal("MPL")),
+                MPL = reader.IsDBNull(reader.GetOrdinal("MPL")) ? 0 : Convert.ToDouble(reader.GetValue(reader.GetOrdinal("MPL"))),
                 IsBelowMPL = reader.GetInt32(reader.GetOrdinal("IsBelowMPL")) == 1,
                 
                 ItemType = reader.IsDBNull(reader.GetOrdinal("ItemType")) ? null : reader.GetString(reader.GetOrdinal("ItemType")),

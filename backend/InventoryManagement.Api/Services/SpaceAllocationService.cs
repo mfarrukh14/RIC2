@@ -34,57 +34,7 @@ namespace InventoryManagement.Api.Services
                         {
                             while (await reader.ReadAsync())
                             {
-                                allocations.Add(new SpaceAllocation
-                                {
-                                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
-                                    ItemId = reader.GetGuid(reader.GetOrdinal("ItemId")),
-                                    FeeId = reader.IsDBNull(reader.GetOrdinal("FeeId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("FeeId")),
-                                    RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                                    RackRowId = reader.IsDBNull(reader.GetOrdinal("RackRowId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackRowId")),
-                                    RackColumnId = reader.IsDBNull(reader.GetOrdinal("RackColumnId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackColumnId")),
-                                    RackDrawerId = reader.IsDBNull(reader.GetOrdinal("RackDrawerId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackDrawerId")),
-                                    MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("MedicineId")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("CreatedById")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
-                                        ? null
-                                        : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("StoreName")),
-                                    ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("ItemName")),
-                                    RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RackName")),
-                                    RowName = reader.IsDBNull(reader.GetOrdinal("RowName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RowName")),
-                                    ColumnName = reader.IsDBNull(reader.GetOrdinal("ColumnName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("ColumnName")),
-                                    DrawerName = reader.IsDBNull(reader.GetOrdinal("DrawerName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("DrawerName"))
-                                });
+                                allocations.Add(MapSpaceAllocation(reader));
                             }
                         }
                     }
@@ -99,7 +49,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<SpaceAllocation?> GetSpaceAllocationByIdAsync(Guid id)
+        public async Task<SpaceAllocation?> GetSpaceAllocationByIdAsync(int id)
         {
             try
             {
@@ -116,57 +66,7 @@ namespace InventoryManagement.Api.Services
                         {
                             if (await reader.ReadAsync())
                             {
-                                return new SpaceAllocation
-                                {
-                                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
-                                    ItemId = reader.GetGuid(reader.GetOrdinal("ItemId")),
-                                    FeeId = reader.IsDBNull(reader.GetOrdinal("FeeId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("FeeId")),
-                                    RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
-                                    RackRowId = reader.IsDBNull(reader.GetOrdinal("RackRowId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackRowId")),
-                                    RackColumnId = reader.IsDBNull(reader.GetOrdinal("RackColumnId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackColumnId")),
-                                    RackDrawerId = reader.IsDBNull(reader.GetOrdinal("RackDrawerId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("RackDrawerId")),
-                                    MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("MedicineId")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("CreatedById")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
-                                        ? null
-                                        : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
-                                        ? null
-                                        : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("StoreName")),
-                                    ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("ItemName")),
-                                    RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RackName")),
-                                    RowName = reader.IsDBNull(reader.GetOrdinal("RowName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("RowName")),
-                                    ColumnName = reader.IsDBNull(reader.GetOrdinal("ColumnName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("ColumnName")),
-                                    DrawerName = reader.IsDBNull(reader.GetOrdinal("DrawerName"))
-                                        ? null
-                                        : reader.GetString(reader.GetOrdinal("DrawerName"))
-                                };
+                                return MapSpaceAllocation(reader);
                             }
                         }
                     }
@@ -185,8 +85,6 @@ namespace InventoryManagement.Api.Services
         {
             try
             {
-                var newId = Guid.NewGuid();
-
                 using (var connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -195,7 +93,6 @@ namespace InventoryManagement.Api.Services
                     {
                         command.CommandType = CommandType.StoredProcedure;
 
-                        command.Parameters.AddWithValue("@Id", newId);
                         command.Parameters.AddWithValue("@StoreId", request.StoreId);
                         command.Parameters.AddWithValue("@ItemId", request.ItemId);
                         command.Parameters.AddWithValue("@FeeId", (object?)request.FeeId ?? DBNull.Value);
@@ -207,12 +104,13 @@ namespace InventoryManagement.Api.Services
                         command.Parameters.AddWithValue("@IsActive", request.IsActive);
                         command.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
 
-                        await command.ExecuteNonQueryAsync();
+                        var result = await command.ExecuteScalarAsync();
+                        var newId = Convert.ToInt32(result);
+
+                        var created = await GetSpaceAllocationByIdAsync(newId);
+                        return created ?? throw new Exception("Failed to retrieve created space allocation");
                     }
                 }
-
-                var created = await GetSpaceAllocationByIdAsync(newId);
-                return created ?? throw new Exception("Failed to retrieve created space allocation");
             }
             catch (Exception ex)
             {
@@ -221,7 +119,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> UpdateSpaceAllocationAsync(Guid id, SpaceAllocationUpdateRequest request)
+        public async Task<bool> UpdateSpaceAllocationAsync(int id, SpaceAllocationUpdateRequest request)
         {
             try
             {
@@ -257,7 +155,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteSpaceAllocationAsync(Guid id)
+        public async Task<bool> DeleteSpaceAllocationAsync(int id)
         {
             try
             {
@@ -280,6 +178,61 @@ namespace InventoryManagement.Api.Services
                 _logger.LogError(ex, "Error deleting space allocation: {Id}", id);
                 throw;
             }
+        }
+
+        private static SpaceAllocation MapSpaceAllocation(SqlDataReader reader)
+        {
+            return new SpaceAllocation
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                FeeId = reader.IsDBNull(reader.GetOrdinal("FeeId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("FeeId")),
+                RackId = reader.GetInt32(reader.GetOrdinal("RackId")),
+                RackRowId = reader.IsDBNull(reader.GetOrdinal("RackRowId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("RackRowId")),
+                RackColumnId = reader.IsDBNull(reader.GetOrdinal("RackColumnId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("RackColumnId")),
+                RackDrawerId = reader.IsDBNull(reader.GetOrdinal("RackDrawerId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("RackDrawerId")),
+                MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("MedicineId")),
+                IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("CreatedById")),
+                CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById"))
+                    ? null
+                    : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
+                ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
+                StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("StoreName")),
+                ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("ItemName")),
+                RackName = reader.IsDBNull(reader.GetOrdinal("RackName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("RackName")),
+                RowName = reader.IsDBNull(reader.GetOrdinal("RowName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("RowName")),
+                ColumnName = reader.IsDBNull(reader.GetOrdinal("ColumnName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("ColumnName")),
+                DrawerName = reader.IsDBNull(reader.GetOrdinal("DrawerName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("DrawerName"))
+            };
         }
     }
 }

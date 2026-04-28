@@ -550,7 +550,7 @@ namespace InventoryManagement.Api.Services
                 SaleUnitId = reader.IsDBNull("SaleUnitId") ? null : reader.GetInt32("SaleUnitId"),
                 SaleUnitName = reader.IsDBNull("SaleUnitName") ? null : reader.GetString("SaleUnitName"),
                 Conversion = reader.IsDBNull("Conversion") ? null : reader.GetDecimal("Conversion"),
-                CaseContains = reader.IsDBNull("CaseContains") ? null : reader.GetString("CaseContains"),
+                CaseContains = reader.IsDBNull(reader.GetOrdinal("CaseContains")) ? null : Convert.ToString(reader.GetValue(reader.GetOrdinal("CaseContains"))),
                 HSCode = reader.IsDBNull("HSCode") ? null : reader.GetString("HSCode"),
                 ItemRetailPrice = reader.IsDBNull("ItemRetailPrice") ? null : reader.GetDecimal("ItemRetailPrice"),
                 CostMethod = reader.IsDBNull("CostMethod") ? null : reader.GetInt32("CostMethod"),

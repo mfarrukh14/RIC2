@@ -13,13 +13,13 @@ namespace InventoryManagement.Api.Models
         public string StockType { get; set; } = string.Empty;
         
         // Rack Location
-        public Guid? RackId { get; set; }
+        public int? RackId { get; set; }
         public string? RackName { get; set; }
-        public Guid? RackRowId { get; set; }
+        public int? RackRowId { get; set; }
         public string? RowNumber { get; set; }
-        public Guid? RackColumnId { get; set; }
+        public int? RackColumnId { get; set; }
         public string? ColumnNumber { get; set; }
-        public Guid? RackDrawerId { get; set; }
+        public int? RackDrawerId { get; set; }
         public string? DrawerNumber { get; set; }
         
         // MPL and Status

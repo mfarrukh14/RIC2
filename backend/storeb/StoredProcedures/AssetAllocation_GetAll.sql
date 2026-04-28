@@ -14,9 +14,9 @@ BEGIN
     
     SELECT 
         aa.Id,
-        aa.Remarks,
+        aa.Notes AS Remarks,
         aa.AllocatedDate,
-        aa.ReturnDate,
+        NULL AS ReturnDate,
         aa.UserId,
         u.Name as UserName,
         u.Email as UserEmail,
@@ -32,18 +32,18 @@ BEGIN
         aa.ItemId,
         aa.BranchId,
         b.Name as BranchName,
-        aa.IsReturn,
-        aa.ReturnRemarks,
+        CAST(0 AS BIT) AS IsReturn,
+        NULL AS ReturnRemarks,
         aa.Quantity,
-        aa.InventoryItemId,
-        ii.Name as InventoryItemName,
-        ii.SerialNumber,
-        ii.Model,
-        ii.Status as ItemStatus,
-        ii.PurchasePrice,
-        ii.CurrentValue,
-        aa.SysBatchNo,
-        aa.BatchNo,
+        NULL AS InventoryItemId,
+        NULL AS InventoryItemName,
+        aa.SerialNumber,
+        NULL AS Model,
+        NULL AS ItemStatus,
+        NULL AS PurchasePrice,
+        NULL AS CurrentValue,
+        NULL AS SysBatchNo,
+        NULL AS BatchNo,
         aa.IsActive,
         aa.CreatedById,
         aa.CreatedOn,
@@ -55,7 +55,6 @@ BEGIN
     LEFT JOIN dbo.SubDepartments sd ON aa.SubDepartmentId = sd.Id
     LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
     LEFT JOIN dbo.Branches b ON aa.BranchId = b.Id
-    LEFT JOIN dbo.InventoryItems ii ON aa.InventoryItemId = ii.Id
-    WHERE aa.IsActive = 1 AND aa.IsDeleted = 0
+    WHERE aa.IsActive = 1
     ORDER BY aa.AllocatedDate DESC;
 END

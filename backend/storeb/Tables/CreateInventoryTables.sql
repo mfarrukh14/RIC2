@@ -109,14 +109,14 @@ GO
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'StockTypes')
 BEGIN
     CREATE TABLE [dbo].[StockTypes] (
-        [StockTypeId] INT IDENTITY(1,1) PRIMARY KEY,
-        [StockTypeName] NVARCHAR(100) NOT NULL,
+        [Id] INT IDENTITY(1,1) PRIMARY KEY,
+        [Name] NVARCHAR(100) NOT NULL,
         [Description] NVARCHAR(500),
         [IsActive] BIT NOT NULL DEFAULT 1
     );
     
     -- Insert default stock types
-    INSERT INTO [dbo].[StockTypes] ([StockTypeName], [Description], [IsActive])
+    INSERT INTO [dbo].[StockTypes] ([Name], [Description], [IsActive])
     VALUES 
         ('Regular', 'Regular stock type', 1),
         ('Consignment', 'Consignment stock', 1),

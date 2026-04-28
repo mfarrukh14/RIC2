@@ -34,7 +34,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(Guid id)
+        public async Task<IActionResult> GetById(int id)
         {
             try
             {
@@ -68,7 +68,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] SpaceAllocationUpdateRequest request)
+        public async Task<IActionResult> Update(int id, [FromBody] SpaceAllocationUpdateRequest request)
         {
             try
             {
@@ -88,7 +88,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(Guid id)
+        public async Task<IActionResult> Delete(int id)
         {
             try
             {

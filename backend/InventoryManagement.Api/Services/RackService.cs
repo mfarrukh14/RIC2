@@ -73,7 +73,7 @@ namespace InventoryManagement.Api.Services
             return null;
         }
 
-        public async Task<int> CreateRackAsync(RackRequest request, Guid userId)
+        public async Task<int> CreateRackAsync(RackRequest request, int userId)
         {
             try
             {
@@ -89,7 +89,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Location", (object?)request.Location ?? DBNull.Value);
                 command.Parameters.AddWithValue("@NumberOfRows", request.NumberOfRows);
                 command.Parameters.AddWithValue("@NumberOfCols", request.NumberOfCols);
-                command.Parameters.AddWithValue("@NumberOfDraws", request.NumberOfDraws);
+                command.Parameters.AddWithValue("@NumberOfDrawrs", request.NumberOfDraws);
                 command.Parameters.AddWithValue("@BranchId", request.BranchId);
                 command.Parameters.AddWithValue("@CreatedById", userId);
                 command.Parameters.AddWithValue("@IsActive", request.IsActive);
@@ -105,7 +105,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> UpdateRackAsync(RackRequest request, Guid userId)
+        public async Task<bool> UpdateRackAsync(RackRequest request, int userId)
         {
             if (!request.Id.HasValue)
                 throw new ArgumentException("Id is required for update");
@@ -125,7 +125,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Location", (object?)request.Location ?? DBNull.Value);
                 command.Parameters.AddWithValue("@NumberOfRows", request.NumberOfRows);
                 command.Parameters.AddWithValue("@NumberOfCols", request.NumberOfCols);
-                command.Parameters.AddWithValue("@NumberOfDraws", request.NumberOfDraws);
+                command.Parameters.AddWithValue("@NumberOfDrawrs", request.NumberOfDraws);
                 command.Parameters.AddWithValue("@ModifiedById", userId);
                 command.Parameters.AddWithValue("@IsActive", request.IsActive);
 
@@ -140,7 +140,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteRackAsync(int id, Guid userId)
+        public async Task<bool> DeleteRackAsync(int id, int userId)
         {
             try
             {
@@ -170,17 +170,40 @@ namespace InventoryManagement.Api.Services
             {
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 Name = reader.GetString(reader.GetOrdinal("Name")),
-                StoreId = reader.GetGuid(reader.GetOrdinal("StoreId")),
-                StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
+                StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                StoreName = GetNullableString(reader, "StoreName"),
                 Description = reader.IsDBNull(reader.GetOrdinal("Description")) ? null : reader.GetString(reader.GetOrdinal("Description")),
                 Location = reader.IsDBNull(reader.GetOrdinal("Location")) ? null : reader.GetString(reader.GetOrdinal("Location")),
                 NumberOfRows = reader.GetInt32(reader.GetOrdinal("NumberOfRows")),
                 NumberOfCols = reader.GetInt32(reader.GetOrdinal("NumberOfCols")),
-                NumberOfDraws = reader.GetInt32(reader.GetOrdinal("NumberOfDraws")),
-                BranchId = reader.GetGuid(reader.GetOrdinal("BranchId")),
+                NumberOfDraws = reader.GetInt32(FindOrdinal(reader, "NumberOfDrawrs", "NumberOfDraws")),
+                BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
                 CreatedOn = reader.IsDBNull(reader.GetOrdinal("CreatedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("CreatedOn"))
             };
+        }
+
+        private static int FindOrdinal(SqlDataReader reader, params string[] columnNames)
+        {
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                var currentName = reader.GetName(index);
+                foreach (var columnName in columnNames)
+                {
+                    if (string.Equals(currentName, columnName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return index;
+                    }
+                }
+            }
+
+            throw new IndexOutOfRangeException($"None of the expected columns were found: {string.Join(", ", columnNames)}");
+        }
+
+        private static string? GetNullableString(SqlDataReader reader, string columnName)
+        {
+            var ordinal = reader.GetOrdinal(columnName);
+            return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal));
         }
     }
 }

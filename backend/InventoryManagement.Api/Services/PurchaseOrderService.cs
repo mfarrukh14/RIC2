@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<PurchaseOrderService> _logger;
+        private readonly string _schemaPrefix;
 
         public PurchaseOrderService(IConfiguration configuration, ILogger<PurchaseOrderService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IReadOnlyList<PurchaseOrderSummary>> GetAllAsync(PurchaseOrderFilter filter)
         {
@@ -74,7 +79,7 @@ ORDER BY po.CreatedOn DESC;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection);
+                using var command = new SqlCommand(NormalizeSql(sql), connection);
                 command.Parameters.AddWithValue("@DateFrom", (object?)filter.DateFrom ?? DBNull.Value);
                 command.Parameters.AddWithValue("@DateTo", (object?)filter.DateTo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@VendorId", (object?)filter.VendorId ?? DBNull.Value);
@@ -162,7 +167,7 @@ ORDER BY poi.Id;";
 
                 PurchaseOrderDetails? details = null;
 
-                using (var headerCommand = new SqlCommand(headerSql, connection))
+                using (var headerCommand = new SqlCommand(NormalizeSql(headerSql), connection))
                 {
                     headerCommand.Parameters.AddWithValue("@PurchaseOrderId", id);
                     using var reader = await headerCommand.ExecuteReaderAsync();
@@ -198,7 +203,7 @@ ORDER BY poi.Id;";
                     return null;
                 }
 
-                using (var itemsCommand = new SqlCommand(itemsSql, connection))
+                using (var itemsCommand = new SqlCommand(NormalizeSql(itemsSql), connection))
                 {
                     itemsCommand.Parameters.AddWithValue("@PurchaseOrderId", id);
                     using var reader = await itemsCommand.ExecuteReaderAsync();
@@ -300,7 +305,7 @@ VALUES
                 using var transaction = await connection.BeginTransactionAsync();
 
                 int purchaseOrderId;
-                using (var headerCommand = new SqlCommand(insertHeaderSql, connection, (SqlTransaction)transaction))
+                using (var headerCommand = new SqlCommand(NormalizeSql(insertHeaderSql), connection, (SqlTransaction)transaction))
                 {
                     headerCommand.Parameters.AddWithValue("@PONumber", poNumber);
                     headerCommand.Parameters.AddWithValue("@ManualPONumber", (object?)request.ManualPONumber ?? DBNull.Value);
@@ -318,7 +323,7 @@ VALUES
 
                 foreach (var item in request.Items)
                 {
-                    using var itemCommand = new SqlCommand(insertItemSql, connection, (SqlTransaction)transaction);
+                    using var itemCommand = new SqlCommand(NormalizeSql(insertItemSql), connection, (SqlTransaction)transaction);
                     itemCommand.Parameters.AddWithValue("@PurchaseOrderId", purchaseOrderId);
                     itemCommand.Parameters.AddWithValue("@ItemId", item.ItemId);
                     itemCommand.Parameters.AddWithValue("@ItemType", (object?)item.ItemType ?? DBNull.Value);

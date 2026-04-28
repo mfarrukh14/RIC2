@@ -7,7 +7,6 @@ CREATE PROCEDURE [dbo].[ItemType_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
-    @Value INT = NULL,
     @BranchId INT = NULL,
     @ModifiedById INT,
     @IsActive BIT = 1
@@ -19,7 +18,6 @@ BEGIN
     SET
         Name = @Name,
         Description = @Description,
-        Value = @Value,
         BranchId = @BranchId,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,

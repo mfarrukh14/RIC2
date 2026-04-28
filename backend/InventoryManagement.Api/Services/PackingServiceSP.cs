@@ -110,9 +110,6 @@ namespace InventoryManagement.Api.Services
                 Id = reader.GetInt32("Id"),
                 Name = reader.GetString("Name"),
                 Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
-                Pack = reader.IsDBNull("Pack") ? null : reader.GetInt32("Pack"),
-                Leaf = reader.IsDBNull("Leaf") ? null : reader.GetInt32("Leaf"),
-                NumberOfItems = reader.IsDBNull("NumberOfItems") ? null : reader.GetInt32("NumberOfItems"),
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
                 IsActive = reader.GetBoolean("IsActive"),
                 CreatedById = reader.GetInt32("CreatedById"),
@@ -130,9 +127,6 @@ namespace InventoryManagement.Api.Services
                 case CreatePackingRequest createRequest:
                     command.Parameters.AddWithValue("@Name", createRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)createRequest.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Pack", (object?)createRequest.Pack ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Leaf", (object?)createRequest.Leaf ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@NumberOfItems", (object?)createRequest.NumberOfItems ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)createRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@CreatedById", createRequest.CreatedById);
                     break;
@@ -140,9 +134,6 @@ namespace InventoryManagement.Api.Services
                 case UpdatePackingRequest updateRequest:
                     command.Parameters.AddWithValue("@Name", updateRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)updateRequest.Description ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Pack", (object?)updateRequest.Pack ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@Leaf", (object?)updateRequest.Leaf ?? DBNull.Value);
-                    command.Parameters.AddWithValue("@NumberOfItems", (object?)updateRequest.NumberOfItems ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)updateRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@IsActive", updateRequest.IsActive);
                     command.Parameters.AddWithValue("@ModifiedById", updateRequest.ModifiedById);

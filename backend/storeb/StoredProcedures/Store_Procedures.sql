@@ -335,12 +335,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Convert INT StoreId to GUID format for Racks comparison
-    DECLARE @StoreIdGuid NVARCHAR(36);
-    SET @StoreIdGuid = RIGHT('00000000' + CAST(@StoreId AS NVARCHAR(8)), 8) + '-0000-0000-0000-000000000000';
-
     -- Check if store has dependent records
-    IF EXISTS (SELECT 1 FROM dbo.Racks WHERE StoreId = CAST(@StoreIdGuid AS UNIQUEIDENTIFIER))
+    IF EXISTS (SELECT 1 FROM dbo.Racks WHERE StoreId = @StoreId)
     BEGIN
         RAISERROR('Cannot delete store. It has associated racks.', 16, 1);
         RETURN;

@@ -13,7 +13,6 @@ BEGIN
         it.Id,
         it.Name,
         it.Description,
-        it.Value,
         it.BranchId,
         it.IsActive,
         it.CreatedById,

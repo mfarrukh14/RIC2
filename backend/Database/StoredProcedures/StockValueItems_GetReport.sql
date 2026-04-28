@@ -9,30 +9,35 @@ BEGIN
     SET NOCOUNT ON;
 
     SELECT 
-        s.StoreName AS StoreName,
+        COALESCE(s.StoreName, 'Unassigned Store') AS StoreName,
         i.Name AS Name,
         gi.BatchNo AS BatchNo,
-        SUM(gi.TotalItem) AS TotalItems,
-        AVG(gi.UnitBuyingPrice) AS UnitPurchaseRate,
-        SUM(gi.TotalBuyingPrice) AS TotalPurchaseRate,
-        AVG(gi.UnitSellingPrice) AS UnitSaleRate,
-        SUM(gi.TotalSellingPrice) AS TotalSaleRate
+        SUM(COALESCE(gi.RemainingQuantity, gi.TotalItem, 0)) AS TotalItems,
+        CAST(AVG(CAST(COALESCE(gi.UnitBuyingPrice, 0) AS DECIMAL(18, 2))) AS DECIMAL(18, 2)) AS UnitPurchaseRate,
+        SUM(COALESCE(gi.TotalBuyingPrice, 0)) AS TotalPurchaseRate,
+        CAST(AVG(CAST(COALESCE(gi.UnitSellingPrice, 0) AS DECIMAL(18, 2))) AS DECIMAL(18, 2)) AS UnitSaleRate,
+        SUM(COALESCE(gi.TotalSellingPrice, 0)) AS TotalSaleRate
     FROM 
-        GRNItems gi
+        dbo.GRNItems gi
     INNER JOIN 
-        Items i ON gi.ItemId = i.Id
+        dbo.Items i ON gi.ItemId = i.Id
     INNER JOIN 
-        GoodsReceivingNotes grn ON gi.GRNId = grn.Id
+        dbo.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
+    LEFT JOIN
+        dbo.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN 
-        Stores s ON grn.StockTypeId = s.StoreId
+        dbo.Stores s ON po.StoreId = s.StoreId
+    LEFT JOIN
+        dbo.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE 
         (@StartDate IS NULL OR grn.DateAndTime >= @StartDate)
         AND (@EndDate IS NULL OR grn.DateAndTime <= @EndDate)
         AND (@Store IS NULL OR s.StoreName = @Store)
+        AND (@ItemType IS NULL OR it.Name = @ItemType)
         AND gi.BatchNo IS NOT NULL
     GROUP BY 
-        s.StoreName, i.Name, gi.BatchNo
+        COALESCE(s.StoreName, 'Unassigned Store'), i.Name, gi.BatchNo
     ORDER BY 
-        s.StoreName, i.Name, gi.BatchNo;
+        COALESCE(s.StoreName, 'Unassigned Store'), i.Name, gi.BatchNo;
 END;
 GO

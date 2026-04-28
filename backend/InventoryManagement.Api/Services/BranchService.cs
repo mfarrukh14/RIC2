@@ -13,13 +13,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<BranchService> _logger;
+        private readonly string _schemaPrefix;
 
         public BranchService(IConfiguration configuration, ILogger<BranchService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IEnumerable<Branch>> GetAllAsync()
         {
@@ -27,30 +32,24 @@ namespace InventoryManagement.Api.Services
 
             try
             {
-                using (var connection = new SqlConnection(_connectionString))
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                const string sql = "SELECT Id, Name, Address, IsActive, CreatedOn, ModifiedOn FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name";
+                using var command = new SqlCommand(NormalizeSql(sql), connection);
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
                 {
-                    await connection.OpenAsync();
-
-                    using (var command = new SqlCommand("Branch_GetAll", connection))
+                    branches.Add(new Branch
                     {
-                        command.CommandType = CommandType.StoredProcedure;
-
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                branches.Add(new Branch
-                                {
-                                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                                    Name = reader.GetString(reader.GetOrdinal("Name")),
-                                    Address = reader.IsDBNull(reader.GetOrdinal("Address")) ? null : reader.GetString(reader.GetOrdinal("Address")),
-                                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn"))
-                                });
-                            }
-                        }
-                    }
+                        Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                        Name = reader.GetString(reader.GetOrdinal("Name")),
+                        Address = reader.IsDBNull(reader.GetOrdinal("Address")) ? null : reader.GetString(reader.GetOrdinal("Address")),
+                        IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                        CreatedOn = reader.IsDBNull(reader.GetOrdinal("CreatedOn")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
+                        ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn"))
+                    });
                 }
 
                 return branches;

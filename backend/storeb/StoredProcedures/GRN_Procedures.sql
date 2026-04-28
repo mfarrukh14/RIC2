@@ -16,7 +16,7 @@ BEGIN
         g.PONumber,
         g.InvoiceNo,
         g.StockTypeId,
-        st.StockTypeName,
+        st.Name as StockTypeName,
         g.VendorId,
         v.Name as VendorName,
         g.DateAndTime,
@@ -24,7 +24,7 @@ BEGIN
         g.CreatedOn
     FROM dbo.GoodsReceivingNotes g
     LEFT JOIN dbo.Vendors v ON g.VendorId = v.Id
-    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.IsActive = 1
     ORDER BY g.CreatedOn DESC;
 END
@@ -52,7 +52,7 @@ BEGIN
         v.Name as VendorName,
         g.InvoiceNo,
         g.StockTypeId,
-        st.StockTypeName,
+        st.Name as StockTypeName,
         g.DateAndTime,
         g.VendorInvoiceNo,
         g.VendorInvoiceDate,
@@ -63,7 +63,7 @@ BEGIN
         g.ModifiedOn
     FROM dbo.GoodsReceivingNotes g
     LEFT JOIN dbo.Vendors v ON g.VendorId = v.Id
-    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.StockTypeId
+    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.Id = @Id;
     
     -- Get items
@@ -294,10 +294,10 @@ BEGIN
     ORDER BY Name;
     
     -- Stock Types
-    SELECT StockTypeId as Id, StockTypeName as Name 
+    SELECT Id, Name 
     FROM dbo.StockTypes 
     WHERE IsActive = 1 
-    ORDER BY StockTypeName;
+    ORDER BY Name;
     
     -- Manufacturers
     SELECT Id, Name 

@@ -29,10 +29,10 @@ BEGIN
         i.Name AS ItemName,
         inv.StoreId,
         st.StoreName,
-        CAST(id.Id AS NVARCHAR(50)) AS BatchNumber, -- Using ID as batch number since no batch field exists
+        COALESCE(ii.Batch, ii.SysBatchNo, CAST(id.Id AS NVARCHAR(50))) AS BatchNumber,
         id.ExpiryDate,
         id.TotalItems AS Quantity,
-        ISNULL(sty.StockTypeName, 'Regular') AS StockType,
+        ISNULL(sty.Name, 'Regular') AS StockType,
         
         -- Rack Location Information (from SpaceAllocations)
         sa.RackId,
@@ -41,7 +41,7 @@ BEGIN
         rr.Name AS RowNumber,
         sa.RackColumnId,
         rc.Name AS ColumnNumber,
-        sa.RackDrawerId,
+        sa.RackDrawrId AS RackDrawerId,
         rd.Name AS DrawerNumber,
         
         -- MPL and Stock Status
@@ -53,14 +53,14 @@ BEGIN
         
         -- Item Details
         it.Name AS ItemType,
-        CAST(0 AS BIT) AS IsExpensiveItem, -- Not in schema, defaulting to false
+        i.IsExpensiveItem,
         i.IsFridgeItem,
         i.CategoryId,
         
         -- Total Items in Transition (all items for this ItemId in this store)
         (SELECT ISNULL(SUM(id2.TotalItems), 0) 
-         FROM InventoryDetails id2
-         INNER JOIN Inventories inv2 ON id2.InventoryId = inv2.Id
+         FROM dbo.InventoryDetails id2
+         INNER JOIN dbo.Inventories inv2 ON id2.InventoryId = inv2.Id
          WHERE id2.ItemId = i.Id AND inv2.StoreId = inv.StoreId) AS TotalItemsInTransition,
         
         inv.ModifiedOn,
@@ -73,12 +73,21 @@ BEGIN
     INNER JOIN dbo.Items i ON id.ItemId = i.Id
     INNER JOIN dbo.Stores st ON inv.StoreId = st.StoreId
     LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN dbo.StockTypes sty ON inv.StockTypeId = sty.StockTypeId
-    LEFT JOIN dbo.SpaceAllocations sa ON CAST(SUBSTRING(CAST(sa.ItemId AS VARCHAR(36)), 1, 8) AS INT) = i.Id
+    LEFT JOIN dbo.StockTypes sty ON inv.StockTypeId = sty.Id
+        OUTER APPLY (
+                SELECT TOP 1 ii.Batch, ii.SysBatchNo
+                FROM dbo.InventoryItems ii
+                WHERE ii.InventoryId = id.InventoryId
+                    AND ii.ItemId = id.ItemId
+                    AND ii.IsActive = 1
+                    AND (ii.IsDeleted = 0 OR ii.IsDeleted IS NULL)
+                ORDER BY ii.Id DESC
+        ) ii
+    LEFT JOIN dbo.SpaceAllocations sa ON sa.ItemId = i.Id
     LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
     LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
     LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawerId = rd.Id
+    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
     
     WHERE 
         (@BranchId IS NULL OR inv.BranchId = @BranchId)
@@ -86,6 +95,7 @@ BEGIN
         AND (@ItemType IS NULL OR it.Name = @ItemType)
         AND (@ItemId IS NULL OR i.Id = @ItemId)
         AND (@CategoryId IS NULL OR i.CategoryId = @CategoryId)
+        AND (@IsExpensiveItem IS NULL OR i.IsExpensiveItem = @IsExpensiveItem)
         AND (@IsFridgeItem IS NULL OR i.IsFridgeItem = @IsFridgeItem)
         AND (@MinimumPanicLevelOnly = 0 OR id.TotalItems <= ISNULL(i.MinimumPanicLevel, 0))
         AND id.TotalItems > 0

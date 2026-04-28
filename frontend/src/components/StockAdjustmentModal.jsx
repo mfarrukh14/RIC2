@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import inventoryApi from '../services/inventoryApi';
 import stockAdjustmentApi from '../services/stockAdjustmentApi';
 
+const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
+  (items || [])
+    .map((item, index) => {
+      const id = idKeys.map((key) => item?.[key]).find((value) => value !== null && value !== undefined && value !== '');
+      if (id === null || id === undefined || id === '') {
+        return null;
+      }
+
+      const name = nameKeys.map((key) => item?.[key]).find((value) => value !== null && value !== undefined && value !== '');
+      return {
+        id,
+        name: name ?? `${fallbackLabel} ${index + 1}`,
+      };
+    })
+    .filter(Boolean);
+
 const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, branches }) => {
   const [formData, setFormData] = useState({
     storeId: '',
@@ -50,8 +66,8 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
   const loadLookupData = async () => {
     try {
       const data = await inventoryApi.getLookupData();
-      setItems(data.items || []);
-      setStockTypes(data.stockTypes || []);
+      setItems(normalizeLookupOptions(data.items, ['id', 'itemId'], ['name', 'itemName'], 'Item'));
+      setStockTypes(normalizeLookupOptions(data.stockTypes, ['id', 'stockTypeId'], ['name', 'stockTypeName'], 'Stock Type'));
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }

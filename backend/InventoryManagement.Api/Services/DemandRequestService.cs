@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<DemandRequestService> _logger;
+        private readonly string _schemaPrefix;
 
         public DemandRequestService(IConfiguration configuration, ILogger<DemandRequestService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IReadOnlyList<DemandRequestSummary>> GetAllAsync(DemandRequestFilter filter)
         {
@@ -22,21 +27,21 @@ namespace InventoryManagement.Api.Services
 
             const string sql = @"
 SELECT
-    dr.DemandRequestId,
-    dr.DRNo,
-    dr.IndentNo,
-    dr.DateFrom,
-    dr.DateTo,
+    dr.Id AS DemandRequestId,
+    dr.DemandRequestNumber AS DRNo,
+    dr.IndentNumber AS IndentNo,
+    dr.CreatedOn AS DateFrom,
+    COALESCE(dr.ModifiedOn, dr.CreatedOn) AS DateTo,
     dr.BranchId,
     b.Name AS RequestingBranchName,
     dr.RequestingStoreId,
     COALESCE(rs.StoreName, s.StoreName) AS RequestingStoreName,
-    dr.RequestedStoreId,
+    dr.RequestedToStoreId AS RequestedStoreId,
     s.StoreName AS RequestedStoreName,
     dr.StockTypeId,
-    st.StockTypeName,
-    dr.Status,
-    dr.Remarks,
+    st.Name AS StockTypeName,
+    COALESCE(drs.Name, 'Unknown') AS Status,
+    dr.DemandNotes AS Remarks,
     dr.CreatedOn,
     COUNT(dri.Id) AS ItemsCount,
     COALESCE(SUM(dri.RequestedQuantity), 0) AS TotalRequestedQuantity,
@@ -44,62 +49,52 @@ SELECT
 FROM dbo.DemandRequests dr
 INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
 LEFT JOIN dbo.Stores rs ON rs.StoreId = dr.RequestingStoreId
-INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedStoreId
-LEFT JOIN dbo.StockTypes st ON st.StockTypeId = dr.StockTypeId
+INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedToStoreId
+LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
+LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
 LEFT JOIN dbo.DemandRequestItems dri
-    ON dri.DemandRequestId = dr.DemandRequestId
+    ON dri.DemandRequestId = dr.Id
    AND dri.IsActive = 1
 LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
 WHERE dr.IsActive = 1
   AND (@BranchId IS NULL OR dr.BranchId = @BranchId)
-    AND (@RequestingStoreId IS NULL OR dr.RequestingStoreId = @RequestingStoreId)
-  AND (@RequestedStoreId IS NULL OR dr.RequestedStoreId = @RequestedStoreId)
-  AND (
-        @StockTypeId IS NULL
-        OR dr.StockTypeId = @StockTypeId
-        OR EXISTS (
-            SELECT 1
-            FROM dbo.DemandRequestItems dri2
-            WHERE dri2.DemandRequestId = dr.DemandRequestId
-              AND dri2.IsActive = 1
-              AND dri2.StockTypeId = @StockTypeId
-        )
-      )
-  AND (@DateFrom IS NULL OR dr.DateTo >= @DateFrom)
-  AND (@DateTo IS NULL OR dr.DateFrom <= @DateTo)
+  AND (@RequestingStoreId IS NULL OR dr.RequestingStoreId = @RequestingStoreId)
+  AND (@RequestedStoreId IS NULL OR dr.RequestedToStoreId = @RequestedStoreId)
+  AND (@StockTypeId IS NULL OR dr.StockTypeId = @StockTypeId)
+  AND (@DateFrom IS NULL OR COALESCE(dr.ModifiedOn, dr.CreatedOn) >= @DateFrom)
+  AND (@DateTo IS NULL OR dr.CreatedOn <= @DateTo)
   AND (
         @Search IS NULL
-        OR dr.DRNo LIKE '%' + @Search + '%'
-        OR ISNULL(dr.IndentNo, '') LIKE '%' + @Search + '%'
+        OR dr.DemandRequestNumber LIKE '%' + @Search + '%'
+        OR ISNULL(dr.IndentNumber, '') LIKE '%' + @Search + '%'
         OR b.Name LIKE '%' + @Search + '%'
-                OR ISNULL(rs.StoreName, '') LIKE '%' + @Search + '%'
+        OR ISNULL(rs.StoreName, '') LIKE '%' + @Search + '%'
         OR s.StoreName LIKE '%' + @Search + '%'
-        OR ISNULL(st.StockTypeName, '') LIKE '%' + @Search + '%'
-        OR dr.Status LIKE '%' + @Search + '%'
+        OR ISNULL(st.Name, '') LIKE '%' + @Search + '%'
+        OR drs.Name LIKE '%' + @Search + '%'
       )
 GROUP BY
-    dr.DemandRequestId,
-    dr.DRNo,
-    dr.IndentNo,
-    dr.DateFrom,
-    dr.DateTo,
+    dr.Id,
+    dr.DemandRequestNumber,
+    dr.IndentNumber,
+    dr.CreatedOn,
+    dr.ModifiedOn,
     dr.BranchId,
     b.Name,
     dr.RequestingStoreId,
     rs.StoreName,
-    dr.RequestedStoreId,
+    dr.RequestedToStoreId,
     s.StoreName,
     dr.StockTypeId,
-    st.StockTypeName,
-    dr.Status,
-    dr.Remarks,
-    dr.CreatedOn
+    st.Name,
+    drs.Name,
+    dr.DemandNotes
 ORDER BY dr.CreatedOn DESC;";
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection)
+                using var command = new SqlCommand(NormalizeSql(sql), connection)
                 {
                     CommandType = CommandType.Text
                 };
@@ -133,47 +128,48 @@ ORDER BY dr.CreatedOn DESC;";
         {
             const string headerSql = @"
 SELECT
-    dr.DemandRequestId,
-    dr.DRNo,
-    dr.IndentNo,
-    dr.DateFrom,
-    dr.DateTo,
+    dr.Id AS DemandRequestId,
+    dr.DemandRequestNumber AS DRNo,
+    dr.IndentNumber AS IndentNo,
+    dr.CreatedOn AS DateFrom,
+    COALESCE(dr.ModifiedOn, dr.CreatedOn) AS DateTo,
     dr.BranchId,
     b.Name AS RequestingBranchName,
     dr.RequestingStoreId,
     COALESCE(rs.StoreName, s.StoreName) AS RequestingStoreName,
-    dr.RequestedStoreId,
+    dr.RequestedToStoreId AS RequestedStoreId,
     s.StoreName AS RequestedStoreName,
     dr.StockTypeId,
-    st.StockTypeName,
-    dr.Status,
-    dr.Remarks,
+    st.Name AS StockTypeName,
+    COALESCE(drs.Name, 'Unknown') AS Status,
+    dr.DemandNotes AS Remarks,
     dr.CreatedOn,
     (
         SELECT COUNT(*)
         FROM dbo.DemandRequestItems dri
-        WHERE dri.DemandRequestId = dr.DemandRequestId
+        WHERE dri.DemandRequestId = dr.Id
           AND dri.IsActive = 1
     ) AS ItemsCount,
     (
         SELECT COALESCE(SUM(dri.RequestedQuantity), 0)
         FROM dbo.DemandRequestItems dri
-        WHERE dri.DemandRequestId = dr.DemandRequestId
+        WHERE dri.DemandRequestId = dr.Id
           AND dri.IsActive = 1
         ) AS TotalRequestedQuantity,
         (
-                SELECT STRING_AGG(COALESCE(i.Name, 'Unassigned Item'), ', ')
-                FROM dbo.DemandRequestItems dri
-                LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
-                WHERE dri.DemandRequestId = dr.DemandRequestId
-                    AND dri.IsActive = 1
+                SELECT STRING_AGG(COALESCE(i2.Name, 'Unassigned Item'), ', ')
+                FROM dbo.DemandRequestItems dri2
+                LEFT JOIN dbo.Items i2 ON i2.Id = dri2.ItemId
+                WHERE dri2.DemandRequestId = dr.Id
+                    AND dri2.IsActive = 1
         ) AS ItemSummary
 FROM dbo.DemandRequests dr
 INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
 LEFT JOIN dbo.Stores rs ON rs.StoreId = dr.RequestingStoreId
-INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedStoreId
-LEFT JOIN dbo.StockTypes st ON st.StockTypeId = dr.StockTypeId
-WHERE dr.DemandRequestId = @DemandRequestId
+INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedToStoreId
+LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
+LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
+WHERE dr.Id = @DemandRequestId
   AND dr.IsActive = 1;";
 
             const string itemsSql = @"
@@ -184,25 +180,27 @@ SELECT
     i.Name AS ItemName,
     dri.RequestedQuantity,
     dri.ApprovedQuantity,
-    dri.BranchId,
+    dr.BranchId,
     b.Name AS BranchName,
-    dri.MedicineId,
-    dri.SubServiceId,
+    CAST(NULL AS INT) AS MedicineId,
+    CAST(NULL AS INT) AS SubServiceId,
     dri.IsActive,
-    dri.CreatedById,
+    CAST(NULL AS INT) AS CreatedById,
     dri.CreatedOn,
-    dri.ModifiedById,
-    dri.ModifiedOn,
-    dri.Remarks,
-    dri.StockTypeId,
-    st.StockTypeName,
+    CAST(NULL AS INT) AS ModifiedById,
+    CAST(NULL AS DATETIME) AS ModifiedOn,
+    dri.Notes AS Remarks,
+    dr.StockTypeId,
+    st.Name AS StockTypeName,
     dri.IssuedQuantity,
-    dri.IssuingQuantity,
-    dri.RemainingQuantity
+    CAST(0 AS INT) AS IssuingQuantity,
+    CAST(CASE WHEN dri.RequestedQuantity - ISNULL(dri.IssuedQuantity, 0) > 0
+              THEN dri.RequestedQuantity - ISNULL(dri.IssuedQuantity, 0) ELSE 0 END AS INT) AS RemainingQuantity
 FROM dbo.DemandRequestItems dri
 LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
-INNER JOIN dbo.Branches b ON b.Id = dri.BranchId
-LEFT JOIN dbo.StockTypes st ON st.StockTypeId = dri.StockTypeId
+INNER JOIN dbo.DemandRequests dr ON dr.Id = dri.DemandRequestId
+INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
+LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
 WHERE dri.DemandRequestId = @DemandRequestId
   AND dri.IsActive = 1
 ORDER BY dri.Id;";
@@ -214,7 +212,7 @@ ORDER BY dri.Id;";
 
                 DemandRequestDetails? details = null;
 
-                using (var headerCommand = new SqlCommand(headerSql, connection))
+                using (var headerCommand = new SqlCommand(NormalizeSql(headerSql), connection))
                 {
                     headerCommand.Parameters.AddWithValue("@DemandRequestId", id);
                     using var reader = await headerCommand.ExecuteReaderAsync();
@@ -251,7 +249,7 @@ ORDER BY dri.Id;";
                     return null;
                 }
 
-                using (var itemsCommand = new SqlCommand(itemsSql, connection))
+                using (var itemsCommand = new SqlCommand(NormalizeSql(itemsSql), connection))
                 {
                     itemsCommand.Parameters.AddWithValue("@DemandRequestId", id);
                     using var itemsReader = await itemsCommand.ExecuteReaderAsync();
@@ -274,6 +272,12 @@ ORDER BY dri.Id;";
         {
             var results = new List<DemandRequestLifeCycleEntry>();
 
+            // DemandRequestLifeCycles table does not exist in HMS - return empty list
+            if (_schemaPrefix == "Inv")
+            {
+                return results;
+            }
+
             const string sql = @"
 SELECT
     drlc.Id,
@@ -291,7 +295,7 @@ ORDER BY drlc.CreatedOn DESC, drlc.Id DESC;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection)
+                using var command = new SqlCommand(NormalizeSql(sql), connection)
                 {
                     CommandType = CommandType.Text
                 };
@@ -329,39 +333,20 @@ ORDER BY drlc.CreatedOn DESC, drlc.Id DESC;";
             const string updateHeaderSql = @"
 UPDATE dbo.DemandRequests
 SET
-    Status = 'Received',
-    IndentNo = COALESCE(NULLIF(@IndentNo, ''), IndentNo),
+    DemandRequestStatusId = (SELECT TOP 1 Id FROM dbo.DemandRequestStatuses WHERE Name = 'Received'),
+    IndentNumber = COALESCE(NULLIF(@IndentNo, ''), IndentNumber),
+    ReceivedDate = SYSUTCDATETIME(),
     ModifiedById = 1,
     ModifiedOn = SYSUTCDATETIME()
-WHERE DemandRequestId = @DemandRequestId
+WHERE Id = @DemandRequestId
   AND IsActive = 1;";
 
             const string updateItemsSql = @"
 UPDATE dbo.DemandRequestItems
 SET
-    RemainingQuantity = 0,
-    ModifiedById = 1,
-    ModifiedOn = SYSUTCDATETIME()
+    ReceivedQuantity = COALESCE(IssuedQuantity, RequestedQuantity)
 WHERE DemandRequestId = @DemandRequestId
   AND IsActive = 1;";
-
-            const string insertLifeCycleSql = @"
-INSERT INTO dbo.DemandRequestLifeCycles
-(
-    DemandRequestId,
-    DemandRequestStatusId,
-    UserId,
-    ActionByName,
-    CreatedOn
-)
-SELECT
-    @DemandRequestId,
-    drs.DemandRequestStatusId,
-    NULL,
-    'Mr. Jalil Ahmed',
-    SYSUTCDATETIME()
-FROM dbo.DemandRequestStatuses drs
-WHERE drs.StatusName = 'Received';";
 
             try
             {
@@ -369,7 +354,7 @@ WHERE drs.StatusName = 'Received';";
                 await connection.OpenAsync();
                 using var transaction = await connection.BeginTransactionAsync();
 
-                using var headerCommand = new SqlCommand(updateHeaderSql, connection, (SqlTransaction)transaction);
+                using var headerCommand = new SqlCommand(NormalizeSql(updateHeaderSql), connection, (SqlTransaction)transaction);
                 headerCommand.Parameters.AddWithValue("@DemandRequestId", id);
                 headerCommand.Parameters.AddWithValue("@IndentNo", (object?)request.IndentNo ?? DBNull.Value);
                 var rowsAffected = await headerCommand.ExecuteNonQueryAsync();
@@ -380,13 +365,9 @@ WHERE drs.StatusName = 'Received';";
                     return null;
                 }
 
-                using var itemsCommand = new SqlCommand(updateItemsSql, connection, (SqlTransaction)transaction);
+                using var itemsCommand = new SqlCommand(NormalizeSql(updateItemsSql), connection, (SqlTransaction)transaction);
                 itemsCommand.Parameters.AddWithValue("@DemandRequestId", id);
                 await itemsCommand.ExecuteNonQueryAsync();
-
-                using var lifeCycleCommand = new SqlCommand(insertLifeCycleSql, connection, (SqlTransaction)transaction);
-                lifeCycleCommand.Parameters.AddWithValue("@DemandRequestId", id);
-                await lifeCycleCommand.ExecuteNonQueryAsync();
 
                 await transaction.CommitAsync();
                 return await GetByIdAsync(id);
@@ -408,16 +389,14 @@ WHERE drs.StatusName = 'Received';";
             const string insertHeaderSql = @"
 INSERT INTO dbo.DemandRequests
 (
-    DRNo,
-    IndentNo,
-    DateFrom,
-    DateTo,
+    DemandRequestNumber,
+    IndentNumber,
     BranchId,
     RequestingStoreId,
-    RequestedStoreId,
+    RequestedToStoreId,
     StockTypeId,
-    Status,
-    Remarks,
+    DemandRequestStatusId,
+    DemandNotes,
     IsActive,
     CreatedById,
     CreatedOn
@@ -426,13 +405,11 @@ VALUES
 (
     @DRNo,
     @IndentNo,
-    @DateFrom,
-    @DateTo,
     @BranchId,
     @RequestingStoreId,
     @RequestedStoreId,
     @StockTypeId,
-    @Status,
+    COALESCE((SELECT TOP 1 Id FROM dbo.DemandRequestStatuses WHERE Name = @Status), 1),
     @Remarks,
     1,
     1,
@@ -441,24 +418,6 @@ VALUES
 
 SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
-            const string insertLifeCycleSql = @"
-INSERT INTO dbo.DemandRequestLifeCycles
-(
-    DemandRequestId,
-    DemandRequestStatusId,
-    UserId,
-    ActionByName,
-    CreatedOn
-)
-SELECT
-    @DemandRequestId,
-    drs.DemandRequestStatusId,
-    NULL,
-    @ActionByName,
-    SYSUTCDATETIME()
-FROM dbo.DemandRequestStatuses drs
-WHERE drs.StatusName = @StatusName;";
-
             const string insertItemSql = @"
 INSERT INTO dbo.DemandRequestItems
 (
@@ -466,17 +425,10 @@ INSERT INTO dbo.DemandRequestItems
     ItemId,
     RequestedQuantity,
     ApprovedQuantity,
-    BranchId,
-    MedicineId,
-    SubServiceId,
-    IsActive,
-    CreatedById,
-    CreatedOn,
-    Remarks,
-    StockTypeId,
     IssuedQuantity,
-    IssuingQuantity,
-    RemainingQuantity
+    Notes,
+    IsActive,
+    CreatedOn
 )
 VALUES
 (
@@ -484,17 +436,10 @@ VALUES
     @ItemId,
     @RequestedQuantity,
     @ApprovedQuantity,
-    @BranchId,
-    @MedicineId,
-    @SubServiceId,
-    1,
-    1,
-    SYSUTCDATETIME(),
-    @Remarks,
-    @StockTypeId,
     @IssuedQuantity,
-    @IssuingQuantity,
-    @RemainingQuantity
+    @Remarks,
+    1,
+    SYSUTCDATETIME()
 );";
 
             try
@@ -505,14 +450,12 @@ VALUES
 
                 int demandRequestId;
 
-                using (var headerCommand = new SqlCommand(insertHeaderSql, connection, (SqlTransaction)transaction))
+                using (var headerCommand = new SqlCommand(NormalizeSql(insertHeaderSql), connection, (SqlTransaction)transaction))
                 {
                     var status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status.Trim();
 
                     headerCommand.Parameters.AddWithValue("@DRNo", drNo);
                     headerCommand.Parameters.AddWithValue("@IndentNo", indentNo);
-                    headerCommand.Parameters.AddWithValue("@DateFrom", request.DateFrom);
-                    headerCommand.Parameters.AddWithValue("@DateTo", request.DateTo);
                     headerCommand.Parameters.AddWithValue("@BranchId", request.BranchId);
                     headerCommand.Parameters.AddWithValue("@RequestingStoreId", (object?)(request.RequestingStoreId ?? request.RequestedStoreId) ?? DBNull.Value);
                     headerCommand.Parameters.AddWithValue("@RequestedStoreId", request.RequestedStoreId);
@@ -521,37 +464,18 @@ VALUES
                     headerCommand.Parameters.AddWithValue("@Remarks", (object?)request.Remarks ?? DBNull.Value);
 
                     demandRequestId = Convert.ToInt32(await headerCommand.ExecuteScalarAsync());
-
-                    using var lifeCycleCommand = new SqlCommand(insertLifeCycleSql, connection, (SqlTransaction)transaction);
-                    lifeCycleCommand.Parameters.AddWithValue("@DemandRequestId", demandRequestId);
-                    lifeCycleCommand.Parameters.AddWithValue("@StatusName", status);
-                    lifeCycleCommand.Parameters.AddWithValue("@ActionByName", "Miss Ruth Yaqoob");
-                    await lifeCycleCommand.ExecuteNonQueryAsync();
                 }
 
                 foreach (var item in request.Items)
                 {
-                    using var itemCommand = new SqlCommand(insertItemSql, connection, (SqlTransaction)transaction);
-                    var issuedQuantity = item.IssuedQuantity ?? 0;
-                    var remainingQuantity = item.RemainingQuantity ?? Math.Max(item.RequestedQuantity - issuedQuantity, 0);
-                    object stockTypeValue = item.StockTypeId.HasValue
-                        ? item.StockTypeId.Value
-                        : request.StockTypeId.HasValue
-                            ? request.StockTypeId.Value
-                            : DBNull.Value;
+                    using var itemCommand = new SqlCommand(NormalizeSql(insertItemSql), connection, (SqlTransaction)transaction);
 
                     itemCommand.Parameters.AddWithValue("@DemandRequestId", demandRequestId);
                     itemCommand.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@RequestedQuantity", item.RequestedQuantity);
                     itemCommand.Parameters.AddWithValue("@ApprovedQuantity", (object?)item.ApprovedQuantity ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@BranchId", item.BranchId ?? request.BranchId);
-                    itemCommand.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@Remarks", (object?)item.Remarks ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@StockTypeId", stockTypeValue);
                     itemCommand.Parameters.AddWithValue("@IssuedQuantity", (object?)item.IssuedQuantity ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@IssuingQuantity", (object?)item.IssuingQuantity ?? DBNull.Value);
-                    itemCommand.Parameters.AddWithValue("@RemainingQuantity", remainingQuantity);
+                    itemCommand.Parameters.AddWithValue("@Remarks", (object?)item.Remarks ?? DBNull.Value);
 
                     await itemCommand.ExecuteNonQueryAsync();
                 }

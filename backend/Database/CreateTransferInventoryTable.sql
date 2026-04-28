@@ -134,7 +134,7 @@ DECLARE @MainDisposableStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE
 DECLARE @MedicineStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE StoreName = 'Medicine Store' ORDER BY StoreId);
 DECLARE @MainStockAccessoriesStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE StoreName = 'Main Stock & Accessories Store' ORDER BY StoreId);
 DECLARE @MainLaboratoryStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE StoreName = 'Main Laboratory Store' ORDER BY StoreId);
-DECLARE @RegularStockTypeId INT = (SELECT TOP 1 StockTypeId FROM dbo.StockTypes WHERE StockTypeName = 'Regular' ORDER BY StockTypeId);
+DECLARE @RegularStockTypeId INT = (SELECT TOP 1 Id FROM dbo.StockTypes WHERE Name = 'Regular' ORDER BY Id);
 DECLARE @SyringeCutterItemId INT = (SELECT TOP 1 Id FROM dbo.Items WHERE Name = 'Syringe Cutter' ORDER BY Id);
 DECLARE @CableItemId INT = (SELECT TOP 1 Id FROM dbo.Items WHERE Name = '0.75 mm 2 core Shielded Communication/control Cable' ORDER BY Id);
 DECLARE @SolenoidItemId INT = (SELECT TOP 1 Id FROM dbo.Items WHERE Name = '03 Way Solenoid Valve Part NO. 471828721 Make, Electrolnux Italy' ORDER BY Id);

@@ -10,9 +10,9 @@ namespace InventoryManagement.Api.Models
         public string? FromStoreName { get; set; }
         public int ToStoreId { get; set; }
         public string? ToStoreName { get; set; }
-        public int StockTypeId { get; set; }
+        public int? StockTypeId { get; set; }
         public string? StockTypeName { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
         public string? ItemName { get; set; }
         public int Quantity { get; set; }
         public DateTime TransferDate { get; set; }

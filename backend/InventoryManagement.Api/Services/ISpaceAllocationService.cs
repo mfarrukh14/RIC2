@@ -5,9 +5,9 @@ namespace InventoryManagement.Api.Services
     public interface ISpaceAllocationService
     {
         Task<IEnumerable<SpaceAllocation>> GetAllSpaceAllocationsAsync();
-        Task<SpaceAllocation?> GetSpaceAllocationByIdAsync(Guid id);
+        Task<SpaceAllocation?> GetSpaceAllocationByIdAsync(int id);
         Task<SpaceAllocation> CreateSpaceAllocationAsync(SpaceAllocationCreateRequest request);
-        Task<bool> UpdateSpaceAllocationAsync(Guid id, SpaceAllocationUpdateRequest request);
-        Task<bool> DeleteSpaceAllocationAsync(Guid id);
+        Task<bool> UpdateSpaceAllocationAsync(int id, SpaceAllocationUpdateRequest request);
+        Task<bool> DeleteSpaceAllocationAsync(int id);
     }
 }

@@ -35,7 +35,7 @@ GO
 
 -- Get Rack Drawer By ID
 CREATE OR ALTER PROCEDURE RackDrawer_GetById
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -69,40 +69,41 @@ GO
 
 -- Insert Rack Drawer
 CREATE OR ALTER PROCEDURE RackDrawer_Insert
-    @Id UNIQUEIDENTIFIER,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @RackRowId UNIQUEIDENTIFIER = NULL,
-    @RackColumnId UNIQUEIDENTIFIER = NULL,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @RackRowId INT = NULL,
+    @RackColumnId INT = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT
 AS
 BEGIN
     SET NOCOUNT ON;
     
     INSERT INTO dbo.RackDrawers (
-        Id, Name, Description, StoreId, RackId, RackRowId, RackColumnId,
+        Name, Description, StoreId, RackId, RackRowId, RackColumnId,
         BranchId, IsActive, CreatedOn
     )
     VALUES (
-        @Id, @Name, @Description, @StoreId, @RackId, @RackRowId, @RackColumnId,
+        @Name, @Description, @StoreId, @RackId, @RackRowId, @RackColumnId,
         @BranchId, @IsActive, GETUTCDATE()
     );
+
+    SELECT SCOPE_IDENTITY() AS Id;
 END
 GO
 
 -- Update Rack Drawer
 CREATE OR ALTER PROCEDURE RackDrawer_Update
-    @Id UNIQUEIDENTIFIER,
+    @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @RackRowId UNIQUEIDENTIFIER = NULL,
-    @RackColumnId UNIQUEIDENTIFIER = NULL,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @RackRowId INT = NULL,
+    @RackColumnId INT = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT
 AS
 BEGIN
@@ -125,7 +126,7 @@ GO
 
 -- Delete Rack Drawer
 CREATE OR ALTER PROCEDURE RackDrawer_Delete
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;

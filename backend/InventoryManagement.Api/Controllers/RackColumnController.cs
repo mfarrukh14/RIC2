@@ -33,7 +33,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(Guid id)
+        public async Task<IActionResult> GetById(int id)
         {
             try
             {
@@ -71,8 +71,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var userId = Guid.Empty; // TODO: Get from authenticated user
-                var id = await _rackColumnService.CreateRackColumnAsync(request, userId);
+                var id = await _rackColumnService.CreateRackColumnAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id }, new { id });
             }
             catch (Exception ex)
@@ -83,7 +82,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] RackColumnUpdateRequest request)
+        public async Task<IActionResult> Update(int id, [FromBody] RackColumnUpdateRequest request)
         {
             try
             {
@@ -92,8 +91,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest(new { message = "ID mismatch" });
                 }
 
-                var userId = Guid.Empty; // TODO: Get from authenticated user
-                var success = await _rackColumnService.UpdateRackColumnAsync(request, userId);
+                var success = await _rackColumnService.UpdateRackColumnAsync(request);
                 
                 if (!success)
                 {
@@ -110,7 +108,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(Guid id)
+        public async Task<IActionResult> Delete(int id)
         {
             try
             {

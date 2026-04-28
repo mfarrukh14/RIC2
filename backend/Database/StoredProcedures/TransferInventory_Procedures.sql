@@ -1,27 +1,26 @@
--- =============================================
--- Get all transfer inventory records
--- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_GetAll')
-    DROP PROCEDURE [dbo].[TransferInventory_GetAll]
+﻿USE InventoryManagementDB_SP;
 GO
 
-CREATE PROCEDURE [dbo].[TransferInventory_GetAll]
+-- =============================================
+-- 1. TransferInventory_GetAll
+-- =============================================
+CREATE OR ALTER PROCEDURE TransferInventory_GetAll
 AS
 BEGIN
     SET NOCOUNT ON;
     
     SELECT 
         t.Id,
-        t.DRNo,
+        t.TransferNumber AS DRNo,
         t.FromStoreId,
         fs.StoreName as FromStoreName,
         t.ToStoreId,
         ts.StoreName as ToStoreName,
-        t.StockTypeId,
-        st.StockTypeName,
-        t.ItemId,
-        t.ItemName,
-        t.Quantity,
+        NULL AS StockTypeId,
+        NULL AS StockTypeName,
+        NULL AS ItemId,
+        NULL AS ItemName,
+        ISNULL((SELECT SUM(ti.Quantity) FROM dbo.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
         t.TransferDate,
         t.Status,
         t.Notes,
@@ -30,20 +29,15 @@ BEGIN
     FROM dbo.TransferInventory t
     LEFT JOIN dbo.Stores fs ON t.FromStoreId = fs.StoreId
     LEFT JOIN dbo.Stores ts ON t.ToStoreId = ts.StoreId
-    LEFT JOIN dbo.StockTypes st ON t.StockTypeId = st.StockTypeId
     WHERE t.IsActive = 1
     ORDER BY t.CreatedOn DESC;
 END
 GO
 
 -- =============================================
--- Get transfer inventory by ID
+-- 2. TransferInventory_GetById
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_GetById')
-    DROP PROCEDURE [dbo].[TransferInventory_GetById]
-GO
-
-CREATE PROCEDURE [dbo].[TransferInventory_GetById]
+CREATE OR ALTER PROCEDURE TransferInventory_GetById
     @Id INT
 AS
 BEGIN
@@ -51,16 +45,16 @@ BEGIN
     
     SELECT 
         t.Id,
-        t.DRNo,
+        t.TransferNumber AS DRNo,
         t.FromStoreId,
         fs.StoreName as FromStoreName,
         t.ToStoreId,
         ts.StoreName as ToStoreName,
-        t.StockTypeId,
-        st.StockTypeName,
-        t.ItemId,
-        t.ItemName,
-        t.Quantity,
+        NULL AS StockTypeId,
+        NULL AS StockTypeName,
+        NULL AS ItemId,
+        NULL AS ItemName,
+        ISNULL((SELECT SUM(ti.Quantity) FROM dbo.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
         t.TransferDate,
         t.Status,
         t.Notes,
@@ -72,25 +66,20 @@ BEGIN
     FROM dbo.TransferInventory t
     LEFT JOIN dbo.Stores fs ON t.FromStoreId = fs.StoreId
     LEFT JOIN dbo.Stores ts ON t.ToStoreId = ts.StoreId
-    LEFT JOIN dbo.StockTypes st ON t.StockTypeId = st.StockTypeId
     WHERE t.Id = @Id;
 END
 GO
 
 -- =============================================
--- Insert transfer inventory
+-- 3. TransferInventory_Insert
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_Insert')
-    DROP PROCEDURE [dbo].[TransferInventory_Insert]
-GO
-
-CREATE PROCEDURE [dbo].[TransferInventory_Insert]
+CREATE OR ALTER PROCEDURE TransferInventory_Insert
     @FromStoreId INT,
     @ToStoreId INT,
-    @StockTypeId INT,
-    @ItemId INT,
-    @ItemName NVARCHAR(MAX),
-    @Quantity INT,
+    @StockTypeId INT = NULL,
+    @ItemId INT = NULL,
+    @ItemName NVARCHAR(MAX) = NULL,
+    @Quantity INT = 0,
     @TransferDate DATETIME = NULL,
     @Status NVARCHAR(50) = 'Pending',
     @Notes NVARCHAR(MAX) = NULL,
@@ -99,43 +88,45 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    DECLARE @DRNo NVARCHAR(50);
-    
-    -- Generate DR Number (DR-0401AAAE + incremental number)
+    DECLARE @TransferNumber NVARCHAR(50);
     DECLARE @NextId INT;
     SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM dbo.TransferInventory;
-    SET @DRNo = 'DR-0401AAA' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
+    SET @TransferNumber = 'DR-' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
     
     INSERT INTO dbo.TransferInventory (
-        DRNo, FromStoreId, ToStoreId, StockTypeId, ItemId, ItemName,
-        Quantity, TransferDate, Status, Notes,
+        TransferNumber, FromStoreId, ToStoreId, BranchId,
+        TransferDate, Status, Notes,
         IsActive, CreatedById, CreatedOn
     )
     VALUES (
-        @DRNo, @FromStoreId, @ToStoreId, @StockTypeId, @ItemId, @ItemName,
-        @Quantity, ISNULL(@TransferDate, GETDATE()), @Status, @Notes,
+        @TransferNumber, @FromStoreId, @ToStoreId, NULL,
+        ISNULL(@TransferDate, GETDATE()), @Status, @Notes,
         1, @CreatedById, GETDATE()
     );
     
-    SELECT SCOPE_IDENTITY() as Id;
+    DECLARE @NewId INT = SCOPE_IDENTITY();
+    
+    IF @ItemId IS NOT NULL
+    BEGIN
+        INSERT INTO dbo.TransferInventoryItems (TransferInventoryId, ItemId, Quantity, Notes, IsActive, CreatedOn)
+        VALUES (@NewId, @ItemId, @Quantity, @Notes, 1, GETDATE());
+    END
+    
+    SELECT @NewId as Id;
 END
 GO
 
 -- =============================================
--- Update transfer inventory
+-- 4. TransferInventory_Update
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_Update')
-    DROP PROCEDURE [dbo].[TransferInventory_Update]
-GO
-
-CREATE PROCEDURE [dbo].[TransferInventory_Update]
+CREATE OR ALTER PROCEDURE TransferInventory_Update
     @Id INT,
     @FromStoreId INT,
     @ToStoreId INT,
-    @StockTypeId INT,
-    @ItemId INT,
-    @ItemName NVARCHAR(MAX),
-    @Quantity INT,
+    @StockTypeId INT = NULL,
+    @ItemId INT = NULL,
+    @ItemName NVARCHAR(MAX) = NULL,
+    @Quantity INT = 0,
     @Status NVARCHAR(50) = NULL,
     @Notes NVARCHAR(MAX) = NULL,
     @ModifiedById INT
@@ -147,10 +138,6 @@ BEGIN
     SET 
         FromStoreId = @FromStoreId,
         ToStoreId = @ToStoreId,
-        StockTypeId = @StockTypeId,
-        ItemId = @ItemId,
-        ItemName = @ItemName,
-        Quantity = @Quantity,
         Status = ISNULL(@Status, Status),
         Notes = @Notes,
         ModifiedById = @ModifiedById,
@@ -162,13 +149,9 @@ END
 GO
 
 -- =============================================
--- Delete transfer inventory (soft delete)
+-- 5. TransferInventory_Delete
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_Delete')
-    DROP PROCEDURE [dbo].[TransferInventory_Delete]
-GO
-
-CREATE PROCEDURE [dbo].[TransferInventory_Delete]
+CREATE OR ALTER PROCEDURE TransferInventory_Delete
     @Id INT,
     @ModifiedById INT
 AS
@@ -187,33 +170,32 @@ END
 GO
 
 -- =============================================
--- Get lookup data for transfer inventory
+-- 6. TransferInventory_GetLookupData
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TransferInventory_GetLookupData')
-    DROP PROCEDURE [dbo].[TransferInventory_GetLookupData]
-GO
-
-CREATE PROCEDURE [dbo].[TransferInventory_GetLookupData]
+CREATE OR ALTER PROCEDURE TransferInventory_GetLookupData
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Stores
+    -- dbo.Stores
     SELECT StoreId as Id, StoreName as Name
     FROM dbo.Stores
     WHERE IsActive = 1
     ORDER BY StoreName;
     
     -- Stock Types
-    SELECT StockTypeId as Id, StockTypeName as Name
+    SELECT Id, Name
     FROM dbo.StockTypes
     WHERE IsActive = 1
-    ORDER BY StockTypeName;
+    ORDER BY Name;
     
-    -- Items
+    -- dbo.Items
     SELECT Id, Name
     FROM dbo.Items
     WHERE IsActive = 1
     ORDER BY Name;
 END
 GO
+
+PRINT 'All dbo.TransferInventory stored procedures created successfully';
+

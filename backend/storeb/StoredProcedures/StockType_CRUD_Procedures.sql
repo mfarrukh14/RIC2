@@ -1,5 +1,6 @@
 -- =============================================
 -- Stock Type CRUD Stored Procedures
+-- (HMS compatible: uses Id/Name columns)
 -- =============================================
 
 -- =============================================
@@ -11,13 +12,13 @@ BEGIN
     SET NOCOUNT ON;
     
     SELECT 
-        StockTypeId AS Id,
-        StockTypeName AS Name,
+        Id,
+        Name,
         Description,
         IsActive
     FROM dbo.StockTypes
     WHERE IsActive = 1
-    ORDER BY StockTypeName;
+    ORDER BY Name;
 END
 GO
 
@@ -31,12 +32,12 @@ BEGIN
     SET NOCOUNT ON;
     
     SELECT 
-        StockTypeId AS Id,
-        StockTypeName AS Name,
+        Id,
+        Name,
         Description,
         IsActive
     FROM dbo.StockTypes
-    WHERE StockTypeId = @Id;
+    WHERE Id = @Id;
 END
 GO
 
@@ -51,7 +52,7 @@ BEGIN
     SET NOCOUNT ON;
     
     BEGIN TRY
-        INSERT INTO dbo.StockTypes (StockTypeName, Description, IsActive)
+        INSERT INTO dbo.StockTypes (Name, Description, IsActive)
         VALUES (@Name, @Description, 1);
         
         SELECT SCOPE_IDENTITY() AS Id;
@@ -76,9 +77,9 @@ BEGIN
     BEGIN TRY
         UPDATE dbo.StockTypes
         SET 
-            StockTypeName = @Name,
+            Name = @Name,
             Description = @Description
-        WHERE StockTypeId = @Id;
+        WHERE Id = @Id;
         
         SELECT @@ROWCOUNT AS RowsAffected;
     END TRY
@@ -100,7 +101,7 @@ BEGIN
     BEGIN TRY
         UPDATE dbo.StockTypes
         SET IsActive = 0
-        WHERE StockTypeId = @Id;
+        WHERE Id = @Id;
         
         SELECT @@ROWCOUNT AS RowsAffected;
     END TRY

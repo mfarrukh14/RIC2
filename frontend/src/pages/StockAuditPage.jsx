@@ -3,6 +3,21 @@ import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { stockAuditApi } from '../services/stockAuditApi';
 import inventoryApi from '../services/inventoryApi';
 
+const normalizeStores = (stores) =>
+  (stores || [])
+    .map((store, index) => {
+      const id = store?.id ?? store?.storeId;
+      if (id === null || id === undefined || id === '') {
+        return null;
+      }
+
+      return {
+        id,
+        name: store?.name ?? store?.storeName ?? `Store ${index + 1}`,
+      };
+    })
+    .filter(Boolean);
+
 const StockAuditPage = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -50,10 +65,12 @@ const StockAuditPage = () => {
   const loadLookupData = async () => {
     try {
       const data = await inventoryApi.getLookupData();
-      console.log('Lookup data:', data); // Debug
-      setStores(data.stores || []);
+      setStores(normalizeStores(data.stores));
       setItemList(data.items || []);
-      setManufacturers(data.brands || []); // Using brands as manufacturers
+      setManufacturers((data.brands || []).map((brand) => ({
+        id: brand.id ?? brand.brandId,
+        name: brand.name ?? brand.brandName,
+      })));
       setCategories(data.categories || []);
     } catch (err) {
       console.error('Error loading lookup data:', err);
@@ -235,8 +252,8 @@ const StockAuditPage = () => {
             >
               <option value="">ED OPD Store</option>
               {stores.map((store) => (
-                <option key={store.storeId} value={store.storeId}>
-                  {store.storeName}
+                <option key={store.id} value={store.id}>
+                  {store.name}
                 </option>
               ))}
             </select>
@@ -307,11 +324,16 @@ const StockAuditPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Please Select</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
+              {categories.map((category, index) => {
+                const categoryId = category.id ?? category.categoryId ?? '';
+                const categoryName = category.name ?? category.categoryName ?? `Category ${index + 1}`;
+
+                return (
+                <option key={`category-${categoryId || index}`} value={categoryId}>
+                  {categoryName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
         </div>
@@ -331,11 +353,16 @@ const StockAuditPage = () => {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              {itemList.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
+              {itemList.map((item, index) => {
+                const itemId = item.id ?? item.itemId ?? '';
+                const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+
+                return (
+                <option key={`audit-item-${itemId || index}`} value={itemId}>
+                  {itemName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
 
@@ -370,11 +397,16 @@ const StockAuditPage = () => {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              {manufacturers.map((mfg) => (
-                <option key={mfg.brandId} value={mfg.brandId}>
-                  {mfg.brandName}
+              {manufacturers.map((manufacturer, index) => {
+                const manufacturerId = manufacturer.id ?? manufacturer.brandId ?? '';
+                const manufacturerName = manufacturer.name ?? manufacturer.brandName ?? `Manufacturer ${index + 1}`;
+
+                return (
+                <option key={`manufacturer-${manufacturerId || index}`} value={manufacturerId}>
+                  {manufacturerName}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </div>
         </div>
@@ -460,7 +492,7 @@ const StockAuditPage = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentItems.map((item, index) => (
-                  <React.Fragment key={item.itemId}>
+                  <React.Fragment key={`audit-row-${item.itemId ?? 'item'}-${item.stockType ?? 'stock'}-${item.batchNo ?? index}-${index}`}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-3 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded" />

@@ -2,19 +2,19 @@ namespace InventoryManagement.Api.Models
 {
     public class SpaceAllocation
     {
-        public Guid Id { get; set; }
+        public int Id { get; set; }
         public int StoreId { get; set; }
-        public Guid ItemId { get; set; }
-        public Guid? FeeId { get; set; }
+        public int ItemId { get; set; }
+        public int? FeeId { get; set; }
         public int RackId { get; set; }
-        public Guid? RackRowId { get; set; }
-        public Guid? RackColumnId { get; set; }
-        public Guid? RackDrawerId { get; set; }
-        public Guid? MedicineId { get; set; }
+        public int? RackRowId { get; set; }
+        public int? RackColumnId { get; set; }
+        public int? RackDrawerId { get; set; }
+        public int? MedicineId { get; set; }
         public bool IsActive { get; set; } = true;
-        public Guid? CreatedById { get; set; }
+        public int? CreatedById { get; set; }
         public DateTime CreatedOn { get; set; }
-        public Guid? ModifiedById { get; set; }
+        public int? ModifiedById { get; set; }
         public DateTime? ModifiedOn { get; set; }
 
         // Navigation properties
@@ -29,28 +29,28 @@ namespace InventoryManagement.Api.Models
     public class SpaceAllocationCreateRequest
     {
         public int StoreId { get; set; }
-        public Guid ItemId { get; set; }
-        public Guid? FeeId { get; set; }
+        public int ItemId { get; set; }
+        public int? FeeId { get; set; }
         public int RackId { get; set; }
-        public Guid? RackRowId { get; set; }
-        public Guid? RackColumnId { get; set; }
-        public Guid? RackDrawerId { get; set; }
-        public Guid? MedicineId { get; set; }
+        public int? RackRowId { get; set; }
+        public int? RackColumnId { get; set; }
+        public int? RackDrawerId { get; set; }
+        public int? MedicineId { get; set; }
         public bool IsActive { get; set; } = true;
-        public Guid? CreatedById { get; set; }
+        public int? CreatedById { get; set; }
     }
 
     public class SpaceAllocationUpdateRequest
     {
         public int StoreId { get; set; }
-        public Guid ItemId { get; set; }
-        public Guid? FeeId { get; set; }
+        public int ItemId { get; set; }
+        public int? FeeId { get; set; }
         public int RackId { get; set; }
-        public Guid? RackRowId { get; set; }
-        public Guid? RackColumnId { get; set; }
-        public Guid? RackDrawerId { get; set; }
-        public Guid? MedicineId { get; set; }
+        public int? RackRowId { get; set; }
+        public int? RackColumnId { get; set; }
+        public int? RackDrawerId { get; set; }
+        public int? MedicineId { get; set; }
         public bool IsActive { get; set; }
-        public Guid? ModifiedById { get; set; }
+        public int? ModifiedById { get; set; }
     }
 }

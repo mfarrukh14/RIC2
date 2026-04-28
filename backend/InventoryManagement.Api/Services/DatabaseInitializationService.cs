@@ -10,22 +10,33 @@ namespace InventoryManagement.Api.Services
 
     public class DatabaseInitializationService : IDatabaseInitializationService
     {
-        private readonly IConfiguration _configuration;
         private readonly ILogger<DatabaseInitializationService> _logger;
+        private readonly IHostEnvironment _hostEnvironment;
         private readonly string _connectionString;
         private readonly string _masterConnectionString;
+        private readonly bool _ensureDatabaseExists;
+        private readonly bool _runScripts;
 
         public DatabaseInitializationService(
             IConfiguration configuration,
+            IHostEnvironment hostEnvironment,
             ILogger<DatabaseInitializationService> logger)
         {
-            _configuration = configuration;
             _logger = logger;
-            _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
-            
+            _hostEnvironment = hostEnvironment;
+            _connectionString = configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
             // Create master connection string for database creation
             var builder = new SqlConnectionStringBuilder(_connectionString);
-            var databaseName = builder.InitialCatalog;
+            var defaultBootstrapBehavior = hostEnvironment.IsDevelopment() && IsLocalSqlServerTarget(builder.DataSource);
+            var databaseInitializationSection = configuration.GetSection("DatabaseInitialization");
+
+            _ensureDatabaseExists = databaseInitializationSection.GetValue<bool?>("EnsureDatabaseExists")
+                ?? defaultBootstrapBehavior;
+            _runScripts = databaseInitializationSection.GetValue<bool?>("RunScripts")
+                ?? defaultBootstrapBehavior;
+
             builder.InitialCatalog = "master";
             _masterConnectionString = builder.ConnectionString;
         }
@@ -36,11 +47,36 @@ namespace InventoryManagement.Api.Services
             {
                 _logger.LogInformation("Starting database initialization...");
 
-                // Check if database exists, if not create it
-                await EnsureDatabaseExistsAsync();
+                var connectionDetails = new SqlConnectionStringBuilder(_connectionString);
+                _logger.LogInformation(
+                    "Database initialization target resolved to server '{Server}' and database '{Database}'. Content root: '{ContentRoot}'. Base directory: '{BaseDirectory}'. Working directory: '{WorkingDirectory}'.",
+                    connectionDetails.DataSource,
+                    connectionDetails.InitialCatalog,
+                    _hostEnvironment.ContentRootPath,
+                    AppContext.BaseDirectory,
+                    Directory.GetCurrentDirectory());
 
-                // Run all initialization scripts
-                await ExecuteInitializationScriptsAsync();
+                if (_ensureDatabaseExists)
+                {
+                    await EnsureDatabaseExistsAsync();
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Skipping database existence check for server '{Server}'. Set 'DatabaseInitialization:EnsureDatabaseExists' to true to enable it.",
+                        connectionDetails.DataSource);
+                }
+
+                if (_runScripts)
+                {
+                    await ExecuteInitializationScriptsAsync();
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Skipping database script execution for server '{Server}'. Set 'DatabaseInitialization:RunScripts' to true to enable it.",
+                        connectionDetails.DataSource);
+                }
 
                 _logger.LogInformation("Database initialization completed successfully!");
             }
@@ -49,6 +85,24 @@ namespace InventoryManagement.Api.Services
                 _logger.LogError(ex, "Error during database initialization");
                 throw;
             }
+        }
+
+        private static bool IsLocalSqlServerTarget(string dataSource)
+        {
+            if (string.IsNullOrWhiteSpace(dataSource))
+            {
+                return false;
+            }
+
+            var normalizedDataSource = dataSource.Trim();
+            var serverName = normalizedDataSource.Split(',', 2)[0].Split('\\', 2)[0].Trim();
+
+            return serverName.Equals(".", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals("(local)", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase)
+                || normalizedDataSource.StartsWith("(localdb)", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task EnsureDatabaseExistsAsync()
@@ -100,6 +154,22 @@ namespace InventoryManagement.Api.Services
 
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
+
+            // Phase 0: Run HMS setup script (creates views, missing tables, adds columns)
+            var hmsSetupPath = Path.Combine(scriptsPath, "HMS", "HMS_Setup.sql");
+            if (File.Exists(hmsSetupPath))
+            {
+                _logger.LogInformation("Phase 0: Executing HMS setup script...");
+                try
+                {
+                    await ExecuteSqlScriptAsync(connection, hmsSetupPath, skipNormalization: true);
+                    _logger.LogInformation("HMS setup script executed successfully.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error executing HMS setup script");
+                }
+            }
 
             var executedRootScripts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -335,10 +405,11 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        private async Task ExecuteSqlScriptAsync(SqlConnection connection, string scriptPath)
+        private async Task ExecuteSqlScriptAsync(SqlConnection connection, string scriptPath, bool skipNormalization = false)
         {
             var sqlScript = await File.ReadAllTextAsync(scriptPath);
-            sqlScript = NormalizeScriptForSharedDatabase(sqlScript);
+            if (!skipNormalization)
+                sqlScript = NormalizeScriptForSharedDatabase(sqlScript);
             
             // Split by GO statements (case-insensitive)
             var batches = System.Text.RegularExpressions.Regex.Split(
@@ -373,9 +444,21 @@ namespace InventoryManagement.Api.Services
                         {
                             _logger.LogDebug($"Column already exists (continuing): {ex.Message}");
                         }
+                        else if (ex.Number == 207) // Invalid column name - HMS table has different column names
+                        {
+                            _logger.LogWarning($"Column name mismatch (HMS compatibility): {ex.Message}");
+                        }
+                        else if (ex.Number == 206) // Operand type clash - HMS table has different column types
+                        {
+                            _logger.LogWarning($"Type mismatch (HMS compatibility): {ex.Message}");
+                        }
                         else if (ex.Number == 1767 || ex.Number == 547) // FK constraint errors - referenced table may not exist yet
                         {
                             _logger.LogWarning($"Foreign key constraint issue in {Path.GetFileName(scriptPath)}: {ex.Message}. This may resolve when all tables are created.");
+                        }
+                        else if (ex.Number == 2627 || ex.Number == 2601) // Duplicate key / unique constraint
+                        {
+                            _logger.LogDebug($"Duplicate key (seed data already exists): {ex.Message}");
                         }
                         else
                         {
@@ -399,12 +482,116 @@ namespace InventoryManagement.Api.Services
                 normalized = normalized.Replace("InventoryManagementDB_SP", configuredDatabaseName, StringComparison.OrdinalIgnoreCase);
             }
 
-            normalized = normalized.Replace("dbo.Users", "dbo.StoreUsers", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("name='Users'", "name='StoreUsers'", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("name = 'Users'", "name = 'StoreUsers'", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("CREATE TABLE Users", "CREATE TABLE StoreUsers", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("INSERT INTO Users", "INSERT INTO StoreUsers", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("REFERENCES Users(", "REFERENCES StoreUsers(", StringComparison.OrdinalIgnoreCase);
+            // --- HMS Schema Remapping ---
+            // All store-specific tables live in the Inv schema.
+            // Lookup tables (Countries, Branches, etc.) are Inv schema views
+            // that alias HMS column names to the names the SPs expect.
+
+            // Store-specific tables → Inv schema
+            var invTables = new[]
+            {
+                "Vendors", "Manufacturers", "Brands", "ItemTypes", "ItemUnits",
+                "Packings", "Items", "Categories", "SubCategories", "Prices",
+                "TaxRates", "TaxDescriptions", "TaxTypes", "TaxPayerCategories",
+                "AccountCOAs", "Stores", "StockTypes", "Stocks",
+                "Inventories", "InventoryDetails", "InventoryItems",
+                "GoodsReceivingNotes", "GRNItems",
+                "PurchaseOrders", "PurchaseOrderItems", "PurchaseOrderTypes",
+                "PurchaseOrderStatus", "PurchaseOrderStatusItems",
+                "StockConsumptions", "StockConsumptionDetails",
+                "StockAdjustments", "StockAdjustmentDetails",
+                "StockAudits", "StockAuditItems",
+                "TransferInventory", "TransferInventoryItems",
+                "ReturnInventory", "ReturnInventoryItems",
+                "ContingentBills", "AssetAllocations",
+                "DemandRequests", "DemandRequestStatus", "DemandRequestItems",
+                "DemandRequestLifeCycles",
+                "Racks", "RackRows", "RackColumns", "RackDrawers",
+                "SpaceAllocations", "StoreAllocationToUser",
+                "FinancialYears", "ItemTypeSaleLevels",
+                "StockTypeAssociations", "ItemCategories",
+                "PurchaseSummaries", "PurchaseSummaryInvoices",
+                "EstimatedPurchaseOrders", "DemandWiseValues",
+                "SurgicalItemGroups", "SampleCollectionConsumptionItems"
+            };
+
+            // Lookup tables backed by Inv views over HMS tables
+            var viewTables = new[]
+            {
+                "Countries", "StateOrProvinces", "Branches", "Cities",
+                "Departments", "SubDepartments", "Rooms"
+            };
+
+            // Replace schema-qualified references for store tables
+            foreach (var table in invTables)
+            {
+                normalized = normalized.Replace($"[dbo].[{table}]", $"[Inv].[{table}]", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"dbo.{table}", $"Inv.{table}", StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Replace schema-qualified references for view-backed lookup tables
+            foreach (var table in viewTables)
+            {
+                normalized = normalized.Replace($"[dbo].[{table}]", $"[Inv].[{table}]", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"dbo.{table}", $"Inv.{table}", StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Users table → Inv.StoreUsers view (HMS has dbo.Users with different columns)
+            normalized = normalized.Replace("dbo.Users", "Inv.StoreUsers", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("[dbo].[Users]", "[Inv].[StoreUsers]", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("dbo.StoreUsers", "Inv.StoreUsers", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("[dbo].[StoreUsers]", "[Inv].[StoreUsers]", StringComparison.OrdinalIgnoreCase);
+
+            // Fix IF NOT EXISTS checks to be schema-aware for Inv schema
+            // Pattern: name='TableName' → add schema check
+            foreach (var table in invTables.Concat(viewTables))
+            {
+                normalized = normalized.Replace(
+                    $"name='{table}' AND xtype='U'",
+                    $"name='{table}' AND xtype='U' AND uid = SCHEMA_ID('Inv')",
+                    StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace(
+                    $"name = '{table}' AND xtype='U'",
+                    $"name = '{table}' AND xtype='U' AND uid = SCHEMA_ID('Inv')",
+                    StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Fix sys.tables checks
+            foreach (var table in invTables.Concat(viewTables))
+            {
+                // Handle: sys.tables WHERE name = 'X') - add schema_id check
+                var oldCheck1 = $"sys.tables WHERE name = '{table}')";
+                var newCheck1 = $"sys.tables WHERE name = '{table}' AND schema_id = SCHEMA_ID('Inv'))";
+                normalized = normalized.Replace(oldCheck1, newCheck1, StringComparison.OrdinalIgnoreCase);
+
+                var oldCheck2 = $"sys.tables WHERE name = '{table}' AND schema_id = SCHEMA_ID('dbo'))";
+                var newCheck2 = $"sys.tables WHERE name = '{table}' AND schema_id = SCHEMA_ID('Inv'))";
+                normalized = normalized.Replace(oldCheck2, newCheck2, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Fix bare table references in CREATE TABLE statements
+            // CREATE TABLE TableName → CREATE TABLE Inv.TableName
+            foreach (var table in invTables)
+            {
+                normalized = normalized.Replace($"CREATE TABLE {table} ", $"CREATE TABLE Inv.{table} ", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"CREATE TABLE {table}(", $"CREATE TABLE Inv.{table}(", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"INSERT INTO {table} ", $"INSERT INTO Inv.{table} ", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"INSERT INTO {table}(", $"INSERT INTO Inv.{table}(", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"FROM {table} ", $"FROM Inv.{table} ", StringComparison.OrdinalIgnoreCase);
+                normalized = normalized.Replace($"REFERENCES {table}(", $"REFERENCES Inv.{table}(", StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Remove FK constraints that reference tables not in Inv schema
+            // (these will be handled at the application level)
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @",?\s*CONSTRAINT\s+\[?FK_\w+\]?\s+FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)",
+                "",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // HMS table name typos: RackDrawers → RackDrawrs, RackDrawerId → RackDrawrId in SpaceAllocations
+            normalized = normalized.Replace("Inv.RackDrawers", "Inv.RackDrawrs", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("[Inv].[RackDrawers]", "[Inv].[RackDrawrs]", StringComparison.OrdinalIgnoreCase);
 
             return normalized;
         }

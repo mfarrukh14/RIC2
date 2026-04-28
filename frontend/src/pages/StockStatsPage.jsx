@@ -40,9 +40,18 @@ const StockStatsPage = () => {
   const loadLookupData = async () => {
     try {
       const data = await inventoryApi.getLookupData();
-      setStores(data.stores || []);
-      setItems(data.items || []);
-      setStockTypes(data.stockTypes || []);
+      setStores((data.stores || []).map((store, index) => ({
+        id: store.storeId ?? store.id ?? index,
+        name: store.storeName ?? store.name ?? `Store ${index + 1}`
+      })));
+      setItems((data.items || []).map((item, index) => ({
+        id: item.id ?? item.itemId ?? index,
+        name: item.name ?? item.itemName ?? `Item ${index + 1}`
+      })));
+      setStockTypes((data.stockTypes || []).map((type, index) => ({
+        id: type.id ?? type.stockTypeId ?? index,
+        name: type.name ?? type.stockTypeName ?? `Stock Type ${index + 1}`
+      })));
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }
@@ -144,7 +153,7 @@ const StockStatsPage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">General Store</option>
+              <option value="">Select Store</option>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}

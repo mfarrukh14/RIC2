@@ -8,13 +8,18 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<PurchaseOrderTypeService> _logger;
+        private readonly string _schemaPrefix;
 
         public PurchaseOrderTypeService(IConfiguration configuration, ILogger<PurchaseOrderTypeService> logger)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            var builder = new SqlConnectionStringBuilder(_connectionString);
+            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
+
+        private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
         public async Task<IReadOnlyList<PurchaseOrderTypeDto>> GetAllAsync()
         {
@@ -33,7 +38,7 @@ ORDER BY Name ASC;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
@@ -66,7 +71,7 @@ WHERE Id = @PurchaseOrderTypeId;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@PurchaseOrderTypeId", id);
 
                 await connection.OpenAsync();
@@ -108,7 +113,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@Name", request.Name.Trim());
                 command.Parameters.AddWithValue("@Description", (object?)NormalizeDescription(request.Description) ?? DBNull.Value);
                 command.Parameters.AddWithValue("@IsActive", request.IsActive);
@@ -138,7 +143,7 @@ WHERE Id = @PurchaseOrderTypeId;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@PurchaseOrderTypeId", id);
                 command.Parameters.AddWithValue("@Name", request.Name.Trim());
                 command.Parameters.AddWithValue("@Description", (object?)NormalizeDescription(request.Description) ?? DBNull.Value);
@@ -169,7 +174,7 @@ WHERE Id = @PurchaseOrderTypeId;";
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text };
+                using var command = new SqlCommand(NormalizeSql(sql), connection) { CommandType = CommandType.Text };
                 command.Parameters.AddWithValue("@PurchaseOrderTypeId", id);
 
                 await connection.OpenAsync();

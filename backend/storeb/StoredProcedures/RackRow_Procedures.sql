@@ -45,7 +45,7 @@ IF OBJECT_ID('dbo.RackRow_GetById', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RackRow_GetById
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -116,20 +116,18 @@ IF OBJECT_ID('dbo.RackRow_Insert', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RackRow_Insert
-    @Id UNIQUEIDENTIFIER,
     @Name NVARCHAR(255),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT = 1,
-    @CreatedById UNIQUEIDENTIFIER = NULL
+    @CreatedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
     INSERT INTO dbo.RackRows (
-        Id,
         Name,
         Description,
         StoreId,
@@ -140,7 +138,6 @@ BEGIN
         CreatedOn
     )
     VALUES (
-        @Id,
         @Name,
         @Description,
         @StoreId,
@@ -150,6 +147,8 @@ BEGIN
         @CreatedById,
         GETDATE()
     );
+
+    SELECT SCOPE_IDENTITY() AS Id;
 END
 GO
 
@@ -162,14 +161,14 @@ IF OBJECT_ID('dbo.RackRow_Update', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RackRow_Update
-    @Id UNIQUEIDENTIFIER,
+    @Id INT,
     @Name NVARCHAR(255),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT,
-    @ModifiedById UNIQUEIDENTIFIER = NULL
+    @ModifiedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -197,7 +196,7 @@ IF OBJECT_ID('dbo.RackRow_Delete', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RackRow_Delete
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;

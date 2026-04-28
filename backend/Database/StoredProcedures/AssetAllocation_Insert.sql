@@ -29,27 +29,17 @@ BEGIN
     DECLARE @NewId INT;
     
     INSERT INTO dbo.AssetAllocations (
-        Remarks, AllocatedDate, UserId, DepartmentId, SubDepartmentId,
-        RoomId, ItemId, BranchId, Quantity, InventoryItemId,
-        SysBatchNo, BatchNo, IsActive, CreatedById, CreatedOn,
-        IsReturn, IsDeleted
+        Notes, AllocatedDate, UserId, DepartmentId, SubDepartmentId,
+        RoomId, ItemId, BranchId, Quantity,
+        IsActive, CreatedById, CreatedOn
     )
     VALUES (
         @Remarks, @AllocatedDate, @UserId, @DepartmentId, @SubDepartmentId,
-        @RoomId, @ItemId, @BranchId, @Quantity, @InventoryItemId,
-        @SysBatchNo, @BatchNo, @IsActive, @CreatedById, GETUTCDATE(),
-        0, 0
+        @RoomId, @ItemId, @BranchId, @Quantity,
+        @IsActive, @CreatedById, GETUTCDATE()
     );
     
     SET @NewId = SCOPE_IDENTITY();
-    
-    -- Update inventory item status to 'Allocated' if InventoryItemId is provided
-    IF @InventoryItemId IS NOT NULL
-    BEGIN
-        UPDATE dbo.InventoryItems 
-        SET Status = 'Allocated', ModifiedOn = GETUTCDATE()
-        WHERE Id = @InventoryItemId;
-    END
     
     SELECT @NewId as Id;
 END

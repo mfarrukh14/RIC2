@@ -7,6 +7,22 @@ import rackColumnApi from '../services/rackColumnApi';
 import { rackDrawerApi } from '../services/rackDrawerApi';
 import itemApi from '../services/itemApi';
 
+const normalizeItems = (items) =>
+  (items || [])
+    .map((item, index) => {
+      const id = item?.id ?? item?.itemId;
+      if (id === null || id === undefined || id === '') {
+        return null;
+      }
+
+      return {
+        id,
+        name: item?.name ?? item?.itemName ?? `Item ${index + 1}`,
+        model: item?.model ?? item?.modelNo ?? item?.itemModel ?? null,
+      };
+    })
+    .filter(Boolean);
+
 const SpaceAllocationsPage = () => {
   const [allocations, setAllocations] = useState([]);
   const [stores, setStores] = useState([]);
@@ -65,7 +81,7 @@ const SpaceAllocationsPage = () => {
   const fetchItems = async () => {
     try {
       const data = await itemApi.getAll();
-      setItems(data);
+      setItems(normalizeItems(data));
     } catch (error) {
       console.error('Error fetching items:', error);
     }
@@ -74,9 +90,7 @@ const SpaceAllocationsPage = () => {
   const fetchRacksByStore = async (storeId) => {
     try {
       const allRacks = await racksApi.getAllRacks();
-      // Convert integer storeId to GUID format
-      const storeIdGuid = String(storeId).padStart(8, '0') + '-0000-0000-0000-000000000000';
-      const filteredRacks = allRacks.filter(rack => rack.storeId.toLowerCase() === storeIdGuid.toLowerCase());
+      const filteredRacks = allRacks.filter(rack => Number(rack.storeId) === Number(storeId));
       setRacks(filteredRacks);
     } catch (error) {
       console.error('Error fetching racks:', error);
@@ -164,23 +178,17 @@ const SpaceAllocationsPage = () => {
     }
 
     try {
-      // Convert item INT id to GUID format (similar to store-to-rack conversion)
-      const itemIdGuid = String(formData.itemId).padStart(8, '0') + '-0000-0000-0000-000000000000';
-      
-      // Convert IDs to proper format
       const submitData = {
         storeId: parseInt(formData.storeId),
-        itemId: itemIdGuid,
-        feeId: formData.feeId && formData.feeId !== '' ? formData.feeId : null,
+        itemId: parseInt(formData.itemId, 10),
+        feeId: formData.feeId ? parseInt(formData.feeId, 10) : null,
         rackId: parseInt(formData.rackId),
-        rackRowId: formData.rackRowId && formData.rackRowId !== '' ? formData.rackRowId : null,
-        rackColumnId: formData.rackColumnId && formData.rackColumnId !== '' ? formData.rackColumnId : null,
-        rackDrawerId: formData.rackDrawerId && formData.rackDrawerId !== '' ? formData.rackDrawerId : null,
-        medicineId: formData.medicineId && formData.medicineId !== '' ? formData.medicineId : null,
+        rackRowId: formData.rackRowId ? parseInt(formData.rackRowId, 10) : null,
+        rackColumnId: formData.rackColumnId ? parseInt(formData.rackColumnId, 10) : null,
+        rackDrawerId: formData.rackDrawerId ? parseInt(formData.rackDrawerId, 10) : null,
+        medicineId: formData.medicineId ? parseInt(formData.medicineId, 10) : null,
         isActive: formData.isActive,
       };
-
-      console.log('Submitting space allocation data:', submitData);
 
       if (editMode) {
         await spaceAllocationApi.update(formData.id, submitData);
@@ -204,13 +212,13 @@ const SpaceAllocationsPage = () => {
     setFormData({
       id: allocation.id,
       storeId: allocation.storeId.toString(),
-      itemId: allocation.itemId,
-      feeId: allocation.feeId || '',
+      itemId: allocation.itemId?.toString() || '',
+      feeId: allocation.feeId?.toString() || '',
       rackId: allocation.rackId.toString(),
-      rackRowId: allocation.rackRowId || '',
-      rackColumnId: allocation.rackColumnId || '',
-      rackDrawerId: allocation.rackDrawerId || '',
-      medicineId: allocation.medicineId || '',
+      rackRowId: allocation.rackRowId?.toString() || '',
+      rackColumnId: allocation.rackColumnId?.toString() || '',
+      rackDrawerId: allocation.rackDrawerId?.toString() || '',
+      medicineId: allocation.medicineId?.toString() || '',
       isActive: allocation.isActive,
     });
     setEditMode(true);

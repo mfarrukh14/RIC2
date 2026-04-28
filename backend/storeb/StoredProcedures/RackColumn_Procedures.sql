@@ -29,7 +29,7 @@ GO
 
 -- Get Rack Column By ID
 CREATE OR ALTER PROCEDURE RackColumn_GetById
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -86,34 +86,35 @@ GO
 
 -- Insert Rack Column
 CREATE OR ALTER PROCEDURE RackColumn_Insert
-    @Id UNIQUEIDENTIFIER,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT
 AS
 BEGIN
     SET NOCOUNT ON;
     
     INSERT INTO dbo.RackColumns (
-        Id, Name, Description, StoreId, RackId, BranchId, IsActive, CreatedOn
+        Name, Description, StoreId, RackId, BranchId, IsActive, CreatedOn
     )
     VALUES (
-        @Id, @Name, @Description, @StoreId, @RackId, @BranchId, @IsActive, GETUTCDATE()
+        @Name, @Description, @StoreId, @RackId, @BranchId, @IsActive, GETUTCDATE()
     );
+
+    SELECT SCOPE_IDENTITY() AS Id;
 END
 GO
 
 -- Update Rack Column
 CREATE OR ALTER PROCEDURE RackColumn_Update
-    @Id UNIQUEIDENTIFIER,
+    @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @StoreId INT,
     @RackId INT,
-    @BranchId UNIQUEIDENTIFIER = NULL,
+    @BranchId INT = NULL,
     @IsActive BIT
 AS
 BEGIN
@@ -134,7 +135,7 @@ GO
 
 -- Delete Rack Column
 CREATE OR ALTER PROCEDURE RackColumn_Delete
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;

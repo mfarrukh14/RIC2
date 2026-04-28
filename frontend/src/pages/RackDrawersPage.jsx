@@ -25,9 +25,13 @@ const RackDrawersPage = () => {
     rackId: '',
     rackRowId: '',
     rackColumnId: '',
-    branchId: '00000000-0000-0000-0000-000000000000',
+    branchId: '',
     isActive: true,
   });
+
+  const availableRacks = racks.filter(
+    (rack) => !formData.storeId || Number(rack.storeId) === Number(formData.storeId)
+  );
 
   useEffect(() => {
     fetchRackDrawers();
@@ -90,6 +94,19 @@ const RackDrawersPage = () => {
 
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === 'storeId') {
+      setFormData(prev => ({
+        ...prev,
+        storeId: value,
+        rackId: '',
+        rackRowId: '',
+        rackColumnId: '',
+      }));
+      setRows([]);
+      setColumns([]);
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -131,12 +148,10 @@ const RackDrawersPage = () => {
         ...formData,
         storeId: parseInt(formData.storeId),
         rackId: parseInt(formData.rackId),
-        rackRowId: formData.rackRowId && formData.rackRowId !== '' ? formData.rackRowId : null,
-        rackColumnId: formData.rackColumnId && formData.rackColumnId !== '' ? formData.rackColumnId : null,
-        branchId: formData.branchId && formData.branchId !== '00000000-0000-0000-0000-000000000000' ? formData.branchId : null,
+        rackRowId: formData.rackRowId ? parseInt(formData.rackRowId, 10) : null,
+        rackColumnId: formData.rackColumnId ? parseInt(formData.rackColumnId, 10) : null,
+        branchId: formData.branchId ? parseInt(formData.branchId, 10) : null,
       };
-
-      console.log('Submitting drawer data:', submitData);
 
       if (editMode) {
         await rackDrawerApi.update(submitData.id, submitData);
@@ -161,11 +176,11 @@ const RackDrawersPage = () => {
       id: rackDrawer.id,
       name: rackDrawer.name,
       description: rackDrawer.description || '',
-      storeId: rackDrawer.storeId,
-      rackId: rackDrawer.rackId,
-      rackRowId: rackDrawer.rackRowId,
-      rackColumnId: rackDrawer.rackColumnId,
-      branchId: rackDrawer.branchId,
+      storeId: rackDrawer.storeId?.toString() || '',
+      rackId: rackDrawer.rackId?.toString() || '',
+      rackRowId: rackDrawer.rackRowId?.toString() || '',
+      rackColumnId: rackDrawer.rackColumnId?.toString() || '',
+      branchId: rackDrawer.branchId?.toString() || '',
       isActive: rackDrawer.isActive,
     });
     setEditMode(true);
@@ -194,7 +209,7 @@ const RackDrawersPage = () => {
       rackId: '',
       rackRowId: '',
       rackColumnId: '',
-      branchId: '00000000-0000-0000-0000-000000000000',
+      branchId: '',
       isActive: true,
     });
     setEditMode(false);
@@ -281,7 +296,7 @@ const RackDrawersPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded"
                   >
                     <option value="">Select Store First</option>
-                    {racks.map((rack) => (
+                    {availableRacks.map((rack) => (
                       <option key={rack.id} value={rack.id}>
                         {rack.name}
                       </option>

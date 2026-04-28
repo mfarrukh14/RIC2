@@ -23,7 +23,7 @@ BEGIN
         sa.RackId,
         sa.RackRowId,
         sa.RackColumnId,
-        sa.RackDrawerId,
+        sa.RackDrawrId AS RackDrawerId,
         sa.MedicineId,
         sa.IsActive,
         sa.CreatedById,
@@ -38,11 +38,11 @@ BEGIN
         rd.Name AS DrawerName
     FROM dbo.SpaceAllocations sa
     LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Items i ON CAST(SUBSTRING(CAST(sa.ItemId AS VARCHAR(36)), 1, 8) AS INT) = i.Id
+    LEFT JOIN dbo.Items i ON sa.ItemId = i.Id
     LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
     LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
     LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawerId = rd.Id
+    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
     ORDER BY sa.CreatedOn DESC;
 END
 GO
@@ -56,7 +56,7 @@ IF OBJECT_ID('dbo.SpaceAllocation_GetById', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.SpaceAllocation_GetById
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -69,7 +69,7 @@ BEGIN
         sa.RackId,
         sa.RackRowId,
         sa.RackColumnId,
-        sa.RackDrawerId,
+        sa.RackDrawrId AS RackDrawerId,
         sa.MedicineId,
         sa.IsActive,
         sa.CreatedById,
@@ -84,11 +84,11 @@ BEGIN
         rd.Name AS DrawerName
     FROM dbo.SpaceAllocations sa
     LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Items i ON CAST(SUBSTRING(CAST(sa.ItemId AS VARCHAR(36)), 1, 8) AS INT) = i.Id
+    LEFT JOIN dbo.Items i ON sa.ItemId = i.Id
     LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
     LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
     LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawerId = rd.Id
+    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
     WHERE sa.Id = @Id;
 END
 GO
@@ -102,37 +102,34 @@ IF OBJECT_ID('dbo.SpaceAllocation_Insert', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.SpaceAllocation_Insert
-    @Id UNIQUEIDENTIFIER,
     @StoreId INT,
-    @ItemId UNIQUEIDENTIFIER,
-    @FeeId UNIQUEIDENTIFIER = NULL,
+    @ItemId INT,
+    @FeeId INT = NULL,
     @RackId INT,
-    @RackRowId UNIQUEIDENTIFIER = NULL,
-    @RackColumnId UNIQUEIDENTIFIER = NULL,
-    @RackDrawerId UNIQUEIDENTIFIER = NULL,
-    @MedicineId UNIQUEIDENTIFIER = NULL,
+    @RackRowId INT = NULL,
+    @RackColumnId INT = NULL,
+    @RackDrawerId INT = NULL,
+    @MedicineId INT = NULL,
     @IsActive BIT = 1,
-    @CreatedById UNIQUEIDENTIFIER = NULL
+    @CreatedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
     INSERT INTO dbo.SpaceAllocations (
-        Id,
         StoreId,
         ItemId,
         FeeId,
         RackId,
         RackRowId,
         RackColumnId,
-        RackDrawerId,
+        RackDrawrId,
         MedicineId,
         IsActive,
         CreatedById,
         CreatedOn
     )
     VALUES (
-        @Id,
         @StoreId,
         @ItemId,
         @FeeId,
@@ -145,6 +142,8 @@ BEGIN
         @CreatedById,
         GETDATE()
     );
+
+    SELECT SCOPE_IDENTITY() AS Id;
 END
 GO
 
@@ -157,17 +156,17 @@ IF OBJECT_ID('dbo.SpaceAllocation_Update', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.SpaceAllocation_Update
-    @Id UNIQUEIDENTIFIER,
+    @Id INT,
     @StoreId INT,
-    @ItemId UNIQUEIDENTIFIER,
-    @FeeId UNIQUEIDENTIFIER = NULL,
+    @ItemId INT,
+    @FeeId INT = NULL,
     @RackId INT,
-    @RackRowId UNIQUEIDENTIFIER = NULL,
-    @RackColumnId UNIQUEIDENTIFIER = NULL,
-    @RackDrawerId UNIQUEIDENTIFIER = NULL,
-    @MedicineId UNIQUEIDENTIFIER = NULL,
+    @RackRowId INT = NULL,
+    @RackColumnId INT = NULL,
+    @RackDrawerId INT = NULL,
+    @MedicineId INT = NULL,
     @IsActive BIT,
-    @ModifiedById UNIQUEIDENTIFIER = NULL
+    @ModifiedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -180,7 +179,7 @@ BEGIN
         RackId = @RackId,
         RackRowId = @RackRowId,
         RackColumnId = @RackColumnId,
-        RackDrawerId = @RackDrawerId,
+        RackDrawrId = @RackDrawerId,
         MedicineId = @MedicineId,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,
@@ -198,7 +197,7 @@ IF OBJECT_ID('dbo.SpaceAllocation_Delete', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.SpaceAllocation_Delete
-    @Id UNIQUEIDENTIFIER
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;

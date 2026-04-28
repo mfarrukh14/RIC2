@@ -7,9 +7,6 @@ CREATE PROCEDURE [dbo].[Packing_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
-    @Pack INT = NULL,
-    @Leaf INT = NULL,
-    @NumberOfItems INT = NULL,
     @BranchId INT = NULL,
     @ModifiedById INT,
     @IsActive BIT = 1
@@ -21,9 +18,6 @@ BEGIN
     SET
         Name = @Name,
         Description = @Description,
-        Pack = @Pack,
-        Leaf = @Leaf,
-        NumberOfItems = @NumberOfItems,
         BranchId = @BranchId,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,

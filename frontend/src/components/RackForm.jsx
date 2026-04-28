@@ -9,7 +9,7 @@ const RackForm = ({ rack, stores, onSubmit, onCancel }) => {
     numberOfRows: '',
     numberOfCols: '',
     numberOfDraws: '',
-    branchId: '00000000-0000-0000-0000-000000000001', // Default branch ID
+    branchId: 1,
     isActive: true
   });
 
@@ -25,7 +25,7 @@ const RackForm = ({ rack, stores, onSubmit, onCancel }) => {
         numberOfRows: rack.numberOfRows || '',
         numberOfCols: rack.numberOfCols || '',
         numberOfDraws: rack.numberOfDraws || '',
-        branchId: rack.branchId || '00000000-0000-0000-0000-000000000001',
+        branchId: rack.branchId || 1,
         isActive: rack.isActive !== undefined ? rack.isActive : true
       });
     }
@@ -62,17 +62,10 @@ const RackForm = ({ rack, stores, onSubmit, onCancel }) => {
     e.preventDefault();
     
     if (validate()) {
-      // Convert store ID to GUID format if it's a number
-      let storeIdGuid = formData.storeId;
-      if (typeof formData.storeId === 'number' || !formData.storeId.includes('-')) {
-        // Pad the number to create a GUID-like format
-        const paddedId = String(formData.storeId).padStart(8, '0');
-        storeIdGuid = `${paddedId}-0000-0000-0000-000000000000`;
-      }
-      
       onSubmit({
         ...formData,
-        storeId: storeIdGuid,
+        storeId: Number(formData.storeId),
+        branchId: Number(formData.branchId || 1),
         numberOfRows: parseInt(formData.numberOfRows),
         numberOfCols: parseInt(formData.numberOfCols),
         numberOfDraws: parseInt(formData.numberOfDraws)
