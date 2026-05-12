@@ -155,6 +155,18 @@ namespace InventoryManagement.Api.Services
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
 
+            var hasSharedManufacturerSurface = await HasCompatibleSharedManufacturersAsync(connection);
+            if (hasSharedManufacturerSurface)
+            {
+                _logger.LogInformation("Detected shared manufacturer surface at 'Pharmacy.Manufacturers'; local manufacturer table creation scripts will be skipped.");
+            }
+
+            var hasSharedBrandSurface = await HasCompatibleSharedBrandsAsync(connection);
+            if (hasSharedBrandSurface)
+            {
+                _logger.LogInformation("Detected shared brand surface at 'Data.Brands'; local brand table creation scripts will be skipped.");
+            }
+
             // Phase 0: Run HMS setup script (creates views, missing tables, adds columns)
             var hmsSetupPath = Path.Combine(scriptsPath, "HMS", "HMS_Setup.sql");
             if (File.Exists(hmsSetupPath))
@@ -189,6 +201,12 @@ namespace InventoryManagement.Api.Services
             _logger.LogInformation("Phase 1: Executing ordered root scripts...");
             foreach (var scriptFile in orderedRootScripts)
             {
+                if (ShouldSkipRootScript(scriptFile, hasSharedManufacturerSurface, hasSharedBrandSurface))
+                {
+                    _logger.LogInformation("Skipping script: {ScriptFile} because a shared remote compatibility surface is available.", scriptFile);
+                    continue;
+                }
+
                 var scriptPath = Path.Combine(scriptsPath, scriptFile);
                 if (File.Exists(scriptPath))
                 {
@@ -224,6 +242,12 @@ namespace InventoryManagement.Api.Services
             _logger.LogInformation("Phase 3: Executing remaining root scripts...");
             foreach (var scriptFile in remainingRootScripts)
             {
+                if (ShouldSkipRootScript(scriptFile!, hasSharedManufacturerSurface, hasSharedBrandSurface))
+                {
+                    _logger.LogInformation("Skipping script: {ScriptFile} because a shared remote compatibility surface is available.", scriptFile);
+                    continue;
+                }
+
                 var scriptPath = Path.Combine(scriptsPath, scriptFile!);
                 if (File.Exists(scriptPath))
                 {
@@ -314,6 +338,65 @@ namespace InventoryManagement.Api.Services
                     _logger.LogWarning($"Table script not found: {scriptPath}");
                 }
             }
+        }
+
+        private static bool ShouldSkipRootScript(string scriptFile, bool hasSharedManufacturerSurface, bool hasSharedBrandSurface)
+        {
+            return (hasSharedManufacturerSurface
+                    && scriptFile.Equals("CreateManufacturersTable.sql", StringComparison.OrdinalIgnoreCase))
+                || (hasSharedBrandSurface
+                    && scriptFile.Equals("CreateBrandsTable.sql", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static async Task<bool> HasCompatibleSharedManufacturersAsync(SqlConnection connection)
+        {
+            const string sql = @"
+DECLARE @ManufacturersObjectId INT = OBJECT_ID('Pharmacy.Manufacturers');
+
+SELECT CASE
+    WHEN @ManufacturersObjectId IS NOT NULL
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'ManufacturerId')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'Name')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'Description')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'Email')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'Address')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'CreatedById')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'CreatedOn')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'ModifiedById')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'ModifiedOn')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @ManufacturersObjectId AND name = 'IsActive')
+    THEN 1
+    ELSE 0
+END;";
+
+            using var command = new SqlCommand(sql, connection);
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) == 1;
+        }
+
+        private static async Task<bool> HasCompatibleSharedBrandsAsync(SqlConnection connection)
+        {
+            const string sql = @"
+DECLARE @BrandsObjectId INT = OBJECT_ID('Data.Brands');
+
+SELECT CASE
+    WHEN @BrandsObjectId IS NOT NULL
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'Id')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'Name')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'Description')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'BranchId')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'IsActive')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'CreatedById')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'CreatedOn')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'ModifiedById')
+        AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = @BrandsObjectId AND name = 'ModifiedOn')
+    THEN 1
+    ELSE 0
+END;";
+
+            using var command = new SqlCommand(sql, connection);
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) == 1;
         }
 
         private async Task ExecuteAlterScriptsAsync(SqlConnection connection, string scriptsPath)
@@ -536,11 +619,9 @@ namespace InventoryManagement.Api.Services
                 normalized = normalized.Replace($"dbo.{table}", $"Inv.{table}", StringComparison.OrdinalIgnoreCase);
             }
 
-            // Users table → Inv.StoreUsers view (HMS has dbo.Users with different columns)
-            normalized = normalized.Replace("dbo.Users", "Inv.StoreUsers", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("[dbo].[Users]", "[Inv].[StoreUsers]", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("dbo.StoreUsers", "Inv.StoreUsers", StringComparison.OrdinalIgnoreCase);
-            normalized = normalized.Replace("[dbo].[StoreUsers]", "[Inv].[StoreUsers]", StringComparison.OrdinalIgnoreCase);
+            // Keep HMS user lookups on dbo.Users and map store-user links to the pharmacy table.
+            normalized = normalized.Replace("dbo.StoreUsers", "Pharmacy.UserPharmacyStores", StringComparison.OrdinalIgnoreCase);
+            normalized = normalized.Replace("[dbo].[StoreUsers]", "[Pharmacy].[UserPharmacyStores]", StringComparison.OrdinalIgnoreCase);
 
             // Fix IF NOT EXISTS checks to be schema-aware for Inv schema
             // Pattern: name='TableName' → add schema check
@@ -581,6 +662,13 @@ namespace InventoryManagement.Api.Services
                 normalized = normalized.Replace($"REFERENCES {table}(", $"REFERENCES Inv.{table}(", StringComparison.OrdinalIgnoreCase);
             }
 
+            // Route HMS-backed compatibility surfaces away from accidentally created Inv tables
+            // after all schema normalization has run, including bare CREATE/INSERT references.
+            normalized = RedirectInvCompatibilitySurface(normalized, "Manufacturers", "PharmacyManufacturers");
+            normalized = RedirectInvCompatibilitySurface(normalized, "Brands", "DataBrands");
+            normalized = RedirectInvCompatibilitySurface(normalized, "Stores", "PharmacyStores");
+            normalized = RedirectInvCompatibilitySurface(normalized, "SurgicalItemGroups", "SurgicalGroups");
+
             // Remove FK constraints that reference tables not in Inv schema
             // (these will be handled at the application level)
             normalized = System.Text.RegularExpressions.Regex.Replace(
@@ -592,6 +680,21 @@ namespace InventoryManagement.Api.Services
             // HMS table name typos: RackDrawers → RackDrawrs, RackDrawerId → RackDrawrId in SpaceAllocations
             normalized = normalized.Replace("Inv.RackDrawers", "Inv.RackDrawrs", StringComparison.OrdinalIgnoreCase);
             normalized = normalized.Replace("[Inv].[RackDrawers]", "[Inv].[RackDrawrs]", StringComparison.OrdinalIgnoreCase);
+
+            return normalized;
+        }
+
+        private static string RedirectInvCompatibilitySurface(string script, string legacyName, string targetName)
+        {
+            var normalized = script.Replace(
+                $"[Inv].[{legacyName}]",
+                $"[Inv].[{targetName}]",
+                StringComparison.OrdinalIgnoreCase);
+
+            normalized = normalized.Replace(
+                $"Inv.{legacyName}",
+                $"Inv.{targetName}",
+                StringComparison.OrdinalIgnoreCase);
 
             return normalized;
         }

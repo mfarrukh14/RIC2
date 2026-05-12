@@ -6,23 +6,23 @@ DECLARE @DepartmentId INT = (SELECT TOP 1 Id FROM Inv.Departments ORDER BY Id);
 DECLARE @SubDepartmentId INT = (SELECT TOP 1 Id FROM Inv.SubDepartments WHERE DepartmentId = @DepartmentId ORDER BY Id);
 DECLARE @RoomId INT = (SELECT TOP 1 Id FROM Inv.Rooms ORDER BY Id);
 
-DECLARE @MedicineStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.Stores WHERE StoreName = 'Medicine Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.Stores WHERE IsActive = 1 ORDER BY StoreId));
-DECLARE @DisposableStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.Stores WHERE StoreName = 'Main Disposable Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.Stores WHERE IsActive = 1 AND StoreId <> @MedicineStoreId ORDER BY StoreId));
-DECLARE @EmergencyStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.Stores WHERE StoreName = 'Emergency Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.Stores WHERE IsActive = 1 AND StoreId NOT IN (@MedicineStoreId, @DisposableStoreId) ORDER BY StoreId));
+DECLARE @MedicineStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Medicine Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE IsActive = 1 ORDER BY StoreId));
+DECLARE @DisposableStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Main Disposable Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE IsActive = 1 AND StoreId <> @MedicineStoreId ORDER BY StoreId));
+DECLARE @EmergencyStoreId INT = COALESCE((SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Emergency Store' ORDER BY StoreId), (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE IsActive = 1 AND StoreId NOT IN (@MedicineStoreId, @DisposableStoreId) ORDER BY StoreId));
 DECLARE @RackStoreId INT = COALESCE(
-    (SELECT TOP 1 s.StoreId FROM Inv.Stores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId WHERE s.StoreId = @DisposableStoreId),
-    (SELECT TOP 1 s.StoreId FROM Inv.Stores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId WHERE s.StoreId = @EmergencyStoreId),
-    (SELECT TOP 1 s.StoreId FROM Inv.Stores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId ORDER BY s.StoreId)
+    (SELECT TOP 1 s.StoreId FROM Inv.PharmacyStores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId WHERE s.StoreId = @DisposableStoreId),
+    (SELECT TOP 1 s.StoreId FROM Inv.PharmacyStores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId WHERE s.StoreId = @EmergencyStoreId),
+    (SELECT TOP 1 s.StoreId FROM Inv.PharmacyStores s INNER JOIN Pharmacy.PharmacyStores ps ON ps.Id = s.StoreId ORDER BY s.StoreId)
 );
 
 DECLARE @RegularStockTypeId INT = COALESCE((SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Regular' ORDER BY Id), (SELECT TOP 1 Id FROM Inv.StockTypes ORDER BY Id));
 DECLARE @DonationStockTypeId INT = COALESCE((SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Donation' ORDER BY Id), @RegularStockTypeId);
 DECLARE @Vendor1Id INT = (SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 ORDER BY Id);
 DECLARE @Vendor2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 AND Id <> @Vendor1Id ORDER BY Id), @Vendor1Id);
-DECLARE @Manufacturer1Id INT = (SELECT TOP 1 Id FROM Inv.Manufacturers ORDER BY Id);
-DECLARE @Manufacturer2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Manufacturers WHERE Id <> @Manufacturer1Id ORDER BY Id), @Manufacturer1Id);
-DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 ORDER BY Id);
-DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
+DECLARE @Manufacturer1Id INT = (SELECT TOP 1 Id FROM Inv.PharmacyManufacturers ORDER BY Id);
+DECLARE @Manufacturer2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.PharmacyManufacturers WHERE Id <> @Manufacturer1Id ORDER BY Id), @Manufacturer1Id);
+DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Inv.DataBrands WHERE IsActive = 1 ORDER BY Id);
+DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.DataBrands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
 DECLARE @ItemType1Id INT = (SELECT TOP 1 Id FROM Inv.ItemTypes ORDER BY Id);
 DECLARE @ItemType2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.ItemTypes WHERE Id <> @ItemType1Id ORDER BY Id), @ItemType1Id);
 DECLARE @UnitId INT = (SELECT TOP 1 Id FROM Inv.ItemUnits ORDER BY Id);

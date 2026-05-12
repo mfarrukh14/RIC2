@@ -13,8 +13,8 @@ namespace InventoryManagement.API.Models
         public string? StoreName { get; set; }
         public int? ItemTypeId { get; set; }
         public string? ItemTypeName { get; set; }
-        public int ItemId { get; set; }
-        public string ItemName { get; set; } = string.Empty;
+        public int? ItemId { get; set; }
+        public string? ItemName { get; set; }
         public int ReturnQuantity { get; set; }
         public int? StockTypeId { get; set; }
         public string? StockTypeName { get; set; }
@@ -24,7 +24,7 @@ namespace InventoryManagement.API.Models
         public string? Reason { get; set; }
         public string? Notes { get; set; }
         public bool IsActive { get; set; }
-        public int CreatedById { get; set; }
+        public int? CreatedById { get; set; }
         public DateTime CreatedOn { get; set; }
         public int? ModifiedById { get; set; }
         public DateTime? ModifiedOn { get; set; }

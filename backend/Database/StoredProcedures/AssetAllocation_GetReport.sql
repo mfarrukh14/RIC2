@@ -19,6 +19,91 @@ CREATE PROCEDURE [dbo].[AssetAllocation_GetReport]
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    CREATE TABLE #UserLookup
+    (
+        Id INT NOT NULL PRIMARY KEY,
+        Name NVARCHAR(4000) NULL,
+        Email NVARCHAR(256) NULL,
+        UserName NVARCHAR(256) NULL,
+        Department NVARCHAR(256) NULL,
+        Designation NVARCHAR(256) NULL,
+        IsActive BIT NOT NULL
+    );
+
+    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
+    BEGIN
+        CREATE TABLE #DropdownUsers
+        (
+            value INT NULL,
+            text NVARCHAR(4000) NULL
+        );
+
+        INSERT INTO #DropdownUsers (value, text)
+        EXEC [DropDown].[DD_Users];
+
+        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
+        SELECT
+            du.value,
+            du.text,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            CAST(1 AS BIT)
+        FROM
+        (
+            SELECT
+                value,
+                MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
+            FROM #DropdownUsers
+            WHERE value IS NOT NULL
+            GROUP BY value
+        ) du
+        WHERE du.text IS NOT NULL;
+    END
+    IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
+    BEGIN
+        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
+        EXEC sp_executesql N'
+            SELECT
+                raw.UserID,
+                COALESCE(NULLIF(LTRIM(RTRIM(raw.UserName)), ''''), CONCAT(''User '', CAST(raw.UserID AS NVARCHAR(20)))),
+                NULL,
+                raw.UserName,
+                NULL,
+                NULL,
+                CAST(CASE WHEN ISNULL(raw.Status, 1) = 1 THEN 1 ELSE 0 END AS BIT)
+            FROM dbo.Users raw
+            WHERE ISNULL(raw.Status, 1) = 1
+              AND NULLIF(LTRIM(RTRIM(raw.UserName)), '''') IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM #UserLookup existing
+                  WHERE existing.Id = raw.UserID
+              );';
+    END
+    ELSE IF COL_LENGTH('dbo.Users', 'Id') IS NOT NULL
+    BEGIN
+        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
+        EXEC sp_executesql N'
+            SELECT
+                raw.Id,
+                raw.Name,
+                raw.Email,
+                raw.UserName,
+                raw.Department,
+                raw.Designation,
+                CAST(ISNULL(raw.IsActive, 1) AS BIT)
+            FROM dbo.Users raw
+            WHERE ISNULL(raw.IsActive, 1) = 1
+              AND NULLIF(LTRIM(RTRIM(raw.Name)), '''') IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM #UserLookup existing
+                  WHERE existing.Id = raw.Id
+              );';
+    END
     
     SELECT 
         aa.Id,
@@ -30,14 +115,14 @@ BEGIN
         NULL AS ReturnRemarks,
         -- Asset/Item Information
         i.Id as AssetId,
-        i.Name as AssetName,
+        COALESCE(i.Name, CONCAT('Item ', CAST(aa.ItemId AS NVARCHAR(20)))) as AssetName,
         aa.SerialNumber,
         NULL AS Model,
         NULL AS UnitPrice,
         NULL AS TotalPrice,
         -- User Information
-        u.Id as UserId,
-        u.Name as UserName,
+        aa.UserId as UserId,
+        COALESCE(u.Name, CONCAT('User ', CAST(aa.UserId AS NVARCHAR(20)))) as UserName,
         u.Email as UserEmail,
         u.Department as UserDepartment,
         u.Designation as UserDesignation,
@@ -62,7 +147,7 @@ BEGIN
         -- Allocation Number
         aa.AllocationNumber AS AllocationNo
     FROM dbo.AssetAllocations aa
-    LEFT JOIN dbo.Users u ON aa.UserId = u.Id
+    LEFT JOIN #UserLookup u ON aa.UserId = u.Id
     LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
     LEFT JOIN dbo.Departments d ON aa.DepartmentId = d.Id
     LEFT JOIN dbo.SubDepartments sd ON aa.SubDepartmentId = sd.Id

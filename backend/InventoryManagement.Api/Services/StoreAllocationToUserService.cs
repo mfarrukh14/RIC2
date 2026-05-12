@@ -11,6 +11,7 @@ namespace InventoryManagement.Api.Services
         Task<StoreAllocationToUser> CreateAsync(StoreAllocationToUserCreateRequest request);
         Task UpdateAsync(int id, StoreAllocationToUserUpdateRequest request);
         Task DeleteAsync(int id);
+        Task<IReadOnlyList<DropdownItem>> GetEmployeeDropdownAsync();
     }
 
     public class StoreAllocationToUserService : IStoreAllocationToUserService
@@ -104,7 +105,7 @@ namespace InventoryManagement.Api.Services
                     {
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        command.Parameters.AddWithValue("@EmployeeName", request.EmployeeName);
+                        command.Parameters.AddWithValue("@UserId", request.UserId);
                         command.Parameters.AddWithValue("@IsActive", request.IsActive);
                         command.Parameters.AddWithValue("@CreatedById", DBNull.Value);
 
@@ -136,7 +137,7 @@ namespace InventoryManagement.Api.Services
                         command.CommandType = CommandType.StoredProcedure;
                         command.Parameters.AddWithValue("@Id", id);
                         command.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        command.Parameters.AddWithValue("@EmployeeName", request.EmployeeName);
+                        command.Parameters.AddWithValue("@UserId", request.UserId);
                         command.Parameters.AddWithValue("@IsActive", request.IsActive);
                         command.Parameters.AddWithValue("@ModifiedById", DBNull.Value);
 
@@ -175,6 +176,68 @@ namespace InventoryManagement.Api.Services
             }
         }
 
+        public async Task<IReadOnlyList<DropdownItem>> GetEmployeeDropdownAsync()
+        {
+            var employees = new List<DropdownItem>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                if (await TryLoadEmployeeDropdownAsync(
+                        connection,
+                        employees,
+                        "DropDown.DD_Users",
+                        CommandType.StoredProcedure,
+                        "value",
+                        "text"))
+                {
+                    return employees;
+                }
+
+                if (await TryLoadEmployeeDropdownAsync(
+                        connection,
+                        employees,
+                        @"
+SELECT
+    UserID AS Value,
+    UserName AS Text
+FROM dbo.Users
+WHERE ISNULL(Status, 1) = 1
+  AND NULLIF(LTRIM(RTRIM(UserName)), '') IS NOT NULL
+ORDER BY UserName;",
+                        CommandType.Text,
+                        "Value",
+                        "Text"))
+                {
+                    return employees;
+                }
+
+                await TryLoadEmployeeDropdownAsync(
+                    connection,
+                    employees,
+                    @"
+SELECT
+    Id AS Value,
+    Name AS Text
+FROM dbo.Users
+WHERE ISNULL(IsActive, 1) = 1
+  AND NULLIF(LTRIM(RTRIM(Name)), '') IS NOT NULL
+ORDER BY Name;",
+                    CommandType.Text,
+                    "Value",
+                    "Text");
+
+                return employees;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving employee dropdown");
+                throw;
+            }
+        }
+
         private StoreAllocationToUser MapReaderToAllocation(SqlDataReader reader)
         {
             return new StoreAllocationToUser
@@ -182,6 +245,7 @@ namespace InventoryManagement.Api.Services
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
+                UserId = reader.IsDBNull(reader.GetOrdinal("UserId")) ? null : reader.GetInt32(reader.GetOrdinal("UserId")),
                 EmployeeName = reader.GetString(reader.GetOrdinal("EmployeeName")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
                 CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
@@ -189,6 +253,46 @@ namespace InventoryManagement.Api.Services
                 ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
                 ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn"))
             };
+        }
+
+        private async Task<bool> TryLoadEmployeeDropdownAsync(
+            SqlConnection connection,
+            List<DropdownItem> target,
+            string commandText,
+            CommandType commandType,
+            string valueColumn,
+            string textColumn)
+        {
+            try
+            {
+                using var command = new SqlCommand(commandText, connection)
+                {
+                    CommandType = commandType
+                };
+
+                using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    if (reader.IsDBNull(reader.GetOrdinal(valueColumn)) || reader.IsDBNull(reader.GetOrdinal(textColumn)))
+                    {
+                        continue;
+                    }
+
+                    target.Add(new DropdownItem
+                    {
+                        Value = Convert.ToInt32(reader.GetValue(reader.GetOrdinal(valueColumn))),
+                        Text = reader.GetString(reader.GetOrdinal(textColumn))
+                    });
+                }
+
+                return target.Count > 0;
+            }
+            catch (SqlException ex)
+            {
+                _logger.LogDebug(ex, "Employee dropdown source failed: {CommandText}", commandText);
+                target.Clear();
+                return false;
+            }
         }
     }
 }

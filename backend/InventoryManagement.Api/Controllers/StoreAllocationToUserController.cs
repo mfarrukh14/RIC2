@@ -32,6 +32,21 @@ namespace InventoryManagement.Api.Controllers
             }
         }
 
+        [HttpGet("employee-dropdown")]
+        public async Task<ActionResult<IEnumerable<DropdownItem>>> GetEmployeeDropdown()
+        {
+            try
+            {
+                var employees = await _service.GetEmployeeDropdownAsync();
+                return Ok(employees);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving employee dropdown");
+                return StatusCode(500, new { message = "An error occurred while retrieving the employee dropdown" });
+            }
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<StoreAllocationToUser>> GetById(int id)
         {

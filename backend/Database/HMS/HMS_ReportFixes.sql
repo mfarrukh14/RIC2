@@ -25,7 +25,7 @@ BEGIN
     INNER JOIN Inv.Items i ON gi.ItemId = i.Id
     INNER JOIN Inv.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
     LEFT JOIN Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.Stores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE (@StartDate IS NULL OR grn.DateAndTime >= @StartDate)
       AND (@EndDate IS NULL OR grn.DateAndTime <= @EndDate)
@@ -63,7 +63,7 @@ BEGIN
     INNER JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN Inv.StockTypes st ON grn.StockTypeId = st.Id
-    LEFT JOIN Inv.Stores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
     LEFT JOIN Inv.Vendors v ON grn.VendorId = v.Id
     WHERE gi.BatchNo = @BatchNo
       AND i.Name = @ItemName;
@@ -95,7 +95,7 @@ BEGIN
         gi.TotalBuyingPrice - COALESCE(gi.DiscountAmount, 0) AS Total
     FROM Inv.GRNItems gi
     INNER JOIN Inv.Items i ON gi.ItemId = i.Id
-    LEFT JOIN Inv.Manufacturers m ON gi.ManufacturerId = m.Id
+    LEFT JOIN Inv.PharmacyManufacturers m ON gi.ManufacturerId = m.Id
     WHERE gi.BatchNo = @BatchNo
       AND i.Name = @ItemName;
 END;
@@ -155,7 +155,7 @@ BEGIN
     FROM Inv.InventoryDetails id
     INNER JOIN Inv.Inventories inv ON id.InventoryId = inv.Id
     INNER JOIN Inv.Items i ON id.ItemId = i.Id
-    INNER JOIN Inv.Stores st ON inv.StoreId = st.StoreId
+    INNER JOIN Inv.PharmacyStores st ON inv.StoreId = st.StoreId
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN Inv.StockTypes sty ON inv.StockTypeId = sty.Id
     OUTER APPLY (

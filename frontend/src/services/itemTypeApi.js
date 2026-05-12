@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://10.10.10.35:5100/api';
+const API_BASE_URL = 'http://localhost:5100/api';
 
 export const itemTypeApi = {
   // Get all item types

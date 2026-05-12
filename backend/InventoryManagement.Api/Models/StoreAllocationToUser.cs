@@ -5,6 +5,7 @@ namespace InventoryManagement.Api.Models
         public int Id { get; set; }
         public int StoreId { get; set; }
         public string? StoreName { get; set; }
+        public int? UserId { get; set; }
         public string EmployeeName { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
         public int? CreatedById { get; set; }
@@ -16,7 +17,7 @@ namespace InventoryManagement.Api.Models
     public class StoreAllocationToUserCreateRequest
     {
         public int StoreId { get; set; }
-        public string EmployeeName { get; set; } = string.Empty;
+        public int UserId { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -24,7 +25,7 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public int StoreId { get; set; }
-        public string EmployeeName { get; set; } = string.Empty;
+        public int UserId { get; set; }
         public bool IsActive { get; set; }
     }
 }

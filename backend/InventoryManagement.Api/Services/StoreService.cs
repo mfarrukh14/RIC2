@@ -168,6 +168,9 @@ namespace InventoryManagement.Api.Services
         public async Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request)
         {
             var items = new List<DropdownItem>();
+            var branchId = request.BranchId.HasValue && request.BranchId > 0
+                ? request.BranchId.Value
+                : 1;
             var storeId = request.PharmacyStoreId.HasValue && request.PharmacyStoreId > 0
                 ? request.PharmacyStoreId
                 : null;
@@ -181,6 +184,48 @@ namespace InventoryManagement.Api.Services
             try
             {
                 using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                if (stockType is null && patientType is null)
+                {
+                    try
+                    {
+                        using var sharedDropdownCommand = new SqlCommand("DropDown.SP_DDL_AllPharmacyStore", connection)
+                        {
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+                        sharedDropdownCommand.Parameters.AddWithValue("@BranchId", branchId);
+
+                        using (var sharedReader = await sharedDropdownCommand.ExecuteReaderAsync())
+                        {
+                            while (await sharedReader.ReadAsync())
+                            {
+                                items.Add(new DropdownItem
+                                {
+                                    Value = Convert.ToInt32(sharedReader.GetValue(sharedReader.GetOrdinal("Value"))),
+                                    Text = sharedReader.GetString(sharedReader.GetOrdinal("Text"))
+                                });
+                            }
+                        }
+
+                        if (storeId is not null)
+                        {
+                            items = items.Where(item => item.Value == storeId.Value).ToList();
+                        }
+
+                        if (items.Count > 0)
+                        {
+                            return items;
+                        }
+                    }
+                    catch (SqlException ex)
+                    {
+                        _logger.LogDebug(ex, "Shared pharmacy store dropdown procedure unavailable; falling back to store tables.");
+                        items.Clear();
+                    }
+                }
+
                 using var command = new SqlCommand(@"
 SELECT DISTINCT
     s.StoreId,
@@ -202,7 +247,6 @@ ORDER BY s.StoreName;", connection)
                                 command.Parameters.AddWithValue("@StockType", (object?)stockType ?? DBNull.Value);
                                 command.Parameters.AddWithValue("@PatientType", (object?)patientType ?? DBNull.Value);
 
-                await connection.OpenAsync();
                 using (var reader = await command.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())

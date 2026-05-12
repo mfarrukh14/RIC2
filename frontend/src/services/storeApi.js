@@ -1,10 +1,15 @@
 import axios from 'axios';
 
-const API_URL = 'http://10.10.10.35:5100/api/Store';
+const API_URL = 'http://localhost:5100/api/Store';
 
 export const getAllStores = async () => {
   const response = await axios.get(API_URL);
   return response.data;
+};
+
+export const getPharmacyStoreDropdown = async (branchId = 1) => {
+  const response = await axios.post(`${API_URL}/pharmacy-store-dropdown`, { branchId });
+  return response.data?.data ?? [];
 };
 
 export const getStoreById = async (id) => {

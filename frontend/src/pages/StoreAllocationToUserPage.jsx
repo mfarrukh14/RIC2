@@ -1,10 +1,11 @@
 import React,{ useState, useEffect } from 'react';
 import { storeAllocationToUserApi } from '../services/storeAllocationToUserApi';
-import { getAllStores } from '../services/storeApi';
+import { getPharmacyStoreDropdown } from '../services/storeApi';
 
 function StoreAllocationToUserPage() {
     const [allocations, setAllocations] = useState([]);
     const [stores, setStores] = useState([]);
+    const [employees, setEmployees] = useState([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingAllocation, setEditingAllocation] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -13,13 +14,14 @@ function StoreAllocationToUserPage() {
     
     const [formData, setFormData] = useState({
         storeId: '',
-        employeeName: '',
+        userId: '',
         isActive: true
     });
 
     useEffect(() => {
         fetchAllocations();
         fetchStores();
+        fetchEmployees();
     }, []);
 
     const fetchAllocations = async () => {
@@ -34,10 +36,19 @@ function StoreAllocationToUserPage() {
 
     const fetchStores = async () => {
         try {
-            const data = await getAllStores();
+            const data = await getPharmacyStoreDropdown();
             setStores(data);
         } catch (error) {
             console.error('Error fetching stores:', error);
+        }
+    };
+
+    const fetchEmployees = async () => {
+        try {
+            const data = await storeAllocationToUserApi.getEmployeeDropdown();
+            setEmployees(data);
+        } catch (error) {
+            console.error('Error fetching employees:', error);
         }
     };
 
@@ -67,7 +78,7 @@ function StoreAllocationToUserPage() {
         setEditingAllocation(allocation);
         setFormData({
             storeId: allocation.storeId,
-            employeeName: allocation.employeeName,
+            userId: allocation.userId ?? '',
             isActive: allocation.isActive
         });
         setIsFormOpen(true);
@@ -89,7 +100,7 @@ function StoreAllocationToUserPage() {
     const resetForm = () => {
         setFormData({
             storeId: '',
-            employeeName: '',
+            userId: '',
             isActive: true
         });
         setEditingAllocation(null);
@@ -97,7 +108,8 @@ function StoreAllocationToUserPage() {
     };
 
     const filteredAllocations = allocations.filter(allocation =>
-        allocation.storeName?.toLowerCase().includes(searchTerm.toLowerCase())
+        allocation.storeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        allocation.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -153,26 +165,31 @@ function StoreAllocationToUserPage() {
                                 >
                                     <option value="">Select Store</option>
                                     {stores.map(store => (
-                                        <option key={store.storeId} value={store.storeId}>
-                                            {store.storeName}
+                                        <option key={store.value} value={store.value}>
+                                            {store.text}
                                         </option>
                                     ))}
                                 </select>
                             </div>
 
                             <div>
-                                <label htmlFor="employeeName" className="block text-sm font-medium text-gray-700 mb-2">
-                                    Employee Name *
+                                <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Employee *
                                 </label>
-                                <input
-                                    type="text"
-                                    id="employeeName"
-                                    value={formData.employeeName}
-                                    onChange={(e) => setFormData({...formData, employeeName: e.target.value})}
-                                    placeholder="Enter Employee Name"
+                                <select
+                                    id="userId"
+                                    value={formData.userId}
+                                    onChange={(e) => setFormData({...formData, userId: e.target.value})}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     required
-                                />
+                                >
+                                    <option value="">Select Employee</option>
+                                    {employees.map(employee => (
+                                        <option key={employee.value} value={employee.value}>
+                                            {employee.text}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
@@ -191,7 +208,7 @@ function StoreAllocationToUserPage() {
             <div className="mb-4">
                 <input
                     type="text"
-                    placeholder="Search by store name..."
+                    placeholder="Search by store or employee..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -28,9 +28,9 @@ BEGIN
         s.StoreName AS StoreName,
         NULL AS ItemTypeId,
         NULL AS ItemTypeName,
-        NULL AS ItemId,
-        NULL AS ItemName,
-        ISNULL((SELECT SUM(rii.Quantity) FROM dbo.ReturnInventoryItems rii WHERE rii.ReturnInventoryId = ri.Id AND rii.IsActive = 1), 0) AS ReturnQuantity,
+        primaryItem.ItemId,
+        primaryItem.ItemName,
+        ISNULL(itemTotals.ReturnQuantity, 0) AS ReturnQuantity,
         NULL AS StockTypeId,
         NULL AS StockTypeName,
         ri.VendorId,
@@ -47,6 +47,22 @@ BEGIN
     LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
     LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
     LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
+    OUTER APPLY (
+        SELECT TOP (1)
+            rii.ItemId,
+            i.Name AS ItemName
+        FROM dbo.ReturnInventoryItems rii
+        LEFT JOIN dbo.Items i ON rii.ItemId = i.Id
+        WHERE rii.ReturnInventoryId = ri.Id
+            AND rii.IsActive = 1
+        ORDER BY rii.Id DESC
+    ) primaryItem
+    OUTER APPLY (
+        SELECT SUM(rii.Quantity) AS ReturnQuantity
+        FROM dbo.ReturnInventoryItems rii
+        WHERE rii.ReturnInventoryId = ri.Id
+            AND rii.IsActive = 1
+    ) itemTotals
     WHERE ri.IsActive = 1
         AND (@BranchId IS NULL OR ri.BranchId = @BranchId)
         AND (@StoreId IS NULL OR ri.StoreId = @StoreId)
@@ -75,9 +91,9 @@ BEGIN
         s.StoreName AS StoreName,
         NULL AS ItemTypeId,
         NULL AS ItemTypeName,
-        NULL AS ItemId,
-        NULL AS ItemName,
-        ISNULL((SELECT SUM(rii.Quantity) FROM dbo.ReturnInventoryItems rii WHERE rii.ReturnInventoryId = ri.Id AND rii.IsActive = 1), 0) AS ReturnQuantity,
+        primaryItem.ItemId,
+        primaryItem.ItemName,
+        ISNULL(itemTotals.ReturnQuantity, 0) AS ReturnQuantity,
         NULL AS StockTypeId,
         NULL AS StockTypeName,
         ri.VendorId,
@@ -94,6 +110,22 @@ BEGIN
     LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
     LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
     LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
+    OUTER APPLY (
+        SELECT TOP (1)
+            rii.ItemId,
+            i.Name AS ItemName
+        FROM dbo.ReturnInventoryItems rii
+        LEFT JOIN dbo.Items i ON rii.ItemId = i.Id
+        WHERE rii.ReturnInventoryId = ri.Id
+            AND rii.IsActive = 1
+        ORDER BY rii.Id DESC
+    ) primaryItem
+    OUTER APPLY (
+        SELECT SUM(rii.Quantity) AS ReturnQuantity
+        FROM dbo.ReturnInventoryItems rii
+        WHERE rii.ReturnInventoryId = ri.Id
+            AND rii.IsActive = 1
+    ) itemTotals
     WHERE ri.Id = @Id;
 END
 GO

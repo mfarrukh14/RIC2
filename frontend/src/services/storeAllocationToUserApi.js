@@ -1,10 +1,15 @@
 import axios from 'axios';
 
-const API_URL = 'http://10.10.10.35:5100/api/StoreAllocationToUser';
+const API_URL = 'http://localhost:5100/api/StoreAllocationToUser';
 
 export const storeAllocationToUserApi = {
     getAll: async () => {
         const response = await axios.get(API_URL);
+        return response.data;
+    },
+
+    getEmployeeDropdown: async () => {
+        const response = await axios.get(`${API_URL}/employee-dropdown`);
         return response.data;
     },
 

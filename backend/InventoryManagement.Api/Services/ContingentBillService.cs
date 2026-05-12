@@ -184,14 +184,14 @@ namespace InventoryManagement.API.Services
                 BudgetSetupId = reader.IsDBNull("BudgetSetupId") ? null : reader.GetString("BudgetSetupId"),
                 BillNo = reader.IsDBNull("BillNo") ? null : reader.GetString("BillNo"),
                 BillDate = reader.GetDateTime("BillDate"),
-                BudgetAllotment = reader.IsDBNull("BudgetAllotment") ? null : (float?)reader.GetDouble("BudgetAllotment"),
-                BillAmount = reader.IsDBNull("BillAmount") ? null : (float?)reader.GetDouble("BillAmount"),
-                TotalPreviousBill = reader.IsDBNull("TotalPreviousBill") ? null : (float?)reader.GetDouble("TotalPreviousBill"),
-                TotalUptoDate = reader.IsDBNull("TotalUptoDate") ? null : (float?)reader.GetDouble("TotalUptoDate"),
-                AvailableBalance = reader.IsDBNull("AvailableBalance") ? null : (float?)reader.GetDouble("AvailableBalance"),
-                GrandTotal = reader.IsDBNull("GrandTotal") ? null : (float?)reader.GetDouble("GrandTotal"),
-                TaxAmount = reader.IsDBNull("TaxAmount") ? null : (float?)reader.GetDouble("TaxAmount"),
-                NetPayment = reader.IsDBNull("NetPayment") ? null : (float?)reader.GetDouble("NetPayment"),
+                BudgetAllotment = GetNullableFloat(reader, "BudgetAllotment"),
+                BillAmount = GetNullableFloat(reader, "BillAmount"),
+                TotalPreviousBill = GetNullableFloat(reader, "TotalPreviousBill"),
+                TotalUptoDate = GetNullableFloat(reader, "TotalUptoDate"),
+                AvailableBalance = GetNullableFloat(reader, "AvailableBalance"),
+                GrandTotal = GetNullableFloat(reader, "GrandTotal"),
+                TaxAmount = GetNullableFloat(reader, "TaxAmount"),
+                NetPayment = GetNullableFloat(reader, "NetPayment"),
                 AmountInWords = reader.IsDBNull("AmountInWords") ? null : reader.GetString("AmountInWords"),
                 Stamp1 = reader.IsDBNull("Stamp1") ? null : reader.GetString("Stamp1"),
                 Stamp2 = reader.IsDBNull("Stamp2") ? null : reader.GetString("Stamp2"),
@@ -200,7 +200,7 @@ namespace InventoryManagement.API.Services
                 Stamp5 = reader.IsDBNull("Stamp5") ? null : reader.GetString("Stamp5"),
                 Stamp6 = reader.IsDBNull("Stamp6") ? null : reader.GetString("Stamp6"),
                 TermsAndConditions = reader.IsDBNull("TermsAndConditions") ? null : reader.GetString("TermsAndConditions"),
-                PreAuditedAmount = reader.IsDBNull("PreAuditedAmount") ? null : (float?)reader.GetDouble("PreAuditedAmount"),
+                PreAuditedAmount = GetNullableFloat(reader, "PreAuditedAmount"),
                 PreAuditedAmountInWords = reader.IsDBNull("PreAuditedAmountInWords") ? null : reader.GetString("PreAuditedAmountInWords"),
                 TokenNo = reader.IsDBNull("TokenNo") ? null : reader.GetString("TokenNo"),
                 AuditDate = reader.IsDBNull("AuditDate") ? null : reader.GetDateTime("AuditDate"),
@@ -273,6 +273,16 @@ namespace InventoryManagement.API.Services
             {
                 command.Parameters.AddWithValue("@ModifiedById", (object?)updateRequest.ModifiedById ?? DBNull.Value);
             }
+        }
+
+        private static float? GetNullableFloat(SqlDataReader reader, string columnName)
+        {
+            if (reader.IsDBNull(columnName))
+            {
+                return null;
+            }
+
+            return Convert.ToSingle(reader.GetValue(reader.GetOrdinal(columnName)));
         }
     }
 }

@@ -3,6 +3,7 @@ namespace InventoryManagement.Api.Models
     public class PharmacyStoreDropdownRequest
     {
         public int? Id { get; set; }
+        public int? BranchId { get; set; }
         public int? DepartmentId { get; set; }
         public int? BranchDepartmentId { get; set; }
         public int? PharmacyStoreId { get; set; }

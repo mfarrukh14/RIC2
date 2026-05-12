@@ -6,7 +6,8 @@ BEGIN
     CREATE TABLE dbo.StoreAllocationToUser (
         Id INT IDENTITY(1,1) PRIMARY KEY,
         StoreId INT NOT NULL,
-        EmployeeId INT NOT NULL,
+        UserId INT NOT NULL,
+        BranchId INT NULL,
         IsActive BIT NOT NULL DEFAULT 1,
         CreatedById INT,
         CreatedOn DATETIME NOT NULL DEFAULT GETDATE(),
