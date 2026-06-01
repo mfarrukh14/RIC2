@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getAllStores, createStore, updateStore, deleteStore } from '../services/storeApi';
+import { getAllStores, createStore, updateStore, deleteStore, getStoreLocationLookup } from '../services/storeApi';
 
 const StoreManagementPage = () => {
   const [stores, setStores] = useState([]);
+  const [locationLookup, setLocationLookup] = useState({ buildings: [], floors: [], rooms: [] });
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -56,6 +57,7 @@ const StoreManagementPage = () => {
 
   useEffect(() => {
     fetchStores();
+    fetchLocationLookup();
   }, []);
 
   const fetchStores = async () => {
@@ -71,13 +73,40 @@ const StoreManagementPage = () => {
     }
   };
 
+  const fetchLocationLookup = async () => {
+    try {
+      const data = await getStoreLocationLookup();
+      setLocationLookup({
+        buildings: data?.buildings ?? [],
+        floors: data?.floors ?? [],
+        rooms: data?.rooms ?? [],
+      });
+    } catch (error) {
+      console.error('Error fetching store location lookup:', error);
+      alert('Failed to fetch building, floor, and room lookup data');
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+
     setFormData(prev => ({
       ...prev,
+      ...(name === 'buildingId' ? { floorId: '', roomId: '' } : {}),
+      ...(name === 'floorId' ? { roomId: '' } : {}),
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  const availableFloors = formData.buildingId
+    ? locationLookup.floors.filter((floor) => floor.buildingId === parseInt(formData.buildingId, 10))
+    : [];
+
+  const availableRooms = formData.floorId
+    ? locationLookup.rooms.filter((room) => room.floorId === parseInt(formData.floorId, 10))
+    : formData.buildingId
+      ? locationLookup.rooms.filter((room) => room.buildingId === parseInt(formData.buildingId, 10))
+      : [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -376,6 +405,11 @@ const StoreManagementPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded"
                   >
                     <option value="">Select Building</option>
+                    {locationLookup.buildings.map((building) => (
+                      <option key={building.id} value={building.id}>
+                        {building.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -387,9 +421,15 @@ const StoreManagementPage = () => {
                     name="floorId"
                     value={formData.floorId}
                     onChange={handleInputChange}
+                    disabled={!formData.buildingId}
                     className="w-full px-3 py-2 border border-gray-300 rounded"
                   >
-                    <option value="">Select Building First</option>
+                    <option value="">{formData.buildingId ? 'Select Floor' : 'Select Building First'}</option>
+                    {availableFloors.map((floor) => (
+                      <option key={floor.id} value={floor.id}>
+                        {floor.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -401,9 +441,15 @@ const StoreManagementPage = () => {
                     name="roomId"
                     value={formData.roomId}
                     onChange={handleInputChange}
+                    disabled={!formData.floorId}
                     className="w-full px-3 py-2 border border-gray-300 rounded"
                   >
-                    <option value="">Select Floor First</option>
+                    <option value="">{formData.floorId ? 'Select Room' : 'Select Floor First'}</option>
+                    {availableRooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

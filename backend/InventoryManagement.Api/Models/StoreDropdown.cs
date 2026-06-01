@@ -28,4 +28,32 @@ namespace InventoryManagement.Api.Models
         public int Value { get; set; }
         public string Text { get; set; } = string.Empty;
     }
+
+    public class StoreLocationLookupResponse
+    {
+        public List<StoreBuildingOption> Buildings { get; set; } = new();
+        public List<StoreFloorOption> Floors { get; set; } = new();
+        public List<StoreRoomOption> Rooms { get; set; } = new();
+    }
+
+    public class StoreBuildingOption
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class StoreFloorOption
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int BuildingId { get; set; }
+    }
+
+    public class StoreRoomOption
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int BuildingId { get; set; }
+        public int FloorId { get; set; }
+    }
 }

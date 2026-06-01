@@ -99,7 +99,7 @@ namespace InventoryManagement.Api.Services
 
             return serverName.Equals(".", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals("(local)", StringComparison.OrdinalIgnoreCase)
-                || serverName.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals("10.10.10.67", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase)
                 || normalizedDataSource.StartsWith("(localdb)", StringComparison.OrdinalIgnoreCase);

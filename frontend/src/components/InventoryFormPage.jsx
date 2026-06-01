@@ -257,10 +257,10 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
             required
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Academic Affair Store</option>
+            <option value="">Select Store</option>
             {lookupData.stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
+              <option key={store.storeId} value={store.storeId}>
+                {store.storeName}
               </option>
             ))}
           </select>

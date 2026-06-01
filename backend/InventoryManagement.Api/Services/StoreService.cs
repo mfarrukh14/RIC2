@@ -297,6 +297,91 @@ ORDER BY s.StoreName;", connection)
             return items;
         }
 
+        public async Task<StoreLocationLookupResponse> GetLocationLookupAsync()
+        {
+            var lookup = new StoreLocationLookupResponse();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using (var buildingCommand = new SqlCommand(@"
+SELECT
+    BID AS Id,
+    Name
+FROM dbo.Building
+WHERE ISNULL(Status, 1) = 1
+  AND NULLIF(LTRIM(RTRIM(Name)), '') IS NOT NULL
+ORDER BY Name;", connection))
+                {
+                    using var reader = await buildingCommand.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        lookup.Buildings.Add(new StoreBuildingOption
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            Name = reader.GetString(reader.GetOrdinal("Name"))
+                        });
+                    }
+                }
+
+                using (var floorCommand = new SqlCommand(@"
+SELECT
+    FID AS Id,
+    Name,
+    BID AS BuildingId
+FROM dbo.Floors
+WHERE ISNULL(Status, 1) = 1
+  AND NULLIF(LTRIM(RTRIM(Name)), '') IS NOT NULL
+ORDER BY BID, Name;", connection))
+                {
+                    using var reader = await floorCommand.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        lookup.Floors.Add(new StoreFloorOption
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            Name = reader.GetString(reader.GetOrdinal("Name")),
+                            BuildingId = reader.GetInt32(reader.GetOrdinal("BuildingId"))
+                        });
+                    }
+                }
+
+                using (var roomCommand = new SqlCommand(@"
+SELECT
+    RID AS Id,
+    Name,
+    BID AS BuildingId,
+    FID AS FloorId
+FROM dbo.Rooms
+WHERE ISNULL(IsDeleted, 0) = 0
+  AND ISNULL(IsActive, 1) = 1
+  AND NULLIF(LTRIM(RTRIM(Name)), '') IS NOT NULL
+ORDER BY BID, FID, Name;", connection))
+                {
+                    using var reader = await roomCommand.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        lookup.Rooms.Add(new StoreRoomOption
+                        {
+                            Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                            Name = reader.GetString(reader.GetOrdinal("Name")),
+                            BuildingId = reader.GetInt32(reader.GetOrdinal("BuildingId")),
+                            FloorId = reader.GetInt32(reader.GetOrdinal("FloorId"))
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving store location lookup");
+                throw;
+            }
+
+            return lookup;
+        }
+
         private Store MapReaderToStore(SqlDataReader reader)
         {
             return new Store

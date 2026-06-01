@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/expiredstock';
+const API_URL = 'http://10.10.10.67:5100/api/expiredstock';
 
 export const getExpiredStock = async (filters = {}) => {
   const params = new URLSearchParams();

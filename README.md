@@ -42,7 +42,7 @@ dotnet run
 - ✅ Create all 30+ tables with proper relationships
 - ✅ Execute all ALTER scripts for schema modifications
 - ✅ Install all 60+ stored procedures
-- ✅ Start serving at `http://localhost:5100`
+- ✅ Start serving at `http://10.10.10.67:5100`
 
 **First run:** ~15-20 seconds (database creation)  
 **Subsequent runs:** ~2-3 seconds
@@ -55,7 +55,7 @@ npm install
 npm run dev
 ```
 
-Frontend available at: `http://localhost:5173`
+Frontend available at: `http://10.10.10.67:5173`
 
 **For detailed verification steps, see [SETUP_VERIFICATION.md](SETUP_VERIFICATION.md)**
 
@@ -160,7 +160,7 @@ Installs 60+ stored procedures for all CRUD operations and reports
 3. Run `dotnet run` - database setup is automatic!
 
 ### Frontend API Configuration
-Frontend automatically connects to `http://localhost:5100/api`
+Frontend automatically connects to `http://10.10.10.67:5100/api`
 
 ---
 
@@ -168,9 +168,9 @@ Frontend automatically connects to `http://localhost:5100/api`
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Frontend | http://localhost:5173 | React UI |
-| Backend API | http://localhost:5100 | REST API |
-| Swagger Docs | http://localhost:5100/swagger | Interactive API documentation |
+| Frontend | http://10.10.10.67:5173 | React UI |
+| Backend API | http://10.10.10.67:5100 | REST API |
+| Swagger Docs | http://10.10.10.67:5100/swagger | Interactive API documentation |
 
 ---
 
@@ -290,7 +290,7 @@ Solution: Change port in Properties/launchSettings.json
 
 **Issue:** API calls failing
 ```
-Solution: Ensure backend is running on http://localhost:5100
+Solution: Ensure backend is running on http://10.10.10.67:5100
 Check browser console for CORS errors
 ```
 
@@ -322,12 +322,12 @@ dotnet run
 After starting both backend and frontend:
 
 1. **Check Backend Health:**
-   - Visit http://localhost:5100/swagger
+   - Visit http://10.10.10.67:5100/swagger
    - Try the `/api/Branch/` GET endpoint
    - Should return list of branches
 
 2. **Check Frontend:**
-   - Visit http://localhost:5173
+   - Visit http://10.10.10.67:5173
    - Navigate to "Stock with Least Expiry"
    - Dropdowns should populate from database
 
@@ -345,7 +345,7 @@ After starting both backend and frontend:
 - **[SETUP_VERIFICATION.md](SETUP_VERIFICATION.md)** - Step-by-step verification guide
 - **[Backend Architecture](backend/README.md)** - Detailed backend documentation
 - **[Database Schema](backend/Database/README.md)** - Database structure
-- **[API Documentation](http://localhost:5100/swagger)** - Interactive API docs (when running)
+- **[API Documentation](http://10.10.10.67:5100/swagger)** - Interactive API docs (when running)
 
 ---
 

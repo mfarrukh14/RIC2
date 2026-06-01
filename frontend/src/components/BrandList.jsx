@@ -16,7 +16,7 @@ const BrandList = ({ onEdit, onAdd }) => {
   const fetchBrands = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5100/api/brands');
+      const response = await fetch('http://10.10.10.67:5100/api/brands');
       if (!response.ok) {
         throw new Error('Failed to fetch brands');
       }
@@ -32,7 +32,7 @@ const BrandList = ({ onEdit, onAdd }) => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this brand?')) {
       try {
-        const response = await fetch(`http://localhost:5100/api/brands/${id}?modifiedById=1`, {
+        const response = await fetch(`http://10.10.10.67:5100/api/brands/${id}?modifiedById=1`, {
           method: 'DELETE',
         });
         if (response.ok) {

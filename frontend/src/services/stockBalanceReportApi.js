@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/stockbalancereport';
+const API_URL = 'http://10.10.10.67:5100/api/stockbalancereport';
 
 export const stockBalanceReportApi = {
   getReport: async (params) => {

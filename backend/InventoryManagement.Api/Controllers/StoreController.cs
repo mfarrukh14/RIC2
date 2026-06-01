@@ -158,5 +158,20 @@ namespace InventoryManagement.Api.Controllers
                 });
             }
         }
+
+        [HttpGet("location-lookup")]
+        public async Task<ActionResult<StoreLocationLookupResponse>> GetLocationLookup()
+        {
+            try
+            {
+                var lookup = await _storeService.GetLocationLookupAsync();
+                return Ok(lookup);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving store location lookup");
+                return StatusCode(500, new { message = "An error occurred while retrieving store location lookup." });
+            }
+        }
     }
 }
