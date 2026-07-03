@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class VendorsController : ControllerBase
+    public class VendorsController : BaseController
     {
         private readonly IVendorService _vendorService;
 
-        public VendorsController(IVendorService vendorService)
+        public VendorsController(IUserSessionCacheService sessionCache, IVendorService vendorService)
+            : base(sessionCache)
         {
             _vendorService = vendorService;
         }

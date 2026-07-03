@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SaleSummaryDailyController : ControllerBase
+    public class SaleSummaryDailyController : BaseController
     {
         private readonly ISaleSummaryDailyService _saleSummaryDailyService;
         private readonly ILogger<SaleSummaryDailyController> _logger;
 
-        public SaleSummaryDailyController(ISaleSummaryDailyService saleSummaryDailyService, ILogger<SaleSummaryDailyController> logger)
+        public SaleSummaryDailyController(IUserSessionCacheService sessionCache, ISaleSummaryDailyService saleSummaryDailyService, ILogger<SaleSummaryDailyController> logger)
+            : base(sessionCache)
         {
             _saleSummaryDailyService = saleSummaryDailyService;
             _logger = logger;

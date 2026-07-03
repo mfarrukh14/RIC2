@@ -60,6 +60,8 @@ import ReceivedStockStatusPage from './pages/ReceivedStockStatusPage';
 import DemandRequestStatusPage from './pages/DemandRequestStatusPage';
 import StockTransitionsPage from './pages/StockTransitionsPage';
 import PlaceholderSection from './components/PlaceholderSection';
+import LoginPage from './pages/LoginPage';
+import { useSession } from './context/SessionContext';
 import {
   HomeIcon,
   CubeIcon,
@@ -70,6 +72,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 function App() {
+  const { session, initializing } = useSession();
   const [activeSection, setActiveSection] = useState('vendors');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showVendorForm, setShowVendorForm] = useState(false);
@@ -451,6 +454,18 @@ function App() {
         );
     }
   };
+
+  if (initializing) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-100 text-gray-500">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">

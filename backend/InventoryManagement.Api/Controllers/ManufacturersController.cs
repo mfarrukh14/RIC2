@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ManufacturersController : ControllerBase
+    public class ManufacturersController : BaseController
     {
         private readonly IManufacturerService _manufacturerService;
 
-        public ManufacturersController(IManufacturerService manufacturerService)
+        public ManufacturersController(IUserSessionCacheService sessionCache, IManufacturerService manufacturerService)
+            : base(sessionCache)
         {
             _manufacturerService = manufacturerService;
         }

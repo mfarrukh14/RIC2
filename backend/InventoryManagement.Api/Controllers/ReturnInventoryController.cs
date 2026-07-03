@@ -1,19 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
+using InventoryManagement.Api.Services;
+using InventoryManagement.Api.Controllers;
 
 namespace InventoryManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ReturnInventoryController : ControllerBase
+    public class ReturnInventoryController : BaseController
     {
         private readonly IReturnInventoryService _returnInventoryService;
         private readonly ILogger<ReturnInventoryController> _logger;
 
         public ReturnInventoryController(
+            IUserSessionCacheService sessionCache,
             IReturnInventoryService returnInventoryService,
             ILogger<ReturnInventoryController> logger)
+            : base(sessionCache)
         {
             _returnInventoryService = returnInventoryService;
             _logger = logger;

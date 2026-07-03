@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SaleSummaryItemDiscountController : ControllerBase
+    public class SaleSummaryItemDiscountController : BaseController
     {
         private readonly ISaleSummaryItemDiscountService _saleSummaryItemDiscountService;
         private readonly ILogger<SaleSummaryItemDiscountController> _logger;
 
-        public SaleSummaryItemDiscountController(ISaleSummaryItemDiscountService saleSummaryItemDiscountService, ILogger<SaleSummaryItemDiscountController> logger)
+        public SaleSummaryItemDiscountController(IUserSessionCacheService sessionCache, ISaleSummaryItemDiscountService saleSummaryItemDiscountService, ILogger<SaleSummaryItemDiscountController> logger)
+            : base(sessionCache)
         {
             _saleSummaryItemDiscountService = saleSummaryItemDiscountService;
             _logger = logger;

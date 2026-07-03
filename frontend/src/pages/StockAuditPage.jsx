@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { stockAuditApi } from '../services/stockAuditApi';
 import inventoryApi from '../services/inventoryApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const normalizeStores = (stores) =>
   (stores || [])
@@ -19,6 +21,7 @@ const normalizeStores = (stores) =>
     .filter(Boolean);
 
 const StockAuditPage = () => {
+  const { session } = useSession();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -61,6 +64,14 @@ const StockAuditPage = () => {
   useEffect(() => {
     loadLookupData();
   }, []);
+
+  // Stock audits are always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchId) {
+      setFilters((prev) => ({ ...prev, branchId: session.branchId }));
+      setAuditForm((prev) => ({ ...prev, branchId: session.branchId }));
+    }
+  }, [session?.branchId]);
 
   const loadLookupData = async () => {
     try {
@@ -223,21 +234,8 @@ const StockAuditPage = () => {
       {/* Filters Section */}
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          {/* Branch */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Branch
-            </label>
-            <select
-              name="branchId"
-              value={filters.branchId || ''}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Rawalpindi Institute of Cardiology</option>
-              <option value="1">Rawalpindi Institute of Cardiology</option>
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           {/* Store */}
           <div>

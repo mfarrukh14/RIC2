@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class DemandRequestsController : ControllerBase
+    public class DemandRequestsController : BaseController
     {
         private readonly IDemandRequestService _demandRequestService;
         private readonly ILogger<DemandRequestsController> _logger;
 
-        public DemandRequestsController(IDemandRequestService demandRequestService, ILogger<DemandRequestsController> logger)
+        public DemandRequestsController(IUserSessionCacheService sessionCache, IDemandRequestService demandRequestService, ILogger<DemandRequestsController> logger)
+            : base(sessionCache)
         {
             _demandRequestService = demandRequestService;
             _logger = logger;

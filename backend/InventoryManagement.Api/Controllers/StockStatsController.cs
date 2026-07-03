@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StockStatsController : ControllerBase
+    public class StockStatsController : BaseController
     {
         private readonly IStockStatsService _stockStatsService;
 
-        public StockStatsController(IStockStatsService stockStatsService)
+        public StockStatsController(IUserSessionCacheService sessionCache, IStockStatsService stockStatsService)
+            : base(sessionCache)
         {
             _stockStatsService = stockStatsService;
         }

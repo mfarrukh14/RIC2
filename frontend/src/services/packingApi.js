@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { attachUserIdHeader } from './httpAuth';
 
 const API_BASE_URL = 'http://10.10.10.67:5100/api'; // Backend is running on port 5100
 
@@ -8,6 +9,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+attachUserIdHeader(api);
 
 export const packingApi = {
   // Get all packings

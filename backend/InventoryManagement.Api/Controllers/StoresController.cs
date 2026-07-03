@@ -5,11 +5,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StoresController : ControllerBase
+    public class StoresController : BaseController
     {
         private readonly IStoreService _storeService;
 
-        public StoresController(IStoreService storeService)
+        public StoresController(IUserSessionCacheService sessionCache, IStoreService storeService)
+            : base(sessionCache)
         {
             _storeService = storeService;
         }

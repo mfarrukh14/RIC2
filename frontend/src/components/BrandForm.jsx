@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import BranchField from './BranchField';
+import { useSession } from '../context/SessionContext';
 
 const BrandForm = ({ brand, onSave, onCancel, isEditing }) => {
+  const { session } = useSession();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     branchId: '',
     isActive: true
   });
-  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    fetchBranches();
     if (brand) {
       setFormData({
         name: brand.name || '',
@@ -21,21 +22,11 @@ const BrandForm = ({ brand, onSave, onCancel, isEditing }) => {
         branchId: brand.branchId || '',
         isActive: brand.isActive !== undefined ? brand.isActive : true
       });
+    } else if (session?.branchId) {
+      // New brands belong to the logged-in user's own branch.
+      setFormData((prev) => ({ ...prev, branchId: session.branchId }));
     }
-  }, [brand]);
-
-  const fetchBranches = async () => {
-    try {
-      // Since we don't have a branches API yet, we'll use mock data
-      // In a real application, you would fetch from /api/branches
-      setBranches([
-        { id: 1, name: 'Main Branch' },
-        { id: 2, name: 'Secondary Branch' }
-      ]);
-    } catch (err) {
-      console.error('Error fetching branches:', err);
-    }
-  };
+  }, [brand, session?.branchId]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -182,26 +173,8 @@ const BrandForm = ({ brand, onSave, onCancel, isEditing }) => {
             />
           </div>
 
-          {/* Branch */}
-          <div>
-            <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-1">
-              Branch
-            </label>
-            <select
-              id="branchId"
-              name="branchId"
-              value={formData.branchId}
-              onChange={handleChange}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a branch (optional)</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           {/* Form Actions */}
           <div className="flex items-center justify-end space-x-3 pt-6">

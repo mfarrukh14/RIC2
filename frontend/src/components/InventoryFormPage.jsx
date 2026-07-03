@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import inventoryApi from '../services/inventoryApi';
+import BranchField from './BranchField';
+import { useSession } from '../context/SessionContext';
 
 const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
+  const { session } = useSession();
   const [lookupData, setLookupData] = useState({
     vendors: [],
     stores: [],
@@ -50,6 +53,13 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
   useEffect(() => {
     fetchLookupData();
   }, []);
+
+  // New inventory entries belong to the logged-in user's own branch.
+  useEffect(() => {
+    if (!inventory && session?.branchId) {
+      setFormData((prev) => ({ ...prev, branchId: session.branchId }));
+    }
+  }, [inventory, session?.branchId]);
 
   useEffect(() => {
     if (inventory) {
@@ -288,25 +298,8 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Branch<span className="text-red-500">*</span>
-            </label>
-            <select
-              name="branchId"
-              value={formData.branchId}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select Branch</option>
-              {lookupData.branches?.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class RacksController : ControllerBase
+    public class RacksController : BaseController
     {
         private readonly IRackService _rackService;
         private readonly ILogger<RacksController> _logger;
 
-        public RacksController(IRackService rackService, ILogger<RacksController> logger)
+        public RacksController(IUserSessionCacheService sessionCache, IRackService rackService, ILogger<RacksController> logger)
+            : base(sessionCache)
         {
             _rackService = rackService;
             _logger = logger;

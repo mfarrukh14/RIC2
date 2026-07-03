@@ -3,6 +3,8 @@ import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 import stockAdjustmentApi from '../services/stockAdjustmentApi';
 import inventoryApi from '../services/inventoryApi';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
   (items || [])
@@ -21,6 +23,7 @@ const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
     .filter(Boolean);
 
 const StockAdjustmentPage = () => {
+  const { session } = useSession();
   const [stockAdjustments, setStockAdjustments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -48,6 +51,13 @@ const StockAdjustmentPage = () => {
     loadLookupData();
     loadStockAdjustments();
   }, []);
+
+  // Stock adjustments are always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchId) {
+      setFilters((prev) => ({ ...prev, branchId: session.branchId }));
+    }
+  }, [session?.branchId]);
 
   const loadLookupData = async () => {
     try {
@@ -163,25 +173,8 @@ const StockAdjustmentPage = () => {
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          {/* Branch */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Branch
-            </label>
-            <select
-              name="branchId"
-              value={filters.branchId || ''}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Rawalpindi Institute of Cardiology</option>
-              {branches.map(branch => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           {/* Store */}
           <div>

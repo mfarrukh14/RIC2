@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAllStores, createStore, updateStore, deleteStore, getStoreLocationLookup } from '../services/storeApi';
+import BranchField from '../components/BranchField';
 
 const StoreManagementPage = () => {
   const [stores, setStores] = useState([]);
@@ -311,6 +312,9 @@ const StoreManagementPage = () => {
 
               {/* Basic Information */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* Branch - every store belongs to the logged-in user's own branch */}
+                <BranchField />
+
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Store Type<span className="text-red-500">*</span>

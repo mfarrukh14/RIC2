@@ -1,19 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
+using InventoryManagement.Api.Services;
+using InventoryManagement.Api.Controllers;
 
 namespace InventoryManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SampleCollectionConsumptionItemsController : ControllerBase
+    public class SampleCollectionConsumptionItemsController : BaseController
     {
         private readonly ISampleCollectionConsumptionItemService _service;
         private readonly ILogger<SampleCollectionConsumptionItemsController> _logger;
 
         public SampleCollectionConsumptionItemsController(
+            IUserSessionCacheService sessionCache,
             ISampleCollectionConsumptionItemService service,
             ILogger<SampleCollectionConsumptionItemsController> logger)
+            : base(sessionCache)
         {
             _service = service;
             _logger = logger;

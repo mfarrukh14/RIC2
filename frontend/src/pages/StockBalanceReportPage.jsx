@@ -3,8 +3,11 @@ import { stockBalanceReportApi } from '../services/stockBalanceReportApi';
 import { getAllStores } from '../services/storeApi';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const StockBalanceReportPage = () => {
+  const { session } = useSession();
   const [startDate, setStartDate] = useState('2025-10-29');
   const [endDate, setEndDate] = useState('2025-10-29');
   const [selectedStore, setSelectedStore] = useState('');
@@ -16,6 +19,13 @@ const StockBalanceReportPage = () => {
   useEffect(() => {
     fetchStores();
   }, []);
+
+  // The report is always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchName) {
+      setSelectedBranch(session.branchName);
+    }
+  }, [session?.branchName]);
 
   const fetchStores = async () => {
     try {
@@ -364,16 +374,8 @@ const StockBalanceReportPage = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Branch</label>
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
-            >
-              <option value="Rawalpindi Institute of Cardiology">Rawalpindi Institute of Cardiology</option>
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           <div>
             <label className="block text-sm font-medium mb-1">Store</label>

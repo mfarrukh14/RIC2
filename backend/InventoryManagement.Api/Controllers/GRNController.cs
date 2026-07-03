@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class GRNController : ControllerBase
+    public class GRNController : BaseController
     {
         private readonly IGRNService _grnService;
         private readonly ILogger<GRNController> _logger;
 
-        public GRNController(IGRNService grnService, ILogger<GRNController> logger)
+        public GRNController(IUserSessionCacheService sessionCache, IGRNService grnService, ILogger<GRNController> logger)
+            : base(sessionCache)
         {
             _grnService = grnService;
             _logger = logger;

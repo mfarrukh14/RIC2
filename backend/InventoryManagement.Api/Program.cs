@@ -33,6 +33,9 @@ builder.Services.AddSwaggerGen();
 // Add database initialization service
 builder.Services.AddSingleton<IDatabaseInitializationService, DatabaseInitializationService>();
 
+// In-memory cache of logged-in users; singleton so it's shared and thread-safe across concurrent requests.
+builder.Services.AddSingleton<IUserSessionCacheService, UserSessionCacheService>();
+
 // Add services (using stored procedures instead of Entity Framework)
 builder.Services.AddScoped<IVendorService, VendorServiceSP>();
 builder.Services.AddScoped<IManufacturerService, ManufacturerServiceSP>();

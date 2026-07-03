@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { itemTypeApi } from "../services/itemTypeApi";
+import BranchField from "../components/BranchField";
+import { useSession } from "../context/SessionContext";
 
 const ItemTypeForm = ({ itemType, onSave, onCancel, isEditing = false }) => {
+  const { session } = useSession();
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -23,8 +26,11 @@ const ItemTypeForm = ({ itemType, onSave, onCancel, isEditing = false }) => {
         branchId: itemType.branchId || "",
         isActive: itemType.isActive ?? true,
       });
+    } else if (session?.branchId) {
+      // New item types belong to the logged-in user's own branch.
+      setFormData((prev) => ({ ...prev, branchId: session.branchId }));
     }
-  }, [isEditing, itemType]);
+  }, [isEditing, itemType, session?.branchId]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -167,23 +173,8 @@ const ItemTypeForm = ({ itemType, onSave, onCancel, isEditing = false }) => {
                     />
                   </div>
 
-                  {/* Branch ID */}
-                  <div>
-                    <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-1">
-                      Branch
-                    </label>
-                    <select
-                      id="branchId"
-                      name="branchId"
-                      value={formData.branchId}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select a branch</option>
-                      <option value="1">Main Branch</option>
-                      <option value="2">Secondary Branch</option>
-                    </select>
-                  </div>
+                  {/* Branch - locked to the logged-in user's own branch */}
+                  <BranchField />
 
                   {/* Description */}
                   <div className="md:col-span-2">

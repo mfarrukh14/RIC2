@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PackingsController : ControllerBase
+    public class PackingsController : BaseController
     {
         private readonly IPackingService _packingService;
 
-        public PackingsController(IPackingService packingService)
+        public PackingsController(IUserSessionCacheService sessionCache, IPackingService packingService)
+            : base(sessionCache)
         {
             _packingService = packingService;
         }

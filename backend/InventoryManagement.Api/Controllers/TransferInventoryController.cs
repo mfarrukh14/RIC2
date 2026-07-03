@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class TransferInventoryController : ControllerBase
+    public class TransferInventoryController : BaseController
     {
         private readonly ITransferInventoryService _transferInventoryService;
         private readonly ILogger<TransferInventoryController> _logger;
 
-        public TransferInventoryController(ITransferInventoryService transferInventoryService, ILogger<TransferInventoryController> logger)
+        public TransferInventoryController(IUserSessionCacheService sessionCache, ITransferInventoryService transferInventoryService, ILogger<TransferInventoryController> logger)
+            : base(sessionCache)
         {
             _transferInventoryService = transferInventoryService;
             _logger = logger;

@@ -4,8 +4,11 @@ import { getAllStores } from '../services/storeApi';
 import vendorApi from '../services/vendorApi';
 import { stockTypesApi } from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const StockDetailRecordPage = () => {
+  const { session } = useSession();
   const [branch, setBranch] = useState('Rawalpindi Institute of Cardiology');
   const [startDate, setStartDate] = useState('2025-10-29');
   const [endDate, setEndDate] = useState('2025-10-29');
@@ -31,6 +34,13 @@ const StockDetailRecordPage = () => {
     fetchStockTypes();
     fetchItems();
   }, []);
+
+  // Records are always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchName) {
+      setBranch(session.branchName);
+    }
+  }, [session?.branchName]);
 
   const fetchStores = async () => {
     try {
@@ -131,16 +141,8 @@ const StockDetailRecordPage = () => {
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Branch</label>
-            <select
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm"
-            >
-              <option value="Rawalpindi Institute of Cardiology">Rawalpindi Institute of Cardiology</option>
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           <div>
             <label className="block text-sm font-medium mb-1">Date Range Filter</label>

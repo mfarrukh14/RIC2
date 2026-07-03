@@ -68,7 +68,11 @@ namespace InventoryManagement.Api.Models
         
         // Store Image
         public string? StoreImage { get; set; }
-        
+
+        // Branch (always the creating user's own branch - set server-side, never from the client)
+        public int BranchId { get; set; }
+        public string? BranchName { get; set; }
+
         // Audit
         public bool IsActive { get; set; } = true;
         public int? CreatedById { get; set; }
@@ -118,6 +122,8 @@ namespace InventoryManagement.Api.Models
         public string? StateOrProvince { get; set; }
         public string? City { get; set; }
         public string? StoreImage { get; set; }
+        // Set server-side from the caller's session in StoreController - any value sent by the client is ignored.
+        public int BranchId { get; set; }
         public bool IsActive { get; set; } = true;
     }
 
@@ -163,6 +169,8 @@ namespace InventoryManagement.Api.Models
         public string? StateOrProvince { get; set; }
         public string? City { get; set; }
         public string? StoreImage { get; set; }
+        // Set server-side from the caller's session in StoreController - any value sent by the client is ignored.
+        public int BranchId { get; set; }
         public bool IsActive { get; set; }
     }
 }

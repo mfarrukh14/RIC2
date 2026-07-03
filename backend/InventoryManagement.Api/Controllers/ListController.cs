@@ -7,12 +7,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ListController : ControllerBase
+    public class ListController : BaseController
     {
         private readonly IAssetAllocationService _assetAllocationService;
         private readonly ILogger<ListController> _logger;
 
-        public ListController(IAssetAllocationService assetAllocationService, ILogger<ListController> logger)
+        public ListController(IUserSessionCacheService sessionCache, IAssetAllocationService assetAllocationService, ILogger<ListController> logger)
+            : base(sessionCache)
         {
             _assetAllocationService = assetAllocationService;
             _logger = logger;

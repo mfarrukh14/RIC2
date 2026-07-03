@@ -7,12 +7,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StoreController : ControllerBase
+    public class StoreController : BaseController
     {
         private readonly IStoreService _storeService;
         private readonly ILogger<StoreController> _logger;
 
-        public StoreController(IStoreService storeService, ILogger<StoreController> logger)
+        public StoreController(IUserSessionCacheService sessionCache, IStoreService storeService, ILogger<StoreController> logger)
+            : base(sessionCache)
         {
             _storeService = storeService;
             _logger = logger;
@@ -64,6 +65,13 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest(ModelState);
                 }
 
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot create a store." });
+                }
+
+                request.BranchId = branchId;
+
                 var store = await _storeService.CreateAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id = store.StoreId }, store);
             }
@@ -94,6 +102,13 @@ namespace InventoryManagement.Api.Controllers
                 {
                     return NotFound(new { message = $"Store with ID {id} not found" });
                 }
+
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot update this store." });
+                }
+
+                request.BranchId = branchId;
 
                 await _storeService.UpdateAsync(id, request);
                 return NoContent();

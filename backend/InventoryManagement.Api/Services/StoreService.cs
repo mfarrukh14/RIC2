@@ -427,6 +427,8 @@ ORDER BY BID, FID, Name;", connection))
                 StateOrProvince = reader.IsDBNull(reader.GetOrdinal("StateOrProvince")) ? null : reader.GetString(reader.GetOrdinal("StateOrProvince")),
                 City = reader.IsDBNull(reader.GetOrdinal("City")) ? null : reader.GetString(reader.GetOrdinal("City")),
                 StoreImage = reader.IsDBNull(reader.GetOrdinal("StoreImage")) ? null : reader.GetString(reader.GetOrdinal("StoreImage")),
+                BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
+                BranchName = reader.IsDBNull(reader.GetOrdinal("BranchName")) ? null : reader.GetString(reader.GetOrdinal("BranchName")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
                 CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),

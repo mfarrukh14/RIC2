@@ -27,10 +27,13 @@ import {
   CurrencyDollarIcon,
   TableCellsIcon,
   MapIcon,
-  UsersIcon
+  UsersIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
+import { useSession } from '../context/SessionContext';
 
 const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }) => {
+  const { session, logout } = useSession();
   const menuItems = [
     {
       id: 'dashboard',
@@ -230,7 +233,19 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
 
       {/* Footer */}
       {!collapsed && (
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 space-y-3">
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            <p className="font-medium text-gray-800">{session?.user?.UserName || 'User'}</p>
+            <p>{session?.branchName || 'No branch assigned'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-100"
+          >
+            <ArrowRightOnRectangleIcon className="w-4 h-4" />
+            Logout
+          </button>
           <div className="text-xs text-gray-500 text-center">
             <p>Inventory & Store Management</p>
             <p>v1.0.0</p>

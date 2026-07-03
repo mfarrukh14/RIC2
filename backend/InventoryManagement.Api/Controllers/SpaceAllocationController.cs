@@ -7,12 +7,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SpaceAllocationController : ControllerBase
+    public class SpaceAllocationController : BaseController
     {
         private readonly ISpaceAllocationService _spaceAllocationService;
         private readonly ILogger<SpaceAllocationController> _logger;
 
-        public SpaceAllocationController(ISpaceAllocationService spaceAllocationService, ILogger<SpaceAllocationController> logger)
+        public SpaceAllocationController(IUserSessionCacheService sessionCache, ISpaceAllocationService spaceAllocationService, ILogger<SpaceAllocationController> logger)
+            : base(sessionCache)
         {
             _spaceAllocationService = spaceAllocationService;
             _logger = logger;

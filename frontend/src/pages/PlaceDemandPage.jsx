@@ -11,6 +11,8 @@ import { branchApi } from '../services/branchApi';
 import { getAllStores } from '../services/storeApi';
 import stockTypesApi from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const createDefaultDateRange = () => {
   const now = new Date();
@@ -88,6 +90,7 @@ const emptyForm = () => {
 };
 
 const PlaceDemandPage = () => {
+  const { session } = useSession();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -111,6 +114,13 @@ const PlaceDemandPage = () => {
   useEffect(() => {
     loadLookups();
   }, []);
+
+  // "Branch Request By" is always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchId) {
+      setFilters((current) => ({ ...current, branchId: session.branchId }));
+    }
+  }, [session?.branchId]);
 
   useEffect(() => {
     loadRequests();
@@ -352,22 +362,8 @@ const PlaceDemandPage = () => {
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Branch Request By</label>
-              <select
-                name="branchId"
-                value={filters.branchId || ''}
-                onChange={handleFilterChange}
-                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
-              >
-                <option value="">All Branches</option>
-                {lookups.branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Branch Request By - locked to the logged-in user's own branch */}
+            <BranchField label="Branch Request By" />
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Store Request By</label>

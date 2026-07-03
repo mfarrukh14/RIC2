@@ -1,16 +1,19 @@
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using InventoryManagement.Api.Services;
+using InventoryManagement.Api.Controllers;
 
 namespace InventoryManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ContingentBillsController : ControllerBase
+    public class ContingentBillsController : BaseController
     {
         private readonly IContingentBillService _contingentBillService;
 
-        public ContingentBillsController(IContingentBillService contingentBillService)
+        public ContingentBillsController(IUserSessionCacheService sessionCache, IContingentBillService contingentBillService)
+            : base(sessionCache)
         {
             _contingentBillService = contingentBillService;
         }

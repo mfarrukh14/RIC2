@@ -1,19 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
+using InventoryManagement.Api.Services;
+using InventoryManagement.Api.Controllers;
 
 namespace InventoryManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PurchaseSummaryInvoiceController : ControllerBase
+    public class PurchaseSummaryInvoiceController : BaseController
     {
         private readonly IPurchaseSummaryInvoiceService _purchaseSummaryInvoiceService;
         private readonly ILogger<PurchaseSummaryInvoiceController> _logger;
 
         public PurchaseSummaryInvoiceController(
+            IUserSessionCacheService sessionCache,
             IPurchaseSummaryInvoiceService purchaseSummaryInvoiceService,
             ILogger<PurchaseSummaryInvoiceController> logger)
+            : base(sessionCache)
         {
             _purchaseSummaryInvoiceService = purchaseSummaryInvoiceService;
             _logger = logger;

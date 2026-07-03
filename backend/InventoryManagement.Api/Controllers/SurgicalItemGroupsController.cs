@@ -1,19 +1,23 @@
 using Microsoft.AspNetCore.Mvc;
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
+using InventoryManagement.Api.Services;
+using InventoryManagement.Api.Controllers;
 
 namespace InventoryManagement.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SurgicalItemGroupsController : ControllerBase
+    public class SurgicalItemGroupsController : BaseController
     {
         private readonly ISurgicalItemGroupService _service;
         private readonly ILogger<SurgicalItemGroupsController> _logger;
 
         public SurgicalItemGroupsController(
+            IUserSessionCacheService sessionCache,
             ISurgicalItemGroupService service,
             ILogger<SurgicalItemGroupsController> logger)
+            : base(sessionCache)
         {
             _service = service;
             _logger = logger;

@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class BrandsController : ControllerBase
+    public class BrandsController : BaseController
     {
         private readonly IBrandService _brandService;
 
-        public BrandsController(IBrandService brandService)
+        public BrandsController(IUserSessionCacheService sessionCache, IBrandService brandService)
+            : base(sessionCache)
         {
             _brandService = brandService;
         }

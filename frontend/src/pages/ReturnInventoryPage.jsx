@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { FiSearch } from 'react-icons/fi';
 import returnInventoryApi from '../services/returnInventoryApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 const ReturnInventoryPage = () => {
+  const { session } = useSession();
   const [returns, setReturns] = useState([]);
   const [filteredReturns, setFilteredReturns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +38,13 @@ const ReturnInventoryPage = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Returns are always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchId) {
+      setFilters((prev) => ({ ...prev, branchId: session.branchId }));
+    }
+  }, [session?.branchId]);
 
   useEffect(() => {
     filterReturns();
@@ -171,25 +181,8 @@ const ReturnInventoryPage = () => {
       {/* Filters Section */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          {/* Branch */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Branch
-            </label>
-            <select
-              name="branchId"
-              value={filters.branchId}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Rawalpindi Institute of Cardiology</option>
-              {lookupData.branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Branch - locked to the logged-in user's own branch */}
+          <BranchField />
 
           {/* Store */}
           <div>

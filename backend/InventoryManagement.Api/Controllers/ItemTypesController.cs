@@ -6,11 +6,12 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ItemTypesController : ControllerBase
+    public class ItemTypesController : BaseController
     {
         private readonly IItemTypeService _itemTypeService;
 
-        public ItemTypesController(IItemTypeService itemTypeService)
+        public ItemTypesController(IUserSessionCacheService sessionCache, IItemTypeService itemTypeService)
+            : base(sessionCache)
         {
             _itemTypeService = itemTypeService;
         }

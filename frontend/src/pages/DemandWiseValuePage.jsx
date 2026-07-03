@@ -4,6 +4,8 @@ import { branchApi } from '../services/branchApi';
 import demandWiseValueApi from '../services/demandWiseValueApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
   if (!value) {
@@ -45,6 +47,7 @@ function formatCurrency(value) {
 const itemTypes = ['All', 'Medicine(s)', 'Disposable(s)', 'Item(s)'];
 
 const DemandWiseValuePage = () => {
+  const { session } = useSession();
   const [lookups, setLookups] = useState({ branches: [], stores: [], items: [] });
   const [filters, setFilters] = useState({
     branchId: '',
@@ -71,14 +74,13 @@ const DemandWiseValuePage = () => {
           itemApi.getAll()
         ]);
 
-        const defaultBranch = branches.find((branch) => branch.name === 'Rawalpindi Institute of Cardiology') || branches[0];
         const defaultStore = stores.find((store) => store.storeName === 'Academic Affair Store') || stores[0];
 
         setLookups({ branches, stores, items });
 
         const nextFilters = {
           ...defaultDateRange(),
-          branchId: defaultBranch ? String(defaultBranch.id) : '',
+          branchId: session?.branchId ? String(session.branchId) : '',
           storeId: defaultStore ? String(defaultStore.storeId) : '',
           itemType: 'All',
           itemId: ''
@@ -198,19 +200,8 @@ const DemandWiseValuePage = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-x-4 gap-y-6 px-6 py-5 lg:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Branch</label>
-              <select
-                name="branchId"
-                value={filters.branchId}
-                onChange={handleFilterChange}
-                className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
-              >
-                {lookups.branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </div>
+            {/* Branch - locked to the logged-in user's own branch */}
+            <BranchField />
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Store</label>

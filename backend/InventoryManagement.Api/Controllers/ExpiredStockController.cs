@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class ExpiredStockController : ControllerBase
+    public class ExpiredStockController : BaseController
     {
         private readonly IExpiredStockService _expiredStockService;
         private readonly ILogger<ExpiredStockController> _logger;
 
-        public ExpiredStockController(IExpiredStockService expiredStockService, ILogger<ExpiredStockController> logger)
+        public ExpiredStockController(IUserSessionCacheService sessionCache, IExpiredStockService expiredStockService, ILogger<ExpiredStockController> logger)
+            : base(sessionCache)
         {
             _expiredStockService = expiredStockService;
             _logger = logger;

@@ -12,6 +12,8 @@ import demandRequestApi from '../services/demandRequestApi';
 import { branchApi } from '../services/branchApi';
 import { getAllStores } from '../services/storeApi';
 import stockTypesApi from '../services/stockTypesApi';
+import BranchField from '../components/BranchField';
+import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
   if (!value) {
@@ -29,6 +31,7 @@ function formatDateTime(value) {
 }
 
 const ReceiveStockPage = () => {
+  const { session } = useSession();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submittingReceive, setSubmittingReceive] = useState(false);
@@ -62,6 +65,13 @@ const ReceiveStockPage = () => {
     loadLookups();
     loadRequests();
   }, []);
+
+  // Branch filter is always scoped to the logged-in user's own branch.
+  useEffect(() => {
+    if (session?.branchId) {
+      setFilters((current) => ({ ...current, branchId: session.branchId }));
+    }
+  }, [session?.branchId]);
 
   const loadLookups = async () => {
     try {
@@ -263,20 +273,8 @@ const ReceiveStockPage = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-x-4 gap-y-6 px-6 py-5 lg:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Branch</label>
-              <select
-                name="branchId"
-                value={filters.branchId}
-                onChange={handleFilterChange}
-                className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
-              >
-                <option value="">All</option>
-                {lookups.branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </div>
+            {/* Branch - locked to the logged-in user's own branch */}
+            <BranchField />
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Store</label>

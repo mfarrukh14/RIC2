@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PurchaseOrderTypesController : ControllerBase
+    public class PurchaseOrderTypesController : BaseController
     {
         private readonly IPurchaseOrderTypeService _service;
         private readonly ILogger<PurchaseOrderTypesController> _logger;
 
-        public PurchaseOrderTypesController(IPurchaseOrderTypeService service, ILogger<PurchaseOrderTypesController> logger)
+        public PurchaseOrderTypesController(IUserSessionCacheService sessionCache, IPurchaseOrderTypeService service, ILogger<PurchaseOrderTypesController> logger)
+            : base(sessionCache)
         {
             _service = service;
             _logger = logger;

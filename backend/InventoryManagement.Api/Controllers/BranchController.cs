@@ -6,12 +6,13 @@ namespace InventoryManagement.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class BranchController : ControllerBase
+    public class BranchController : BaseController
     {
         private readonly IBranchService _service;
         private readonly ILogger<BranchController> _logger;
 
-        public BranchController(IBranchService service, ILogger<BranchController> logger)
+        public BranchController(IUserSessionCacheService sessionCache, IBranchService service, ILogger<BranchController> logger)
+            : base(sessionCache)
         {
             _service = service;
             _logger = logger;
