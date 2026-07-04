@@ -32,9 +32,17 @@ namespace InventoryManagement.Api.Services
             var defaultBootstrapBehavior = hostEnvironment.IsDevelopment() && IsLocalSqlServerTarget(builder.DataSource);
             var databaseInitializationSection = configuration.GetSection("DatabaseInitialization");
 
+            // "Enabled" is a master on/off switch (used by appsettings.json / appsettings.Development.json).
+            // It is honored ahead of the local-SQL-Server heuristic so that shared/remote development
+            // databases still get schema repair when explicitly enabled. The granular flags below still
+            // win if someone sets them individually.
+            var explicitlyEnabled = databaseInitializationSection.GetValue<bool?>("Enabled");
+
             _ensureDatabaseExists = databaseInitializationSection.GetValue<bool?>("EnsureDatabaseExists")
+                ?? explicitlyEnabled
                 ?? defaultBootstrapBehavior;
             _runScripts = databaseInitializationSection.GetValue<bool?>("RunScripts")
+                ?? explicitlyEnabled
                 ?? defaultBootstrapBehavior;
 
             builder.InitialCatalog = "master";

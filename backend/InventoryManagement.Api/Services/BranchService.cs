@@ -21,7 +21,7 @@ namespace InventoryManagement.Api.Services
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
             var builder = new SqlConnectionStringBuilder(_connectionString);
-            _schemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
+            _schemaPrefix = builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
 
         private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");

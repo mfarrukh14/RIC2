@@ -20,7 +20,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
 
             var builder = new SqlConnectionStringBuilder(_connectionString);
-            _branchSchemaPrefix = builder.InitialCatalog.Equals("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
+            _branchSchemaPrefix = builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
 
         public async Task<UserSession?> LoginAsync(int userId)

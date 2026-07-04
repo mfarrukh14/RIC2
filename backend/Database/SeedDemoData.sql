@@ -1,3 +1,270 @@
+-- =============================================
+-- SeedDemoData.sql
+-- Idempotent demo/test data for every sidebar section of the Inventory
+-- Management app, targeted at a freshly-cloned shared database (HMS_Jun26)
+-- that has the app's schema (Inv/Pharmacy adapters from HMS_Setup.sql) but
+-- no operational data yet.
+--
+-- Safe to re-run: every INSERT is guarded by an IF NOT EXISTS check.
+-- Run HMS/HMS_Setup.sql BEFORE this script (it creates Inv.Prices,
+-- Inv.TaxTypes, the PharmacyStores/Manufacturers adapter views, etc.).
+-- =============================================
+SET NOCOUNT ON;
+
+DECLARE @BranchId INT = COALESCE((SELECT TOP 1 Id FROM Inv.Branches WHERE IsActive = 1 ORDER BY Id), 1);
+DECLARE @CreatedById INT = COALESCE((SELECT TOP 1 UserID FROM dbo.Users ORDER BY UserID), 1);
+DECLARE @DepartmentId INT = (SELECT TOP 1 Id FROM Inv.Departments ORDER BY Id);
+DECLARE @SubDepartmentId INT = (SELECT TOP 1 Id FROM Inv.SubDepartments WHERE DepartmentId = @DepartmentId ORDER BY Id);
+DECLARE @RoomId INT = (SELECT TOP 1 Id FROM Inv.Rooms ORDER BY Id);
+DECLARE @CountryId INT = (SELECT TOP 1 Id FROM Inv.Countries ORDER BY Id);
+DECLARE @StateOrProvinceId INT = (SELECT TOP 1 Id FROM Inv.StateOrProvinces ORDER BY Id);
+DECLARE @CityId INT = (SELECT TOP 1 Id FROM Inv.Cities ORDER BY Id);
+
+-- =============================================
+-- SECTION 0: Shared/legacy tables backing Inv.* adapter views
+-- (Pharmacy.Manufacturers -> Inv.Manufacturers / Inv.PharmacyManufacturers,
+--  Pharmacy.PharmacyStores -> Inv.PharmacyStores)
+-- These are on HMS_Jun26 only (a demo/test clone), never touch live HMS.
+-- =============================================
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.Manufacturers WHERE Name = 'Nisa SF Pvt Ltd')
+BEGIN
+    INSERT INTO Pharmacy.Manufacturers (Name, Email, MobileNo, Address, Description, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES ('Nisa SF Pvt Ltd', 'info@nisasf.com', '03915455461', '10-km Mundko Shahzadpur road, Pakistan', 'Leading medical equipment manufacturer', @CreatedById, GETDATE(), 0, 1);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.Manufacturers WHERE Name = 'Beijing Domax Medical')
+BEGIN
+    INSERT INTO Pharmacy.Manufacturers (Name, Email, MobileNo, Address, Description, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES ('Beijing Domax Medical', 'info@domaxmedical.com', '0086-10-56771179', 'Tongzhou District, Beijing', 'Advanced medical device manufacturer', @CreatedById, GETDATE(), 0, 1);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.Manufacturers WHERE Name = 'CardioMed Devices')
+BEGIN
+    INSERT INTO Pharmacy.Manufacturers (Name, Email, MobileNo, Address, Description, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES ('CardioMed Devices', 'contact@cardiomed.com', '03001234567', 'Industrial Estate, Karachi', 'Cardiology equipment manufacturer', @CreatedById, GETDATE(), 0, 1);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.Manufacturers WHERE Name = 'Vital Surgical Works')
+BEGIN
+    INSERT INTO Pharmacy.Manufacturers (Name, Email, MobileNo, Address, Description, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES ('Vital Surgical Works', 'sales@vitalsurgical.com', '03007654321', 'Sundar Industrial Estate, Lahore', 'Disposable and surgical goods manufacturer', @CreatedById, GETDATE(), 0, 1);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.PharmacyStores WHERE Name = 'Medicine Store')
+BEGIN
+    INSERT INTO Pharmacy.PharmacyStores (Name, Description, BranchId, OpeningTime, ClosingTime, IsActive, IsDeleted, CreatedById, CreatedOn)
+    VALUES ('Medicine Store', 'Main medicine dispensing store', @BranchId, '08:00', '20:00', 1, 0, @CreatedById, GETDATE());
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.PharmacyStores WHERE Name = 'Main Disposable Store')
+BEGIN
+    INSERT INTO Pharmacy.PharmacyStores (Name, Description, BranchId, OpeningTime, ClosingTime, IsActive, IsDeleted, CreatedById, CreatedOn)
+    VALUES ('Main Disposable Store', 'Disposables and consumables store', @BranchId, '08:00', '20:00', 1, 0, @CreatedById, GETDATE());
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.PharmacyStores WHERE Name = 'Emergency Store')
+BEGIN
+    INSERT INTO Pharmacy.PharmacyStores (Name, Description, BranchId, OpeningTime, ClosingTime, IsActive, IsDeleted, CreatedById, CreatedOn)
+    VALUES ('Emergency Store', 'Emergency ward stock holding store', @BranchId, '00:00', '23:59', 1, 0, @CreatedById, GETDATE());
+END;
+
+IF NOT EXISTS (SELECT 1 FROM Pharmacy.PharmacyStores WHERE Name = 'Central Store')
+BEGIN
+    INSERT INTO Pharmacy.PharmacyStores (Name, Description, BranchId, OpeningTime, ClosingTime, IsActive, IsDeleted, CreatedById, CreatedOn)
+    VALUES ('Central Store', 'Central receiving and distribution store', @BranchId, '08:00', '18:00', 1, 0, @CreatedById, GETDATE());
+END;
+
+-- Link a couple of existing users to pharmacy stores (Pharmacy.UserPharmacyStores)
+DECLARE @SeedUser2Id INT = (SELECT TOP 1 UserID FROM dbo.Users WHERE UserID <> @CreatedById ORDER BY UserID);
+DECLARE @MedStoreForUserId INT = (SELECT TOP 1 Id FROM Pharmacy.PharmacyStores WHERE Name = 'Medicine Store' ORDER BY Id);
+IF @MedStoreForUserId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM Pharmacy.UserPharmacyStores WHERE UserId = @CreatedById AND PharmacyStoreId = @MedStoreForUserId)
+BEGIN
+    INSERT INTO Pharmacy.UserPharmacyStores (UserId, PharmacyStoreId, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES (@CreatedById, @MedStoreForUserId, @CreatedById, GETDATE(), 0, 1);
+END;
+IF @SeedUser2Id IS NOT NULL AND @MedStoreForUserId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM Pharmacy.UserPharmacyStores WHERE UserId = @SeedUser2Id AND PharmacyStoreId = @MedStoreForUserId)
+BEGIN
+    INSERT INTO Pharmacy.UserPharmacyStores (UserId, PharmacyStoreId, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES (@SeedUser2Id, @MedStoreForUserId, @CreatedById, GETDATE(), 0, 1);
+END;
+
+-- =============================================
+-- SECTION 1: App-owned lookup tables (Inv schema)
+-- =============================================
+
+-- Categories / SubCategories
+IF NOT EXISTS (SELECT 1 FROM Inv.Categories WHERE Name = 'Disposables')
+    INSERT INTO Inv.Categories (Name, Description, IsActive) VALUES ('Disposables', 'Single-use disposable medical items', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.Categories WHERE Name = 'Medicines')
+    INSERT INTO Inv.Categories (Name, Description, IsActive) VALUES ('Medicines', 'Pharmaceutical products', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.Categories WHERE Name = 'Surgical Instruments')
+    INSERT INTO Inv.Categories (Name, Description, IsActive) VALUES ('Surgical Instruments', 'Reusable and disposable surgical instruments', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.Categories WHERE Name = 'Laboratory Supplies')
+    INSERT INTO Inv.Categories (Name, Description, IsActive) VALUES ('Laboratory Supplies', 'Lab consumables and reagents', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.Categories WHERE Name = 'Diagnostic Equipment')
+    INSERT INTO Inv.Categories (Name, Description, IsActive) VALUES ('Diagnostic Equipment', 'Diagnostic devices and accessories', 1);
+
+DECLARE @CatDisposablesId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name = 'Disposables' ORDER BY Id);
+DECLARE @CatMedicinesId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name = 'Medicines' ORDER BY Id);
+DECLARE @CatLabId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name = 'Laboratory Supplies' ORDER BY Id);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Syringes' AND CategoryId = @CatDisposablesId)
+    INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Syringes', 'Syringes of various sizes', @CatDisposablesId, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'IV Cannulas' AND CategoryId = @CatDisposablesId)
+    INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('IV Cannulas', 'IV access devices', @CatDisposablesId, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Vaccines' AND CategoryId = @CatMedicinesId)
+    INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Vaccines', 'Injectable vaccines', @CatMedicinesId, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Lab Consumables' AND CategoryId = @CatLabId)
+    INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Lab Consumables', 'Test tubes, slides, reagents', @CatLabId, 1);
+
+-- ItemUnits
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemUnits WHERE Name = 'Piece')
+    INSERT INTO Inv.ItemUnits (Name, Symbol, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Piece', 'pc', 'Individual piece', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemUnits WHERE Name = 'Box')
+    INSERT INTO Inv.ItemUnits (Name, Symbol, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Box', 'bx', 'Box of items', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemUnits WHERE Name = 'Vial')
+    INSERT INTO Inv.ItemUnits (Name, Symbol, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Vial', 'vl', 'Single vial', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemUnits WHERE Name = 'Pack')
+    INSERT INTO Inv.ItemUnits (Name, Symbol, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Pack', 'pk', 'Pack of items', @BranchId, 1, @CreatedById, GETDATE());
+
+-- Packings
+IF NOT EXISTS (SELECT 1 FROM Inv.Packings WHERE Name = 'Carton of 10')
+    INSERT INTO Inv.Packings (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Carton of 10', 'Carton containing 10 packets', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Packings WHERE Name = 'Carton of 20')
+    INSERT INTO Inv.Packings (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Carton of 20', 'Carton containing 20 packets', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Packings WHERE Name = 'Strip of 10')
+    INSERT INTO Inv.Packings (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Strip of 10', 'Strip of 10 units', @BranchId, 1, @CreatedById, GETDATE());
+
+-- ItemTypes
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemTypes WHERE Name = 'Disposable')
+    INSERT INTO Inv.ItemTypes (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Disposable', 'Disposable/consumable items', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemTypes WHERE Name = 'Medicine')
+    INSERT INTO Inv.ItemTypes (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Medicine', 'Pharmaceutical items', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.ItemTypes WHERE Name = 'Equipment')
+    INSERT INTO Inv.ItemTypes (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('Equipment', 'Reusable equipment', @BranchId, 1, @CreatedById, GETDATE());
+
+-- Vendors
+IF NOT EXISTS (SELECT 1 FROM Inv.Vendors WHERE Name = 'MediSupply Traders')
+    INSERT INTO Inv.Vendors (Name, Description, Email, CNo, Address, CountryId, StateOrProvinceId, CityId, BranchId, IsActive, CreatedById, CreatedOn)
+    VALUES ('MediSupply Traders', 'General medical supplies distributor', 'sales@medisupply.com', '03211234567', 'Blue Area, Islamabad', @CountryId, @StateOrProvinceId, @CityId, @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Vendors WHERE Name = 'SterileCare Supplies')
+    INSERT INTO Inv.Vendors (Name, Description, Email, CNo, Address, CountryId, StateOrProvinceId, CityId, BranchId, IsActive, CreatedById, CreatedOn)
+    VALUES ('SterileCare Supplies', 'Emergency procurement vendor', 'contact@sterilecare.com', '03219876543', 'G-9, Islamabad', @CountryId, @StateOrProvinceId, @CityId, @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Vendors WHERE Name = 'National Pharma Distributors')
+    INSERT INTO Inv.Vendors (Name, Description, Email, CNo, Address, CountryId, StateOrProvinceId, CityId, BranchId, IsActive, CreatedById, CreatedOn)
+    VALUES ('National Pharma Distributors', 'Vaccine and medicine distributor', 'info@natpharma.com', '03331112233', 'F-8 Markaz, Islamabad', @CountryId, @StateOrProvinceId, @CityId, @BranchId, 1, @CreatedById, GETDATE());
+
+-- Brands (Inv.Brands is this app's own table -- backs Items.BrandId FK)
+IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'MediLine')
+    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('MediLine', 'General medical disposables brand', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'CardioCare')
+    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('CardioCare', 'Cardiology consumables brand', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'LabPro')
+    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('LabPro', 'Laboratory supplies brand', @BranchId, 1, @CreatedById, GETDATE());
+
+-- StockTypes
+IF NOT EXISTS (SELECT 1 FROM Inv.StockTypes WHERE Name = 'Regular')
+    INSERT INTO Inv.StockTypes (Name, Description, IsActive, IsDeleted, CreatedById, CreatedOn) VALUES ('Regular', 'Regular purchased stock', 1, 0, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.StockTypes WHERE Name = 'Donation')
+    INSERT INTO Inv.StockTypes (Name, Description, IsActive, IsDeleted, CreatedById, CreatedOn) VALUES ('Donation', 'Donated stock', 1, 0, @CreatedById, GETDATE());
+
+-- StockTypeAssociations (link stock types to pharmacy stores)
+DECLARE @RegularStockTypeIdSetup INT = (SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Regular' ORDER BY Id);
+DECLARE @DonationStockTypeIdSetup INT = (SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Donation' ORDER BY Id);
+DECLARE @MedStoreForAssocId INT = (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Medicine Store' ORDER BY StoreId);
+DECLARE @EmergStoreForAssocId INT = (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Emergency Store' ORDER BY StoreId);
+IF @MedStoreForAssocId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM Inv.StockTypeAssociations WHERE StoreId = @MedStoreForAssocId AND StockTypeId = @RegularStockTypeIdSetup)
+    INSERT INTO Inv.StockTypeAssociations (StoreId, StockTypeId, IsActive, CreatedById, CreatedOn) VALUES (@MedStoreForAssocId, @RegularStockTypeIdSetup, 1, @CreatedById, GETDATE());
+IF @EmergStoreForAssocId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM Inv.StockTypeAssociations WHERE StoreId = @EmergStoreForAssocId AND StockTypeId = @DonationStockTypeIdSetup)
+    INSERT INTO Inv.StockTypeAssociations (StoreId, StockTypeId, IsActive, CreatedById, CreatedOn) VALUES (@EmergStoreForAssocId, @DonationStockTypeIdSetup, 1, @CreatedById, GETDATE());
+
+-- AccountCOAs
+IF NOT EXISTS (SELECT 1 FROM Inv.AccountCOAs WHERE Name = 'Inventory Asset Account')
+    INSERT INTO Inv.AccountCOAs (Name, Code, AccountType, IsActive) VALUES ('Inventory Asset Account', 'COA-1000', 'Asset', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.AccountCOAs WHERE Name = 'Cost of Goods Sold')
+    INSERT INTO Inv.AccountCOAs (Name, Code, AccountType, IsActive) VALUES ('Cost of Goods Sold', 'COA-5000', 'Expense', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.AccountCOAs WHERE Name = 'Sales Revenue')
+    INSERT INTO Inv.AccountCOAs (Name, Code, AccountType, IsActive) VALUES ('Sales Revenue', 'COA-4000', 'Revenue', 1);
+
+-- TaxRates / TaxDescriptions / TaxPayerCategories / Prices / TaxTypes (Item lookup data)
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxRates WHERE Name = 'GST 17%')
+    INSERT INTO Inv.TaxRates (Name, Rate, IsActive) VALUES ('GST 17%', 17.00, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxRates WHERE Name = 'GST 5%')
+    INSERT INTO Inv.TaxRates (Name, Rate, IsActive) VALUES ('GST 5%', 5.00, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxRates WHERE Name = 'Exempt')
+    INSERT INTO Inv.TaxRates (Name, Rate, IsActive) VALUES ('Exempt', 0.00, 1);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxDescriptions WHERE Name = 'Standard GST')
+    INSERT INTO Inv.TaxDescriptions (Name, Description, IsActive) VALUES ('Standard GST', 'Standard general sales tax', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxDescriptions WHERE Name = 'Reduced Rate')
+    INSERT INTO Inv.TaxDescriptions (Name, Description, IsActive) VALUES ('Reduced Rate', 'Reduced tax rate for essential items', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxDescriptions WHERE Name = 'Tax Exempt')
+    INSERT INTO Inv.TaxDescriptions (Name, Description, IsActive) VALUES ('Tax Exempt', 'No tax applicable', 1);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxPayerCategories WHERE Name = 'Filer')
+    INSERT INTO Inv.TaxPayerCategories (Name, Code, IsActive) VALUES ('Filer', 'FLR', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxPayerCategories WHERE Name = 'Non-Filer')
+    INSERT INTO Inv.TaxPayerCategories (Name, Code, IsActive) VALUES ('Non-Filer', 'NFLR', 1);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.Prices WHERE RetailPrice = 10.00 AND SalePrice = 8.00)
+    INSERT INTO Inv.Prices (RetailPrice, SalePrice, MarketPrice, IsActive) VALUES (10.00, 8.00, 9.00, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.Prices WHERE RetailPrice = 35.00 AND SalePrice = 30.00)
+    INSERT INTO Inv.Prices (RetailPrice, SalePrice, MarketPrice, IsActive) VALUES (35.00, 30.00, 32.00, 1);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxTypes WHERE Name = 'Sales Tax')
+    INSERT INTO Inv.TaxTypes (Name, Description, IsActive) VALUES ('Sales Tax', 'General sales tax', 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.TaxTypes WHERE Name = 'Withholding Tax')
+    INSERT INTO Inv.TaxTypes (Name, Description, IsActive) VALUES ('Withholding Tax', 'Withholding tax on purchases', 1);
+
+-- FinancialYears
+IF NOT EXISTS (SELECT 1 FROM Inv.FinancialYears WHERE Name = 'FY 2025-2026')
+    INSERT INTO Inv.FinancialYears (Name, StartDate, EndDate, IsActive, CreatedOn) VALUES ('FY 2025-2026', '2025-07-01', '2026-06-30', 1, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.FinancialYears WHERE Name = 'FY 2024-2025')
+    INSERT INTO Inv.FinancialYears (Name, StartDate, EndDate, IsActive, CreatedOn) VALUES ('FY 2024-2025', '2024-07-01', '2025-06-30', 0, GETDATE());
+
+-- DemandWiseValues (lookup; the live "Demand Wise Value" report is computed from
+-- DemandRequests/Inventories seeded below, this table just backs its own dropdown if used)
+IF NOT EXISTS (SELECT 1 FROM Inv.DemandWiseValues WHERE Name = 'High Priority')
+    INSERT INTO Inv.DemandWiseValues (Name, Value, IsActive) VALUES ('High Priority', 3, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.DemandWiseValues WHERE Name = 'Medium Priority')
+    INSERT INTO Inv.DemandWiseValues (Name, Value, IsActive) VALUES ('Medium Priority', 2, 1);
+IF NOT EXISTS (SELECT 1 FROM Inv.DemandWiseValues WHERE Name = 'Low Priority')
+    INSERT INTO Inv.DemandWiseValues (Name, Value, IsActive) VALUES ('Low Priority', 1, 1);
+
+-- EstimatedPurchaseOrders (simple lookup table; the live report is computed elsewhere)
+IF NOT EXISTS (SELECT 1 FROM Inv.EstimatedPurchaseOrders WHERE Name = 'Monthly Estimate')
+    INSERT INTO Inv.EstimatedPurchaseOrders (Name, Description, IsActive, CreatedOn) VALUES ('Monthly Estimate', 'Estimated monthly replenishment', 1, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.EstimatedPurchaseOrders WHERE Name = 'Quarterly Estimate')
+    INSERT INTO Inv.EstimatedPurchaseOrders (Name, Description, IsActive, CreatedOn) VALUES ('Quarterly Estimate', 'Estimated quarterly replenishment', 1, GETDATE());
+
+-- SurgicalItemGroups (Surgical Group sidebar item)
+IF NOT EXISTS (SELECT 1 FROM Inv.SurgicalItemGroups WHERE Name = 'Cardiac Surgery Set')
+    INSERT INTO Inv.SurgicalItemGroups (Name, Description, BranchId, IsActive, CreatedOn) VALUES ('Cardiac Surgery Set', 'Items grouped for cardiac procedures', @BranchId, 1, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.SurgicalItemGroups WHERE Name = 'General Surgery Set')
+    INSERT INTO Inv.SurgicalItemGroups (Name, Description, BranchId, IsActive, CreatedOn) VALUES ('General Surgery Set', 'Items grouped for general surgery', @BranchId, 1, GETDATE());
+
+-- Inv.Stores (Store Management sidebar item -- distinct from Pharmacy.PharmacyStores)
+IF NOT EXISTS (SELECT 1 FROM Inv.Stores WHERE StoreName = 'Main Warehouse')
+    INSERT INTO Inv.Stores (StoreName, StoreCode, Description, IsActive, CreatedById, CreatedOn) VALUES ('Main Warehouse', 'WH-01', 'Central inventory warehouse', 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stores WHERE StoreName = 'OT Store')
+    INSERT INTO Inv.Stores (StoreName, StoreCode, Description, IsActive, CreatedById, CreatedOn) VALUES ('OT Store', 'WH-02', 'Operation theatre supplies store', 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stores WHERE StoreName = 'ER Store')
+    INSERT INTO Inv.Stores (StoreName, StoreCode, Description, IsActive, CreatedById, CreatedOn) VALUES ('ER Store', 'WH-03', 'Emergency room supplies store', 1, @CreatedById, GETDATE());
+
+PRINT 'Section 0-1 complete: shared lookup data seeded.';
+GO
+
+-- =============================================
+-- SECTION 2: Items, Purchase Orders, GRN, Inventory receipts, Racks/Space
+-- Allocation, Transfer/Return Inventory, Stock Adjustments, Purchase
+-- Summaries, Contingent Bills, Store Allocation To User, Asset Allocations,
+-- Demand Requests.
+-- (Adapted from Database/HMS/HMS_TestDataSeed.sql; fixed Brand1Id/Brand2Id
+-- to source from Inv.Brands -- this app's own Brands table that Items.BrandId
+-- actually has an FK to -- instead of Inv.DataBrands, which is a synonym for
+-- the unrelated legacy Data.Brands table and was left empty on HMS_Jun26.)
+-- =============================================
 SET NOCOUNT ON;
 
 DECLARE @BranchId INT = COALESCE((SELECT TOP 1 Id FROM Inv.Branches WHERE IsActive = 1 ORDER BY Id), 1);
@@ -21,8 +288,8 @@ DECLARE @Vendor1Id INT = (SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 OR
 DECLARE @Vendor2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 AND Id <> @Vendor1Id ORDER BY Id), @Vendor1Id);
 DECLARE @Manufacturer1Id INT = (SELECT TOP 1 Id FROM Inv.PharmacyManufacturers ORDER BY Id);
 DECLARE @Manufacturer2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.PharmacyManufacturers WHERE Id <> @Manufacturer1Id ORDER BY Id), @Manufacturer1Id);
-DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Inv.DataBrands WHERE IsActive = 1 ORDER BY Id);
-DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.DataBrands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
+DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 ORDER BY Id);
+DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
 DECLARE @ItemType1Id INT = (SELECT TOP 1 Id FROM Inv.ItemTypes ORDER BY Id);
 DECLARE @ItemType2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.ItemTypes WHERE Id <> @ItemType1Id ORDER BY Id), @ItemType1Id);
 DECLARE @UnitId INT = (SELECT TOP 1 Id FROM Inv.ItemUnits ORDER BY Id);
@@ -476,3 +743,119 @@ BEGIN
     INSERT INTO Inv.DemandRequestItems (DemandRequestId, ItemId, RequestedQuantity, ApprovedQuantity, IssuedQuantity, ReceivedQuantity, Notes, IsActive, CreatedOn)
     VALUES (@DemandRequest2Id, @ElectrodeItemId, 15, 0, 0, 0, 'Seeded pending electrode line', 1, GETDATE());
 END;
+
+PRINT 'Section 2 complete: items, purchase orders, GRN, inventory, racks, transfers, returns, demand requests seeded.';
+GO
+
+-- =============================================
+-- SECTION 3: Remaining gaps -- Stock Consumption, Stock Audit, Stock (current
+-- balance snapshot), Stock Transactions, Stock Transitions.
+-- =============================================
+SET NOCOUNT ON;
+
+DECLARE @BranchId INT = COALESCE((SELECT TOP 1 Id FROM Inv.Branches WHERE IsActive = 1 ORDER BY Id), 1);
+DECLARE @CreatedById INT = COALESCE((SELECT TOP 1 UserID FROM dbo.Users ORDER BY UserID), 1);
+DECLARE @MedicineStoreId INT = (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Medicine Store' ORDER BY StoreId);
+DECLARE @EmergencyStoreId INT = (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Emergency Store' ORDER BY StoreId);
+DECLARE @DisposableStoreId INT = (SELECT TOP 1 StoreId FROM Inv.PharmacyStores WHERE StoreName = 'Main Disposable Store' ORDER BY StoreId);
+DECLARE @RegularStockTypeId INT = COALESCE((SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Regular' ORDER BY Id), (SELECT TOP 1 Id FROM Inv.StockTypes ORDER BY Id));
+DECLARE @DonationStockTypeId INT = COALESCE((SELECT TOP 1 Id FROM Inv.StockTypes WHERE Name = 'Donation' ORDER BY Id), @RegularStockTypeId);
+DECLARE @SyringeItemId INT = (SELECT TOP 1 Id FROM Inv.Items WHERE Name = 'HMS Seed Syringe 10ml' ORDER BY Id);
+DECLARE @CannulaItemId INT = (SELECT TOP 1 Id FROM Inv.Items WHERE Name = 'HMS Seed IV Cannula 20G' ORDER BY Id);
+DECLARE @ElectrodeItemId INT = (SELECT TOP 1 Id FROM Inv.Items WHERE Name = 'HMS Seed ECG Electrode' ORDER BY Id);
+DECLARE @TubeItemId INT = (SELECT TOP 1 Id FROM Inv.Items WHERE Name = 'HMS Seed Test Tube 5ml' ORDER BY Id);
+DECLARE @VaccineItemId INT = (SELECT TOP 1 Id FROM Inv.Items WHERE Name = 'HMS Seed Vaccine Vial' ORDER BY Id);
+DECLARE @InventoryItemSyringeId2 INT = (SELECT TOP 1 ii.Id FROM Inv.InventoryItems ii WHERE ii.ItemId = @SyringeItemId ORDER BY ii.Id);
+DECLARE @DemandRequest2IdForTransition INT = (SELECT TOP 1 Id FROM Inv.DemandRequests WHERE DemandRequestNumber = 'DR-HMS-SEED-002' ORDER BY Id);
+
+-- Stock Consumption
+DECLARE @StockConsumption1Id INT;
+IF NOT EXISTS (SELECT 1 FROM Inv.StockConsumptions WHERE Remarks = 'Seeded ward consumption batch' AND StoreId = @MedicineStoreId)
+BEGIN
+    INSERT INTO Inv.StockConsumptions (StoreId, Type, BranchId, IsActive, CreatedById, CreatedOn, IsDeleted, Remarks)
+    VALUES (@MedicineStoreId, 1, @BranchId, 1, @CreatedById, DATEADD(DAY, -3, GETDATE()), 0, 'Seeded ward consumption batch');
+END;
+SET @StockConsumption1Id = (SELECT TOP 1 Id FROM Inv.StockConsumptions WHERE Remarks = 'Seeded ward consumption batch' AND StoreId = @MedicineStoreId ORDER BY Id);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.StockConsumptionDetails WHERE StockConsumptionId = @StockConsumption1Id AND ItemId = @SyringeItemId)
+BEGIN
+    INSERT INTO Inv.StockConsumptionDetails (StoreId, ItemId, Type, StockTypeId, Quantity, BranchId, InventoryItemId, IsActive, CreatedById, CreatedOn, IsDeleted, StockConsumptionId)
+    VALUES (@MedicineStoreId, @SyringeItemId, 1, @RegularStockTypeId, 20, @BranchId, @InventoryItemSyringeId2, 1, @CreatedById, DATEADD(DAY, -3, GETDATE()), 0, @StockConsumption1Id);
+END;
+
+DECLARE @StockConsumption2Id INT;
+IF NOT EXISTS (SELECT 1 FROM Inv.StockConsumptions WHERE Remarks = 'Seeded emergency ward consumption' AND StoreId = @EmergencyStoreId)
+BEGIN
+    INSERT INTO Inv.StockConsumptions (StoreId, Type, BranchId, IsActive, CreatedById, CreatedOn, IsDeleted, Remarks)
+    VALUES (@EmergencyStoreId, 1, @BranchId, 1, @CreatedById, DATEADD(DAY, -1, GETDATE()), 0, 'Seeded emergency ward consumption');
+END;
+SET @StockConsumption2Id = (SELECT TOP 1 Id FROM Inv.StockConsumptions WHERE Remarks = 'Seeded emergency ward consumption' AND StoreId = @EmergencyStoreId ORDER BY Id);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.StockConsumptionDetails WHERE StockConsumptionId = @StockConsumption2Id AND ItemId = @ElectrodeItemId)
+BEGIN
+    INSERT INTO Inv.StockConsumptionDetails (StoreId, ItemId, Type, StockTypeId, Quantity, BranchId, IsActive, CreatedById, CreatedOn, IsDeleted, StockConsumptionId)
+    VALUES (@EmergencyStoreId, @ElectrodeItemId, 1, @DonationStockTypeId, 12, @BranchId, 1, @CreatedById, DATEADD(DAY, -1, GETDATE()), 0, @StockConsumption2Id);
+END;
+
+-- Stock Audit
+DECLARE @StockAudit1Id INT;
+IF NOT EXISTS (SELECT 1 FROM Inv.StockAudits WHERE AuditNumber = 'SA-HMS-SEED-001')
+BEGIN
+    INSERT INTO Inv.StockAudits (AuditNumber, StoreId, BranchId, AuditDate, Notes, Status, IsActive, CreatedById, CreatedOn)
+    VALUES ('SA-HMS-SEED-001', @MedicineStoreId, @BranchId, DATEADD(DAY, -2, GETDATE()), 'Seeded quarterly stock audit', 'Completed', 1, @CreatedById, DATEADD(DAY, -2, GETDATE()));
+END;
+SET @StockAudit1Id = (SELECT TOP 1 Id FROM Inv.StockAudits WHERE AuditNumber = 'SA-HMS-SEED-001' ORDER BY Id);
+
+IF NOT EXISTS (SELECT 1 FROM Inv.StockAuditItems WHERE StockAuditId = @StockAudit1Id AND ItemId = @SyringeItemId)
+BEGIN
+    INSERT INTO Inv.StockAuditItems (StockAuditId, ItemId, SystemQuantity, PhysicalQuantity, VarianceQuantity, Notes, IsActive, CreatedOn)
+    VALUES (@StockAudit1Id, @SyringeItemId, 140, 138, -2, 'Minor variance -- 2 units damaged', 1, DATEADD(DAY, -2, GETDATE()));
+END;
+IF NOT EXISTS (SELECT 1 FROM Inv.StockAuditItems WHERE StockAuditId = @StockAudit1Id AND ItemId = @CannulaItemId)
+BEGIN
+    INSERT INTO Inv.StockAuditItems (StockAuditId, ItemId, SystemQuantity, PhysicalQuantity, VarianceQuantity, Notes, IsActive, CreatedOn)
+    VALUES (@StockAudit1Id, @CannulaItemId, 48, 48, 0, 'No variance', 1, DATEADD(DAY, -2, GETDATE()));
+END;
+
+DECLARE @StockAudit2Id INT;
+IF NOT EXISTS (SELECT 1 FROM Inv.StockAudits WHERE AuditNumber = 'SA-HMS-SEED-002')
+BEGIN
+    INSERT INTO Inv.StockAudits (AuditNumber, StoreId, BranchId, AuditDate, Notes, Status, IsActive, CreatedById, CreatedOn)
+    VALUES ('SA-HMS-SEED-002', @EmergencyStoreId, @BranchId, GETDATE(), 'Seeded pending stock audit', 'Pending', 1, @CreatedById, GETDATE());
+END;
+SET @StockAudit2Id = (SELECT TOP 1 Id FROM Inv.StockAudits WHERE AuditNumber = 'SA-HMS-SEED-002' ORDER BY Id);
+IF NOT EXISTS (SELECT 1 FROM Inv.StockAuditItems WHERE StockAuditId = @StockAudit2Id AND ItemId = @ElectrodeItemId)
+BEGIN
+    INSERT INTO Inv.StockAuditItems (StockAuditId, ItemId, SystemQuantity, PhysicalQuantity, VarianceQuantity, Notes, IsActive, CreatedOn)
+    VALUES (@StockAudit2Id, @ElectrodeItemId, 88, 85, -3, 'Pending recount', 1, GETDATE());
+END;
+
+-- Inv.Stocks (current balance snapshot)
+IF NOT EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @SyringeItemId AND StoreId = @MedicineStoreId)
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, MinimumPanicLevel, BranchId, StoreId, IsActive, CreatedById, CreatedOn) VALUES (@SyringeItemId, 138, 25, @BranchId, @MedicineStoreId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @CannulaItemId AND StoreId = @MedicineStoreId)
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, MinimumPanicLevel, BranchId, StoreId, IsActive, CreatedById, CreatedOn) VALUES (@CannulaItemId, 48, 20, @BranchId, @MedicineStoreId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @VaccineItemId AND StoreId = @MedicineStoreId)
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, MinimumPanicLevel, BranchId, StoreId, IsActive, CreatedById, CreatedOn) VALUES (@VaccineItemId, 9, 8, @BranchId, @MedicineStoreId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @ElectrodeItemId AND StoreId = @EmergencyStoreId)
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, MinimumPanicLevel, BranchId, StoreId, IsActive, CreatedById, CreatedOn) VALUES (@ElectrodeItemId, 85, 15, @BranchId, @EmergencyStoreId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @TubeItemId AND StoreId = @DisposableStoreId)
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, MinimumPanicLevel, BranchId, StoreId, IsActive, CreatedById, CreatedOn) VALUES (@TubeItemId, 180, 100, @BranchId, @DisposableStoreId, 1, @CreatedById, GETDATE());
+
+-- Stock Transactions (Stock Flow sidebar item)
+IF NOT EXISTS (SELECT 1 FROM Inv.StockTransactions WHERE StoreId = @MedicineStoreId AND ItemId = @SyringeItemId AND TypeBit = 1)
+    INSERT INTO Inv.StockTransactions (StoreId, ItemId, OpeningQty, ReceivedQty, IssuedQty, BalanceQty, StockTypeId, BranchId, InventoryItemId, TypeBit, CreatedOn, ModifiedOn, CreatedBy)
+    VALUES (@MedicineStoreId, @SyringeItemId, 0, 160, 22, 138, @RegularStockTypeId, @BranchId, @InventoryItemSyringeId2, 1, DATEADD(DAY, -9, GETDATE()), DATEADD(DAY, -1, GETDATE()), @CreatedById);
+IF NOT EXISTS (SELECT 1 FROM Inv.StockTransactions WHERE StoreId = @EmergencyStoreId AND ItemId = @ElectrodeItemId AND TypeBit = 1)
+    INSERT INTO Inv.StockTransactions (StoreId, ItemId, OpeningQty, ReceivedQty, IssuedQty, BalanceQty, StockTypeId, BranchId, TypeBit, CreatedOn, ModifiedOn, CreatedBy)
+    VALUES (@EmergencyStoreId, @ElectrodeItemId, 0, 100, 15, 85, @DonationStockTypeId, @BranchId, 1, DATEADD(DAY, -4, GETDATE()), GETDATE(), @CreatedById);
+
+-- Stock Transitions (Stock Transitions sidebar item -- items in transit for a demand request)
+IF @DemandRequest2IdForTransition IS NOT NULL AND NOT EXISTS (SELECT 1 FROM Inv.StockTransitions WHERE DemandRequestId = @DemandRequest2IdForTransition AND ItemId = @ElectrodeItemId)
+BEGIN
+    INSERT INTO Inv.StockTransitions (DemandRequestId, RequestedStoreId, RequestingStoreId, ItemId, TotalItemsInTransition, TypeBit, StockTypeId, CreatedById, CreatedOn, IsDeleted, IsActive)
+    VALUES (@DemandRequest2IdForTransition, @DisposableStoreId, @EmergencyStoreId, @ElectrodeItemId, 15, 1, @DonationStockTypeId, @CreatedById, GETDATE(), 0, 1);
+END;
+
+PRINT 'Section 3 complete: stock consumption, stock audit, stock snapshot, stock transactions/transitions seeded.';
+GO

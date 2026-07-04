@@ -61,34 +61,40 @@ BEGIN
 
     IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
     BEGIN
-        CREATE TABLE #DropdownUsers
-        (
-            value INT NULL,
-            text NVARCHAR(4000) NULL
-        );
+        BEGIN TRY
+            CREATE TABLE #DropdownUsers
+            (
+                value INT NULL,
+                text NVARCHAR(4000) NULL
+            );
 
-        INSERT INTO #DropdownUsers (value, text)
-        EXEC [DropDown].[DD_Users];
+            INSERT INTO #DropdownUsers (value, text)
+            EXEC [DropDown].[DD_Users];
 
-        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-        SELECT
-            du.value,
-            du.text,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            CAST(1 AS BIT)
-        FROM
-        (
+            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
             SELECT
-                value,
-                MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-            FROM #DropdownUsers
-            WHERE value IS NOT NULL
-            GROUP BY value
-        ) du
-        WHERE du.text IS NOT NULL;
+                du.value,
+                du.text,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                CAST(1 AS BIT)
+            FROM
+            (
+                SELECT
+                    value,
+                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
+                FROM #DropdownUsers
+                WHERE value IS NOT NULL
+                GROUP BY value
+            ) du
+            WHERE du.text IS NOT NULL;
+        END TRY
+        BEGIN CATCH
+            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
+            -- Fall back to dbo.Users below instead of failing the whole procedure.
+        END CATCH
     END
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
@@ -203,34 +209,40 @@ BEGIN
 
     IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
     BEGIN
-        CREATE TABLE #DropdownUsers
-        (
-            value INT NULL,
-            text NVARCHAR(4000) NULL
-        );
+        BEGIN TRY
+            CREATE TABLE #DropdownUsers
+            (
+                value INT NULL,
+                text NVARCHAR(4000) NULL
+            );
 
-        INSERT INTO #DropdownUsers (value, text)
-        EXEC [DropDown].[DD_Users];
+            INSERT INTO #DropdownUsers (value, text)
+            EXEC [DropDown].[DD_Users];
 
-        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-        SELECT
-            du.value,
-            du.text,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            CAST(1 AS BIT)
-        FROM
-        (
+            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
             SELECT
-                value,
-                MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-            FROM #DropdownUsers
-            WHERE value IS NOT NULL
-            GROUP BY value
-        ) du
-        WHERE du.text IS NOT NULL;
+                du.value,
+                du.text,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                CAST(1 AS BIT)
+            FROM
+            (
+                SELECT
+                    value,
+                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
+                FROM #DropdownUsers
+                WHERE value IS NOT NULL
+                GROUP BY value
+            ) du
+            WHERE du.text IS NOT NULL;
+        END TRY
+        BEGIN CATCH
+            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
+            -- Fall back to dbo.Users below instead of failing the whole procedure.
+        END CATCH
     END
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN

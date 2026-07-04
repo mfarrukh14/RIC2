@@ -5,6 +5,15 @@
 -- =============================================
 -- Procedure: Store_GetAll
 -- Description: Retrieve all stores with related entity names
+--
+-- Reads/writes go through Inv.PharmacyStores (a view over the shared
+-- Pharmacy.PharmacyStores table, redefined as insertable/updatable in
+-- Tables/AlterPharmacyStoresForStoreManagement.sql), not the legacy
+-- dbo.Stores table, and include BranchId since
+-- Pharmacy.PharmacyStores.BranchId is NOT NULL. These definitions must be
+-- the only ones for Store_GetAll/GetById/Insert/Update in the repo - a
+-- second competing definition here previously fought with this one for
+-- which ran last during startup script execution.
 -- =============================================
 IF OBJECT_ID('dbo.Store_GetAll', 'P') IS NOT NULL
     DROP PROCEDURE dbo.Store_GetAll;
@@ -15,7 +24,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         s.StoreId,
         s.StoreName,
         s.StoreCode,
@@ -57,13 +66,16 @@ BEGIN
         s.StateOrProvince,
         s.City,
         s.StoreImage,
+        s.BranchId,
+        b.Name AS BranchName,
         s.IsActive,
         s.CreatedById,
         s.CreatedOn,
         s.ModifiedById,
         s.ModifiedOn
-    FROM dbo.Stores s
-    LEFT JOIN dbo.Stores ps ON s.ParentStoreId = ps.StoreId
+    FROM Inv.PharmacyStores s
+    LEFT JOIN Inv.PharmacyStores ps ON s.ParentStoreId = ps.StoreId
+    LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     ORDER BY s.StoreName;
 END
 GO
@@ -82,7 +94,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         s.StoreId,
         s.StoreName,
         s.StoreCode,
@@ -124,13 +136,16 @@ BEGIN
         s.StateOrProvince,
         s.City,
         s.StoreImage,
+        s.BranchId,
+        b.Name AS BranchName,
         s.IsActive,
         s.CreatedById,
         s.CreatedOn,
         s.ModifiedById,
         s.ModifiedOn
-    FROM dbo.Stores s
-    LEFT JOIN dbo.Stores ps ON s.ParentStoreId = ps.StoreId
+    FROM Inv.PharmacyStores s
+    LEFT JOIN Inv.PharmacyStores ps ON s.ParentStoreId = ps.StoreId
+    LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     WHERE s.StoreId = @StoreId;
 END
 GO
@@ -183,13 +198,14 @@ CREATE PROCEDURE dbo.Store_Insert
     @StateOrProvince NVARCHAR(100) = NULL,
     @City NVARCHAR(100) = NULL,
     @StoreImage NVARCHAR(500) = NULL,
+    @BranchId INT,
     @IsActive BIT = 1,
     @CreatedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.Stores (
+    INSERT INTO Inv.PharmacyStores (
         StoreName, StoreCode, Description, StoreType, ReceiptType, POSType,
         ParentStoreId, BuildingId, FloorId, RoomId, Email, CellNumber,
         QueuePatientCallStatusValue, MarkTokenAsAutoCollectedOnDispense,
@@ -199,7 +215,7 @@ BEGIN
         ClosingInventoryAccountId, ClosingInventoryExpenseAccountId,
         ClosingTaxExpenseAccountId, PayableAccountId, AdvanceTaxPercentageAccountId,
         RevenueDiscountAccountId, Address, Latitude, Longitude, Country,
-        StateOrProvince, City, StoreImage, IsActive, CreatedById, CreatedOn
+        StateOrProvince, City, StoreImage, BranchId, IsActive, CreatedById, CreatedOn
     )
     VALUES (
         @StoreName, @StoreCode, @Description, @StoreType, @ReceiptType, @POSType,
@@ -211,7 +227,7 @@ BEGIN
         @ClosingInventoryAccountId, @ClosingInventoryExpenseAccountId,
         @ClosingTaxExpenseAccountId, @PayableAccountId, @AdvanceTaxPercentageAccountId,
         @RevenueDiscountAccountId, @Address, @Latitude, @Longitude, @Country,
-        @StateOrProvince, @City, @StoreImage, @IsActive, @CreatedById, GETDATE()
+        @StateOrProvince, @City, @StoreImage, @BranchId, @IsActive, @CreatedById, GETDATE()
     );
 
     SELECT SCOPE_IDENTITY() AS StoreId;
@@ -267,14 +283,15 @@ CREATE PROCEDURE dbo.Store_Update
     @StateOrProvince NVARCHAR(100) = NULL,
     @City NVARCHAR(100) = NULL,
     @StoreImage NVARCHAR(500) = NULL,
+    @BranchId INT,
     @IsActive BIT,
     @ModifiedById INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.Stores
-    SET 
+    UPDATE Inv.PharmacyStores
+    SET
         StoreName = @StoreName,
         StoreCode = @StoreCode,
         Description = @Description,
@@ -314,6 +331,7 @@ BEGIN
         StateOrProvince = @StateOrProvince,
         City = @City,
         StoreImage = @StoreImage,
+        BranchId = @BranchId,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,
         ModifiedOn = GETDATE()
