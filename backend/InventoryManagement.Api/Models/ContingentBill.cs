@@ -13,6 +13,7 @@ namespace InventoryManagement.API.Models
         public int VendorId { get; set; }
         public string? VendorName { get; set; }
         public string? BudgetSetupId { get; set; }
+        public string? BudgetSetupName { get; set; }
         public string? BillNo { get; set; }
         public DateTime BillDate { get; set; }
         public float? BudgetAllotment { get; set; }
@@ -177,5 +178,6 @@ namespace InventoryManagement.API.Models
         public List<LookupItem> PurchaseOrderTypes { get; set; } = new();
         public List<LookupItem> Vendors { get; set; } = new();
         public List<LookupItem> Branches { get; set; } = new();
+        public List<LookupItem> Departments { get; set; } = new();
     }
 }

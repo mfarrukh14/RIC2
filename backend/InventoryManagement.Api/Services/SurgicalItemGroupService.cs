@@ -122,9 +122,9 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@ModifiedById", string.IsNullOrEmpty(request.ModifiedById) ? DBNull.Value : request.ModifiedById);
 
                 await connection.OpenAsync();
-                var rowsAffected = await command.ExecuteNonQueryAsync();
+                var result = await command.ExecuteScalarAsync();
 
-                return rowsAffected > 0;
+                return Convert.ToInt32(result) > 0;
             }
             catch (Exception ex)
             {
@@ -146,9 +146,9 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@Id", id);
 
                 await connection.OpenAsync();
-                var rowsAffected = await command.ExecuteNonQueryAsync();
+                var result = await command.ExecuteScalarAsync();
 
-                return rowsAffected > 0;
+                return Convert.ToInt32(result) > 0;
             }
             catch (Exception ex)
             {
@@ -202,9 +202,9 @@ namespace InventoryManagement.API.Services
                 BranchName = reader.IsDBNull(reader.GetOrdinal("BranchName")) ? null : reader.GetString(reader.GetOrdinal("BranchName")),
                 SubServiceId = reader.IsDBNull(reader.GetOrdinal("SubServiceId")) ? null : reader.GetString(reader.GetOrdinal("SubServiceId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetString(reader.GetOrdinal("CreatedById")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")).ToString(),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetString(reader.GetOrdinal("ModifiedById")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")).ToString(),
                 ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
                 IsDeleted = reader.GetBoolean(reader.GetOrdinal("IsDeleted"))
             };

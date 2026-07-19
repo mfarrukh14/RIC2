@@ -8,7 +8,7 @@ namespace InventoryManagement.Api.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<StockTypeAssociationService> _logger;
-        private readonly Guid _systemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001"); // Default system user ID
+        private const int _systemUserId = 1; // TODO: Get from current user
 
         public StockTypeAssociationService(IConfiguration configuration, ILogger<StockTypeAssociationService> logger)
         {

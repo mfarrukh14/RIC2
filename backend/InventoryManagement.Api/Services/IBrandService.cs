@@ -8,6 +8,6 @@ namespace InventoryManagement.Api.Services
         Task<Brand?> GetBrandByIdAsync(int id);
         Task<int> CreateBrandAsync(CreateBrandRequest request);
         Task<bool> UpdateBrandAsync(UpdateBrandRequest request);
-        Task<bool> DeleteBrandAsync(int id, int modifiedById);
+        Task<bool> DeleteBrandAsync(int id, int modifiedById, bool force = false);
     }
 }

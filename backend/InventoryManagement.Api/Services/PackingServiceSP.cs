@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Linq;
 using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.Api.Services
@@ -58,6 +59,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreatePackingAsync(CreatePackingRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Packing_Insert", connection)
             {
@@ -73,6 +76,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdatePackingAsync(UpdatePackingRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Packing_Update", connection)
             {
@@ -89,18 +94,39 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> DeletePackingAsync(int id, int modifiedById)
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("Packing_Delete", connection)
+            try
             {
-                CommandType = CommandType.StoredProcedure
-            };
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Packing_Delete", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
 
-            command.Parameters.AddWithValue("@Id", id);
-            command.Parameters.AddWithValue("@ModifiedById", modifiedById);
+                command.Parameters.AddWithValue("@Id", id);
 
-            await connection.OpenAsync();
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result) > 0;
+                await connection.OpenAsync();
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result) > 0;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                throw new InvalidOperationException("Cannot delete packing. It has associated records elsewhere in the system.", ex);
+            }
+        }
+
+        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var packings = await GetAllPackingsAsync();
+
+            var isDuplicate = packings.Any(p =>
+                (!excludeId.HasValue || p.Id != excludeId.Value) &&
+                string.Equals(p.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"A packing type named '{normalizedName}' already exists.");
+            }
         }
 
         private static Packing MapReaderToPacking(SqlDataReader reader)
@@ -110,6 +136,9 @@ namespace InventoryManagement.Api.Services
                 Id = reader.GetInt32("Id"),
                 Name = reader.GetString("Name"),
                 Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
+                Pack = reader.IsDBNull("Pack") ? null : reader.GetInt32("Pack"),
+                Leaf = reader.IsDBNull("Leaf") ? null : reader.GetInt32("Leaf"),
+                NumberOfItems = reader.IsDBNull("NumberOfItems") ? null : reader.GetInt32("NumberOfItems"),
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
                 IsActive = reader.GetBoolean("IsActive"),
                 CreatedById = reader.GetInt32("CreatedById"),
@@ -127,6 +156,9 @@ namespace InventoryManagement.Api.Services
                 case CreatePackingRequest createRequest:
                     command.Parameters.AddWithValue("@Name", createRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)createRequest.Description ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@Pack", (object?)createRequest.Pack ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@Leaf", (object?)createRequest.Leaf ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@NumberOfItems", (object?)createRequest.NumberOfItems ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)createRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@CreatedById", createRequest.CreatedById);
                     break;
@@ -134,6 +166,9 @@ namespace InventoryManagement.Api.Services
                 case UpdatePackingRequest updateRequest:
                     command.Parameters.AddWithValue("@Name", updateRequest.Name);
                     command.Parameters.AddWithValue("@Description", (object?)updateRequest.Description ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@Pack", (object?)updateRequest.Pack ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@Leaf", (object?)updateRequest.Leaf ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@NumberOfItems", (object?)updateRequest.NumberOfItems ?? DBNull.Value);
                     command.Parameters.AddWithValue("@BranchId", (object?)updateRequest.BranchId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@IsActive", updateRequest.IsActive);
                     command.Parameters.AddWithValue("@ModifiedById", updateRequest.ModifiedById);

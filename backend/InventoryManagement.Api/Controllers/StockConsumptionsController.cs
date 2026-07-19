@@ -37,7 +37,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<StockConsumption>> GetById(Guid id)
+        public async Task<ActionResult<StockConsumption>> GetById(int id)
         {
             try
             {
@@ -78,7 +78,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<StockConsumption>> Update(Guid id, [FromBody] StockConsumptionUpdateRequest request)
+        public async Task<ActionResult<StockConsumption>> Update(int id, [FromBody] StockConsumptionUpdateRequest request)
         {
             try
             {
@@ -103,7 +103,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(Guid id)
+        public async Task<ActionResult> Delete(int id)
         {
             try
             {

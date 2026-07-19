@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Linq;
 using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.Api.Services
@@ -58,6 +59,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateManufacturerAsync(CreateManufacturerRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Manufacturer_Insert", connection)
             {
@@ -73,6 +76,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateManufacturerAsync(UpdateManufacturerRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Manufacturer_Update", connection)
             {
@@ -89,18 +94,39 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> DeleteManufacturerAsync(int id, int modifiedById)
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("Manufacturer_Delete", connection)
+            try
             {
-                CommandType = CommandType.StoredProcedure
-            };
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Manufacturer_Delete", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
 
-            command.Parameters.AddWithValue("@Id", id);
-            command.Parameters.AddWithValue("@ModifiedById", modifiedById);
+                command.Parameters.AddWithValue("@Id", id);
 
-            await connection.OpenAsync();
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result) > 0;
+                await connection.OpenAsync();
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result) > 0;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                throw new InvalidOperationException("Cannot delete manufacturer. It has associated records elsewhere in the system.", ex);
+            }
+        }
+
+        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var manufacturers = await GetAllManufacturersAsync();
+
+            var isDuplicate = manufacturers.Any(m =>
+                (!excludeId.HasValue || m.Id != excludeId.Value) &&
+                string.Equals(m.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"A manufacturer named '{normalizedName}' already exists.");
+            }
         }
 
         private static Manufacturer MapReaderToManufacturer(SqlDataReader reader)

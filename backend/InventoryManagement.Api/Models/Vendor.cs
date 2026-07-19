@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using InventoryManagement.Api.Validation;
 
 namespace InventoryManagement.Api.Models
 {
@@ -11,7 +12,7 @@ namespace InventoryManagement.Api.Models
 
         public string? Description { get; set; }
 
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? Email { get; set; }
 
         public string? CNo { get; set; } // Contact Number

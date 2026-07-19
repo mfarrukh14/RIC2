@@ -61,6 +61,10 @@ namespace InventoryManagement.Api.Controllers
                 var brandId = await _brandService.CreateBrandAsync(request);
                 return CreatedAtAction(nameof(GetBrand), new { id = brandId }, brandId);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
@@ -90,6 +94,10 @@ namespace InventoryManagement.Api.Controllers
 
                 return NoContent();
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
@@ -97,17 +105,25 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteBrand(int id, [FromQuery] int modifiedById = 1)
+        public async Task<IActionResult> DeleteBrand(int id, [FromQuery] int modifiedById = 1, [FromQuery] bool force = false)
         {
             try
             {
-                var success = await _brandService.DeleteBrandAsync(id, modifiedById);
+                var success = await _brandService.DeleteBrandAsync(id, modifiedById, force);
                 if (!success)
                 {
                     return NotFound($"Brand with ID {id} not found.");
                 }
 
                 return NoContent();
+            }
+            catch (BrandInUseException ex)
+            {
+                return Conflict(new { message = ex.Message, requiresConfirmation = true, itemCount = ex.ItemCount });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {

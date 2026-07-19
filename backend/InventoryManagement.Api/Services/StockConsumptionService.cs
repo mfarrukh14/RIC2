@@ -11,7 +11,7 @@ namespace InventoryManagement.Api.Services
 
         public StockConsumptionService(IConfiguration configuration, ILogger<StockConsumptionService> logger)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection") 
+            _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException("Connection string not found");
             _logger = logger;
         }
@@ -47,7 +47,7 @@ namespace InventoryManagement.Api.Services
                 {
                     stockConsumptions.Add(new StockConsumptionView
                     {
-                        Id = reader.GetGuid(reader.GetOrdinal("Id")),
+                        Id = reader.GetInt32(reader.GetOrdinal("Id")),
                         StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
                         ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? null : reader.GetString(reader.GetOrdinal("ItemName")),
                         Type = reader.IsDBNull(reader.GetOrdinal("Type")) ? null : reader.GetString(reader.GetOrdinal("Type")),
@@ -67,7 +67,7 @@ namespace InventoryManagement.Api.Services
             return stockConsumptions;
         }
 
-        public async Task<StockConsumption?> GetByIdAsync(Guid id)
+        public async Task<StockConsumption?> GetByIdAsync(int id)
         {
             try
             {
@@ -85,7 +85,7 @@ namespace InventoryManagement.Api.Services
                 if (await reader.ReadAsync())
                 {
                     var stockConsumption = MapToStockConsumption(reader);
-                    
+
                     // Get details
                     if (await reader.NextResultAsync())
                     {
@@ -120,12 +120,11 @@ namespace InventoryManagement.Api.Services
                 try
                 {
                     // Insert main stock consumption
-                    var stockConsumptionId = Guid.NewGuid();
-                    
+                    int stockConsumptionId;
+
                     using (var command = new SqlCommand("StockConsumption_Insert", connection, transaction))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        command.Parameters.AddWithValue("@Id", stockConsumptionId);
                         command.Parameters.AddWithValue("@StoreId", request.StoreId);
                         command.Parameters.AddWithValue("@BranchId", request.BranchId);
                         command.Parameters.AddWithValue("@Type", request.Type);
@@ -133,7 +132,8 @@ namespace InventoryManagement.Api.Services
                         command.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
                         command.Parameters.AddWithValue("@Remarks", (object?)request.Remarks ?? DBNull.Value);
 
-                        await command.ExecuteNonQueryAsync();
+                        var newId = await command.ExecuteScalarAsync();
+                        stockConsumptionId = Convert.ToInt32(newId);
                     }
 
                     // Insert details
@@ -141,7 +141,6 @@ namespace InventoryManagement.Api.Services
                     {
                         using var detailCommand = new SqlCommand("StockConsumptionDetail_Insert", connection, transaction);
                         detailCommand.CommandType = CommandType.StoredProcedure;
-                        detailCommand.Parameters.AddWithValue("@Id", Guid.NewGuid());
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", stockConsumptionId);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
                         detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
@@ -152,7 +151,7 @@ namespace InventoryManagement.Api.Services
                         detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
 
-                        await detailCommand.ExecuteNonQueryAsync();
+                        await detailCommand.ExecuteScalarAsync();
                     }
 
                     await transaction.CommitAsync();
@@ -211,7 +210,6 @@ namespace InventoryManagement.Api.Services
                     {
                         using var detailCommand = new SqlCommand("StockConsumptionDetail_Insert", connection, transaction);
                         detailCommand.CommandType = CommandType.StoredProcedure;
-                        detailCommand.Parameters.AddWithValue("@Id", detail.Id ?? Guid.NewGuid());
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", request.Id);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
                         detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
@@ -222,7 +220,7 @@ namespace InventoryManagement.Api.Services
                         detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.ModifiedById ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
 
-                        await detailCommand.ExecuteNonQueryAsync();
+                        await detailCommand.ExecuteScalarAsync();
                     }
 
                     await transaction.CommitAsync();
@@ -242,7 +240,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteAsync(Guid id)
+        public async Task<bool> DeleteAsync(int id)
         {
             try
             {
@@ -270,18 +268,18 @@ namespace InventoryManagement.Api.Services
         {
             return new StockConsumption
             {
-                Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                StoreId = reader.GetGuid(reader.GetOrdinal("StoreId")),
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
                 Type = reader.GetInt32(reader.GetOrdinal("Type")),
-                BranchId = reader.GetGuid(reader.GetOrdinal("BranchId")),
+                BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
                 BranchName = reader.IsDBNull(reader.GetOrdinal("BranchName")) ? null : reader.GetString(reader.GetOrdinal("BranchName")),
-                VoucherId = reader.IsDBNull(reader.GetOrdinal("VoucherId")) ? null : reader.GetGuid(reader.GetOrdinal("VoucherId")),
+                VoucherId = reader.IsDBNull(reader.GetOrdinal("VoucherId")) ? null : reader.GetInt32(reader.GetOrdinal("VoucherId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetGuid(reader.GetOrdinal("CreatedById")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                 CreatedByName = reader.IsDBNull(reader.GetOrdinal("CreatedByName")) ? null : reader.GetString(reader.GetOrdinal("CreatedByName")),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
                 ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
                 IsDeleted = reader.GetBoolean(reader.GetOrdinal("IsDeleted")),
                 Remarks = reader.IsDBNull(reader.GetOrdinal("Remarks")) ? null : reader.GetString(reader.GetOrdinal("Remarks"))
@@ -292,9 +290,9 @@ namespace InventoryManagement.Api.Services
         {
             return new StockConsumptionDetail
             {
-                Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                StockConsumptionId = reader.IsDBNull(reader.GetOrdinal("StockConsumptionId")) ? null : reader.GetGuid(reader.GetOrdinal("StockConsumptionId")),
-                StoreId = reader.GetGuid(reader.GetOrdinal("StoreId")),
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                StockConsumptionId = reader.IsDBNull(reader.GetOrdinal("StockConsumptionId")) ? null : reader.GetInt32(reader.GetOrdinal("StockConsumptionId")),
+                StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
                 ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
                 ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? null : reader.GetString(reader.GetOrdinal("ItemName")),
@@ -302,11 +300,11 @@ namespace InventoryManagement.Api.Services
                 StockTypeId = reader.GetInt32(reader.GetOrdinal("StockTypeId")),
                 StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName")) ? null : reader.GetString(reader.GetOrdinal("StockTypeName")),
                 Quantity = reader.GetDecimal(reader.GetOrdinal("Quantity")),
-                BranchId = reader.GetGuid(reader.GetOrdinal("BranchId")),
+                BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetGuid(reader.GetOrdinal("CreatedById")),
+                CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
+                ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
                 ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
                 IsDeleted = reader.GetBoolean(reader.GetOrdinal("IsDeleted"))
             };

@@ -91,7 +91,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@DepartmentId", (object?)request.DepartmentId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@SubDepartmentId", (object?)request.SubDepartmentId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@RoomId", (object?)request.RoomId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemId", (object?)request.ItemId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ItemId", (object?)(request.ItemId ?? request.InventoryItemId) ?? DBNull.Value);
                 command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Quantity", request.Quantity);
                 command.Parameters.AddWithValue("@InventoryItemId", (object?)request.InventoryItemId ?? DBNull.Value);
@@ -129,7 +129,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@DepartmentId", (object?)request.DepartmentId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@SubDepartmentId", (object?)request.SubDepartmentId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@RoomId", (object?)request.RoomId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemId", (object?)request.ItemId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ItemId", (object?)(request.ItemId ?? request.InventoryItemId) ?? DBNull.Value);
                 command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@IsReturn", request.IsReturn);
                 command.Parameters.AddWithValue("@ReturnRemarks", (object?)request.ReturnRemarks ?? DBNull.Value);
@@ -162,7 +162,6 @@ namespace InventoryManagement.Api.Services
                 };
 
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
 
                 await connection.OpenAsync();
                 var affectedRows = await command.ExecuteScalarAsync();

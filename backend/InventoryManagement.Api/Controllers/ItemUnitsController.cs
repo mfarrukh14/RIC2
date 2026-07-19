@@ -61,6 +61,10 @@ namespace InventoryManagement.Api.Controllers
                 var itemUnitId = await _itemUnitService.CreateItemUnitAsync(request);
                 return CreatedAtAction(nameof(GetItemUnit), new { id = itemUnitId }, itemUnitId);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
@@ -90,6 +94,10 @@ namespace InventoryManagement.Api.Controllers
 
                 return NoContent();
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
@@ -108,6 +116,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {

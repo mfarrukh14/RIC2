@@ -166,6 +166,17 @@ namespace InventoryManagement.API.Services
                 });
             }
 
+            // Read Departments (used as Budget Head for now)
+            await reader.NextResultAsync();
+            while (await reader.ReadAsync())
+            {
+                lookupData.Departments.Add(new LookupItem
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1)
+                });
+            }
+
             return lookupData;
         }
 
@@ -182,6 +193,7 @@ namespace InventoryManagement.API.Services
                 VendorId = reader.GetInt32("VendorId"),
                 VendorName = reader.IsDBNull("VendorName") ? null : reader.GetString("VendorName"),
                 BudgetSetupId = reader.IsDBNull("BudgetSetupId") ? null : reader.GetString("BudgetSetupId"),
+                BudgetSetupName = reader.IsDBNull("BudgetSetupName") ? null : reader.GetString("BudgetSetupName"),
                 BillNo = reader.IsDBNull("BillNo") ? null : reader.GetString("BillNo"),
                 BillDate = reader.GetDateTime("BillDate"),
                 BudgetAllotment = GetNullableFloat(reader, "BudgetAllotment"),

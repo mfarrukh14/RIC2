@@ -53,6 +53,10 @@ namespace InventoryManagement.Api.Controllers
                 var vendor = await _vendorService.CreateVendorAsync(createVendorDto);
                 return CreatedAtAction(nameof(GetVendor), new { id = vendor.Id }, vendor);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return BadRequest(ex.Message);
@@ -76,6 +80,10 @@ namespace InventoryManagement.Api.Controllers
 
                 return Ok(vendor);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return BadRequest(ex.Message);
@@ -88,11 +96,18 @@ namespace InventoryManagement.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVendor(int id)
         {
-            var success = await _vendorService.DeleteVendorAsync(id);
-            if (!success)
-                return NotFound($"Vendor with ID {id} not found");
+            try
+            {
+                var success = await _vendorService.DeleteVendorAsync(id);
+                if (!success)
+                    return NotFound($"Vendor with ID {id} not found");
 
-            return NoContent();
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
     }
 }

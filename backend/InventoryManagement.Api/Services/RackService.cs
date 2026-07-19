@@ -151,11 +151,15 @@ namespace InventoryManagement.Api.Services
                 };
 
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@ModifiedById", userId);
 
                 await connection.OpenAsync();
                 await command.ExecuteNonQueryAsync();
                 return true;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                _logger.LogWarning(ex, "Cannot delete rack with ID {RackId} due to a foreign key constraint", id);
+                throw new InvalidOperationException("Cannot delete rack. It has associated records elsewhere in the system.", ex);
             }
             catch (Exception ex)
             {

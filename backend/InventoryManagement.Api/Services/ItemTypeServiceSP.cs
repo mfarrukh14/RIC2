@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Linq;
 using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.Api.Services
@@ -58,6 +59,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateItemTypeAsync(CreateItemTypeRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemType_Insert", connection)
             {
@@ -73,6 +76,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateItemTypeAsync(UpdateItemTypeRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemType_Update", connection)
             {
@@ -101,6 +106,21 @@ namespace InventoryManagement.Api.Services
             await connection.OpenAsync();
             var result = await command.ExecuteScalarAsync();
             return Convert.ToInt32(result) > 0;
+        }
+
+        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var itemTypes = await GetAllItemTypesAsync();
+
+            var isDuplicate = itemTypes.Any(t =>
+                (!excludeId.HasValue || t.Id != excludeId.Value) &&
+                string.Equals(t.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"An item type named '{normalizedName}' already exists.");
+            }
         }
 
         private static ItemType MapReaderToItemType(SqlDataReader reader)

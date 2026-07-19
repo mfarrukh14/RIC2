@@ -1,9 +1,21 @@
 using Microsoft.Data.SqlClient;
 using System.Data;
 using InventoryManagement.Api.Models;
+using System.Linq;
 
 namespace InventoryManagement.Api.Services
 {
+    public class BrandInUseException : Exception
+    {
+        public int ItemCount { get; }
+
+        public BrandInUseException(int itemCount)
+            : base($"This brand is used by {itemCount} item(s). Deleting it will remove the brand from those items.")
+        {
+            ItemCount = itemCount;
+        }
+    }
+
     public class BrandServiceSP : IBrandService
     {
         private readonly string _connectionString;
@@ -58,6 +70,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateBrandAsync(CreateBrandRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Brand_Insert", connection)
             {
@@ -73,6 +87,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateBrandAsync(UpdateBrandRequest request)
         {
+            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Brand_Update", connection)
             {
@@ -87,20 +103,56 @@ namespace InventoryManagement.Api.Services
             return Convert.ToInt32(result) > 0;
         }
 
-        public async Task<bool> DeleteBrandAsync(int id, int modifiedById)
+        public async Task<bool> DeleteBrandAsync(int id, int modifiedById, bool force = false)
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("Brand_Delete", connection)
+            try
             {
-                CommandType = CommandType.StoredProcedure
-            };
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Brand_Delete", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
 
-            command.Parameters.AddWithValue("@Id", id);
-            command.Parameters.AddWithValue("@ModifiedById", modifiedById);
+                command.Parameters.AddWithValue("@Id", id);
+                command.Parameters.AddWithValue("@Force", force);
 
-            await connection.OpenAsync();
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result) > 0;
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                int affectedRows = 0;
+                int itemCount = 0;
+                if (await reader.ReadAsync())
+                {
+                    affectedRows = reader.GetInt32(reader.GetOrdinal("AffectedRows"));
+                    itemCount = reader.GetInt32(reader.GetOrdinal("ItemCount"));
+                }
+
+                if (affectedRows == 0 && itemCount > 0 && !force)
+                {
+                    throw new BrandInUseException(itemCount);
+                }
+
+                return affectedRows > 0;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                throw new InvalidOperationException("Cannot delete brand. It has associated records elsewhere in the system.", ex);
+            }
+        }
+
+        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var brands = await GetAllBrandsAsync();
+
+            var isDuplicate = brands.Any(b =>
+                (!excludeId.HasValue || b.Id != excludeId.Value) &&
+                string.Equals(b.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"A brand named '{normalizedName}' already exists.");
+            }
         }
 
         private static Brand MapReaderToBrand(SqlDataReader reader)

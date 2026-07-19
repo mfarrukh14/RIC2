@@ -158,6 +158,11 @@ namespace InventoryManagement.Api.Services
                 _logger.LogWarning(ex, "Cannot delete store with ID: {StoreId} due to dependencies", id);
                 throw new InvalidOperationException(ex.Message, ex);
             }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                _logger.LogWarning(ex, "Cannot delete store with ID: {StoreId} due to a foreign key constraint", id);
+                throw new InvalidOperationException("Cannot delete store. It has associated records elsewhere in the system.", ex);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting store with ID: {StoreId}", id);

@@ -2,6 +2,7 @@ using InventoryManagement.Api.DTOs;
 using InventoryManagement.Api.Models;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Linq;
 
 namespace InventoryManagement.Api.Services
 {
@@ -60,6 +61,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<VendorDto> CreateVendorAsync(CreateVendorDto createVendorDto)
         {
+            await EnsureNameNotDuplicateAsync(createVendorDto.Name, excludeId: null);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Vendor_Insert", connection)
             {
@@ -116,6 +119,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<VendorDto?> UpdateVendorAsync(int id, UpdateVendorDto updateVendorDto)
         {
+            await EnsureNameNotDuplicateAsync(updateVendorDto.Name, excludeId: id);
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Vendor_Update", connection)
             {
@@ -156,10 +161,11 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@FaxNo", DBNull.Value);
             command.Parameters.AddWithValue("@IsVerified", false);
             command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+            command.Parameters.AddWithValue("@IsActive", updateVendorDto.IsActive);
 
             await connection.OpenAsync();
             var result = await command.ExecuteReaderAsync();
-            
+
             int rowsAffected = 0;
             if (await result.ReadAsync())
             {
@@ -177,25 +183,46 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> DeleteVendorAsync(int id)
         {
-            using var connection = new SqlConnection(_connectionString);
-            using var command = new SqlCommand("Vendor_Delete", connection)
+            try
             {
-                CommandType = CommandType.StoredProcedure
-            };
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Vendor_Delete", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
 
-            command.Parameters.AddWithValue("@Id", id);
-            command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@Id", id);
 
-            await connection.OpenAsync();
-            var result = await command.ExecuteReaderAsync();
-            
-            int rowsAffected = 0;
-            if (await result.ReadAsync())
-            {
-                rowsAffected = result.GetInt32("RowsAffected");
+                await connection.OpenAsync();
+                var result = await command.ExecuteReaderAsync();
+
+                int rowsAffected = 0;
+                if (await result.ReadAsync())
+                {
+                    rowsAffected = result.GetInt32("RowsAffected");
+                }
+
+                return rowsAffected > 0;
             }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                throw new InvalidOperationException("Cannot delete vendor. It has associated records elsewhere in the system.", ex);
+            }
+        }
 
-            return rowsAffected > 0;
+        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var vendors = await GetAllVendorsAsync();
+
+            var isDuplicate = vendors.Any(v =>
+                (!excludeId.HasValue || v.Id != excludeId.Value) &&
+                string.Equals(v.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"A vendor named '{normalizedName}' already exists.");
+            }
         }
 
         private void AddVendorParameters(SqlCommand command, object vendorDto)

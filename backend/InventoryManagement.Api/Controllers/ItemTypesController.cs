@@ -61,6 +61,10 @@ namespace InventoryManagement.Api.Controllers
                 var itemTypeId = await _itemTypeService.CreateItemTypeAsync(request);
                 return CreatedAtAction(nameof(GetItemType), new { id = itemTypeId }, itemTypeId);
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
@@ -89,6 +93,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {

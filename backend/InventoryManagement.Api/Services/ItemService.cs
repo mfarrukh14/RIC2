@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using InventoryManagement.Api.Models;
 using System.Data;
+using System.Linq;
 
 namespace InventoryManagement.Api.Services
 {
@@ -134,11 +135,15 @@ namespace InventoryManagement.Api.Services
                 };
 
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
 
                 await connection.OpenAsync();
                 var affectedRows = await command.ExecuteScalarAsync();
                 return Convert.ToInt32(affectedRows) > 0;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                _logger.LogWarning(ex, "Cannot delete item with ID {Id} due to a foreign key constraint", id);
+                throw new InvalidOperationException("Cannot delete item. It has associated records elsewhere in the system.", ex);
             }
             catch (Exception ex)
             {
@@ -215,8 +220,25 @@ namespace InventoryManagement.Api.Services
             }
         }
 
+        private async Task EnsureCategoryNameNotDuplicateAsync(string name, int? excludeId)
+        {
+            var normalizedName = name?.Trim() ?? string.Empty;
+            var categories = await GetCategoriesAsync();
+
+            var isDuplicate = categories.Any(c =>
+                (!excludeId.HasValue || c.Id != excludeId.Value) &&
+                string.Equals(c.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                throw new InvalidOperationException($"A category named '{normalizedName}' already exists.");
+            }
+        }
+
         public async Task<int> CreateCategoryAsync(string name, string? description, bool isActive)
         {
+            await EnsureCategoryNameNotDuplicateAsync(name, excludeId: null);
+
             try
             {
                 using var connection = new SqlConnection(_connectionString);
@@ -242,6 +264,8 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateCategoryAsync(int id, string name, string? description, bool isActive)
         {
+            await EnsureCategoryNameNotDuplicateAsync(name, excludeId: id);
+
             try
             {
                 using var connection = new SqlConnection(_connectionString);
@@ -256,8 +280,8 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@IsActive", isActive);
 
                 await connection.OpenAsync();
-                var rowsAffected = await command.ExecuteNonQueryAsync();
-                return rowsAffected > 0;
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result) > 0;
             }
             catch (Exception ex)
             {
@@ -279,8 +303,13 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Id", id);
 
                 await connection.OpenAsync();
-                var rowsAffected = await command.ExecuteNonQueryAsync();
-                return rowsAffected > 0;
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result) > 0;
+            }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                _logger.LogWarning(ex, "Cannot delete category with ID {Id} due to a foreign key constraint", id);
+                throw new InvalidOperationException("Cannot delete category. It has associated records elsewhere in the system.", ex);
             }
             catch (Exception ex)
             {

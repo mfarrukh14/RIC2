@@ -175,6 +175,11 @@ namespace InventoryManagement.Api.Services
 
                 return false;
             }
+            catch (SqlException ex) when (ex.Number == 547)
+            {
+                _logger.LogWarning(ex, "Cannot delete stock type with ID {Id} due to a foreign key constraint", id);
+                throw new InvalidOperationException("Cannot delete stock type. It has associated records elsewhere in the system.", ex);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting stock type with ID {Id}", id);

@@ -64,6 +64,11 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest(new { message = "Item name is required" });
                 }
 
+                if (request.CategoryId == null)
+                {
+                    return BadRequest(new { message = "Category is required" });
+                }
+
                 var id = await _itemService.CreateAsync(request);
                 var item = await _itemService.GetByIdAsync(id);
                 
@@ -84,6 +89,11 @@ namespace InventoryManagement.Api.Controllers
                 if (string.IsNullOrWhiteSpace(request.Name))
                 {
                     return BadRequest(new { message = "Item name is required" });
+                }
+
+                if (request.CategoryId == null)
+                {
+                    return BadRequest(new { message = "Category is required" });
                 }
 
                 var success = await _itemService.UpdateAsync(id, request);
@@ -115,6 +125,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -170,6 +184,10 @@ namespace InventoryManagement.Api.Controllers
                 var id = await _itemService.CreateCategoryAsync(request.Name, request.Description, request.IsActive);
                 return CreatedAtAction(nameof(GetCategoryById), new { id }, new { id, message = "Category created successfully" });
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating category");
@@ -195,6 +213,10 @@ namespace InventoryManagement.Api.Controllers
 
                 return Ok(new { message = "Category updated successfully" });
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating category with ID {Id}", id);
@@ -214,6 +236,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return Ok(new { message = "Category deleted successfully" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {

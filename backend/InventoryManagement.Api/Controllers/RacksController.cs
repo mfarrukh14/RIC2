@@ -93,6 +93,10 @@ namespace InventoryManagement.Api.Controllers
                 await _rackService.DeleteRackAsync(id, userId);
                 return NoContent();
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting rack with ID {RackId}", id);

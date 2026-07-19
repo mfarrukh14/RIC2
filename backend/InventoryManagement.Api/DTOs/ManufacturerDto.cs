@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using InventoryManagement.Api.Validation;
 
 namespace InventoryManagement.Api.DTOs
 {
@@ -33,7 +34,7 @@ namespace InventoryManagement.Api.DTOs
         public string Name { get; set; } = string.Empty;
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? Email { get; set; }
 
         [StringLength(50)]
@@ -64,7 +65,7 @@ namespace InventoryManagement.Api.DTOs
         public string? ContactPersonName1 { get; set; }
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? ContactPersonEmail1 { get; set; }
 
         [StringLength(20)]
@@ -74,7 +75,7 @@ namespace InventoryManagement.Api.DTOs
         public string? ContactPersonName2 { get; set; }
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? ContactPersonEmail2 { get; set; }
 
         [StringLength(20)]
@@ -90,7 +91,7 @@ namespace InventoryManagement.Api.DTOs
         public string Name { get; set; } = string.Empty;
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? Email { get; set; }
 
         [StringLength(50)]
@@ -121,7 +122,7 @@ namespace InventoryManagement.Api.DTOs
         public string? ContactPersonName1 { get; set; }
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? ContactPersonEmail1 { get; set; }
 
         [StringLength(20)]
@@ -131,7 +132,7 @@ namespace InventoryManagement.Api.DTOs
         public string? ContactPersonName2 { get; set; }
 
         [StringLength(100)]
-        [EmailAddress]
+        [OptionalEmailAddress]
         public string? ContactPersonEmail2 { get; set; }
 
         [StringLength(20)]
