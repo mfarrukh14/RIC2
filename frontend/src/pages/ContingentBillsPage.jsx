@@ -13,7 +13,8 @@ const ContingentBillsPage = () => {
     financialYears: [],
     purchaseOrderTypes: [],
     vendors: [],
-    branches: []
+    branches: [],
+    departments: []
   });
 
   // Filter states
@@ -378,8 +379,11 @@ const ContingentBillsPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Budget Head</option>
-                    <option value="budget1">Budget Head 1</option>
-                    <option value="budget2">Budget Head 2</option>
+                    {lookupData.departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -826,6 +830,11 @@ const ContingentBillsPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Budget Head</option>
+              {lookupData.departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -1051,7 +1060,7 @@ const ContingentBillsPage = () => {
                       {bill.financialYearName || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {bill.budgetSetupId || '-'}
+                      {bill.budgetSetupName || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {bill.vendorName || '-'}

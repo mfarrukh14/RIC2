@@ -10,12 +10,14 @@ import {
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import { stockTypesApi } from '../services/stockTypesApi';
+import { itemTypeApi } from '../services/itemTypeApi';
 
 const StockConsumptionPage = () => {
   const [consumptions, setConsumptions] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,8 +25,8 @@ const StockConsumptionPage = () => {
 
   const [formData, setFormData] = useState({
     storeId: '',
-    type: 1,
-    branchId: '00000000-0000-0000-0000-000000000001',
+    type: '',
+    branchId: 1,
     remarks: '',
     details: [
       {
@@ -43,16 +45,18 @@ const StockConsumptionPage = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [consumptionsData, storesData, itemsData, stockTypesData] = await Promise.all([
+      const [consumptionsData, storesData, itemsData, stockTypesData, itemTypesData] = await Promise.all([
         getAllStockConsumptions(),
         getAllStores(),
         itemApi.getAll(),
-        stockTypesApi.getAllStockTypes()
+        stockTypesApi.getAllStockTypes(),
+        itemTypeApi.getAll()
       ]);
       setConsumptions(consumptionsData);
       setStores(storesData);
       setItems(itemsData);
       setStockTypes(stockTypesData);
+      setItemTypes((itemTypesData || []).filter((it) => it.isActive));
     } catch (err) {
       setError('Failed to load data: ' + err.message);
     } finally {
@@ -63,8 +67,8 @@ const StockConsumptionPage = () => {
   const resetForm = () => {
     setFormData({
       storeId: '',
-      type: 1,
-      branchId: '00000000-0000-0000-0000-000000000001',
+      type: '',
+      branchId: 1,
       remarks: '',
       details: [
         {
@@ -83,9 +87,19 @@ const StockConsumptionPage = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
+      // Previously picked items may not belong to the newly selected type, so clear
+      // them rather than silently submitting an item that no longer matches.
+      ...(name === 'type'
+        ? { details: prev.details.map(d => ({ ...d, itemId: '' })) }
+        : {})
     }));
   };
+
+  // Only active items, and only those belonging to the selected item type (if any).
+  const filteredItems = items.filter(item =>
+    item.isActive && (!formData.type || item.itemTypeId === parseInt(formData.type))
+  );
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...formData.details];
@@ -130,12 +144,9 @@ const StockConsumptionPage = () => {
     setError(null);
 
     try {
-      // Convert integer storeId to GUID format by padding with zeros
-      const storeIdGuid = `00000000-0000-0000-0000-${String(formData.storeId).padStart(12, '0')}`;
-      
       const payload = {
-        storeId: storeIdGuid,
-        branchId: formData.branchId,
+        storeId: parseInt(formData.storeId),
+        branchId: parseInt(formData.branchId),
         type: parseInt(formData.type),
         remarks: formData.remarks,
         details: formData.details.map(detail => ({
@@ -155,7 +166,7 @@ const StockConsumptionPage = () => {
       await loadData();
       resetForm();
     } catch (err) {
-      setError('Failed to save: ' + err.message);
+      setError('Failed to save: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -262,9 +273,12 @@ const StockConsumptionPage = () => {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="1">Type 1</option>
-                  <option value="2">Type 2</option>
-                  <option value="3">Type 3</option>
+                  <option value="">Select Type</option>
+                  {itemTypes.map(itemType => (
+                    <option key={itemType.id} value={itemType.id}>
+                      {itemType.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -316,7 +330,7 @@ const StockConsumptionPage = () => {
                             className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="">Select Item</option>
-                            {items.map(item => (
+                            {filteredItems.map(item => (
                               <option key={item.id} value={item.id}>
                                 {item.name}
                               </option>

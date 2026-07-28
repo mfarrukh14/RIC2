@@ -30,7 +30,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.AssetAllocations
+    UPDATE Inv.AssetAllocations
     SET
         Notes = @Remarks,
         AllocatedDate = @AllocatedDate,

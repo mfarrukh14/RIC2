@@ -2,17 +2,33 @@ import React,{ useState, useEffect } from 'react';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { getExpiredStock } from '../services/expiredStockApi';
 import { getAllStores } from '../services/storeApi';
+import itemApi from '../services/itemApi';
+
+const toDateInput = (date) => date.toISOString().split('T')[0];
+
+// Expired stock is inherently backward-looking (the report already hard-filters to
+// ExpiryDate < today), so the sensible default is "the last several years up to
+// today" rather than a stale hardcoded 2025 range.
+const getDefaultDateRange = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - 5);
+  return {
+    startDate: toDateInput(start),
+    endDate: toDateInput(end)
+  };
+};
 
 const ExpiredStockPage = () => {
   const [expiredStocks, setExpiredStocks] = useState([]);
   const [stores, setStores] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const [filters, setFilters] = useState({
     storeName: '',
-    startDate: '2025-07-30',
-    endDate: '2025-10-28',
+    ...getDefaultDateRange(),
     item: ''
   });
 
@@ -20,16 +36,23 @@ const ExpiredStockPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadStores();
+    loadLookupData();
     handleSearch();
   }, []);
 
-  const loadStores = async () => {
+  const loadLookupData = async () => {
     try {
       const storesData = await getAllStores();
       setStores(storesData);
     } catch (err) {
       console.error('Error loading stores:', err);
+    }
+
+    try {
+      const itemsData = await itemApi.getAll();
+      setItems((itemsData || []).filter(i => i.isActive));
+    } catch (err) {
+      console.error('Error loading items:', err);
     }
   };
 
@@ -116,7 +139,7 @@ const ExpiredStockPage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Accounts Store</option>
+              <option value="">All Stores</option>
               {stores.map(store => (
                 <option key={store.storeId} value={store.storeName}>
                   {store.storeName}
@@ -153,14 +176,30 @@ const ExpiredStockPage = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Item
             </label>
-            <input
-              type="text"
+            <select
               name="item"
               value={filters.item}
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            >
+              <option value="">All Items</option>
+              {items.map(item => (
+                <option key={item.id} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
           </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+          >
+            {loading ? 'Searching...' : 'Search'}
+          </button>
         </div>
       </div>
 

@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Update existing manufacturer
 -- =============================================
-CREATE PROCEDURE [dbo].[Manufacturer_Update]
+CREATE OR ALTER PROCEDURE [dbo].[Manufacturer_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
@@ -28,14 +28,14 @@ CREATE PROCEDURE [dbo].[Manufacturer_Update]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    UPDATE dbo.Manufacturers
+
+    UPDATE Pharmacy.Manufacturers
     SET
         Name = @Name,
         Description = @Description,
         Email = @Email,
         Address = @Address,
-        CNo = @CNo,
+        MobileNo = @CNo,
         NTN = @NTN,
         STN = @STN,
         CPName1 = @CPName1,
@@ -52,7 +52,7 @@ BEGIN
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,
         ModifiedOn = GETUTCDATE()
-    WHERE Id = @Id;
-    
+    WHERE ManufacturerId = @Id;
+
     SELECT @@ROWCOUNT as AffectedRows;
 END

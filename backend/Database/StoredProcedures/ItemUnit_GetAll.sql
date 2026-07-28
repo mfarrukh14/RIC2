@@ -21,6 +21,5 @@ BEGIN
         br.Name as BranchName
     FROM dbo.ItemUnits iu
     LEFT JOIN dbo.Branches br ON iu.BranchId = br.Id
-    WHERE iu.IsActive = 1
     ORDER BY iu.Name;
 END

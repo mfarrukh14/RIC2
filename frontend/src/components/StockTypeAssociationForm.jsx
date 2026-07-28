@@ -132,8 +132,8 @@ const StockTypeAssociationForm = ({ association, onSave, onCancel, isEditing = f
             >
               <option value="">Select Store</option>
               {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
+                <option key={store.storeId} value={store.storeId}>
+                  {store.storeName}
                 </option>
               ))}
             </select>

@@ -3,12 +3,12 @@
 -- Create date: 2025-09-30
 -- Description: Get all vendors with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[Vendor_GetAll]
+CREATE OR ALTER PROCEDURE [dbo].[Vendor_GetAll]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    SELECT
         v.Id,
         v.Name,
         v.Description,
@@ -54,14 +54,13 @@ BEGIN
         v.CreditLimit,
         v.FaxNo,
         v.IsVerified
-    FROM dbo.Vendors v
-    LEFT JOIN dbo.Countries c ON v.CountryId = c.Id
-    LEFT JOIN dbo.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
-    LEFT JOIN dbo.Cities ct ON v.CityId = ct.Id
-    LEFT JOIN dbo.Branches b ON v.BranchId = b.Id
-    LEFT JOIN dbo.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
-    LEFT JOIN dbo.AccountCOAs ap ON v.AccountPayableId = ap.Id
-    LEFT JOIN dbo.AccountCOAs ar ON v.AccountReceivableId = ar.Id
-    WHERE v.IsActive = 1
+    FROM Inv.Vendors v
+    LEFT JOIN Inv.Countries c ON v.CountryId = c.Id
+    LEFT JOIN Inv.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
+    LEFT JOIN Inv.Cities ct ON v.CityId = ct.Id
+    LEFT JOIN Inv.Branches b ON v.BranchId = b.Id
+    LEFT JOIN Inv.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
+    LEFT JOIN Inv.AccountCOAs ap ON v.AccountPayableId = ap.Id
+    LEFT JOIN Inv.AccountCOAs ar ON v.AccountReceivableId = ar.Id
     ORDER BY v.Name;
 END

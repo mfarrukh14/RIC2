@@ -23,6 +23,7 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ItemTypeId", (object?)request.ItemTypeId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ItemIds", (object?)request.ItemIds ?? DBNull.Value);
             command.Parameters.AddWithValue("@ManufacturerIds", (object?)request.ManufacturerIds ?? DBNull.Value);
 
@@ -58,28 +59,29 @@ namespace InventoryManagement.Api.Services
             
             command.Parameters.AddWithValue("@StoreId", request.StoreId);
             command.Parameters.AddWithValue("@BranchId", request.BranchId);
-            command.Parameters.AddWithValue("@StockAuditDate", request.StockAuditDate);
-            command.Parameters.AddWithValue("@Remarks", (object?)request.Remarks ?? DBNull.Value);
+            // The deployed StockAudit_Insert proc names these @AuditDate/@Notes, not @StockAuditDate/@Remarks.
+            command.Parameters.AddWithValue("@AuditDate", request.StockAuditDate);
+            command.Parameters.AddWithValue("@Notes", (object?)request.Remarks ?? DBNull.Value);
             command.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
-            
+
             if (await reader.ReadAsync())
             {
                 return new StockAudit
                 {
-                    Id = reader.GetGuid(reader.GetOrdinal("Id")),
-                    StoreId = reader.GetGuid(reader.GetOrdinal("StoreId")),
-                    BranchId = reader.GetGuid(reader.GetOrdinal("BranchId")),
-                    StockAuditDate = reader.GetDateTime(reader.GetOrdinal("StockAuditDate")),
-                    Remarks = reader.IsDBNull(reader.GetOrdinal("Remarks")) ? null : reader.GetString(reader.GetOrdinal("Remarks")),
+                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                    BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
+                    StockAuditDate = reader.GetDateTime(reader.GetOrdinal("AuditDate")),
+                    Remarks = reader.IsDBNull(reader.GetOrdinal("Notes")) ? null : reader.GetString(reader.GetOrdinal("Notes")),
                     IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
-                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetGuid(reader.GetOrdinal("CreatedById")),
+                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                     CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
-                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetGuid(reader.GetOrdinal("ModifiedById")),
+                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
                     ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn")),
-                    IsDeleted = reader.IsDBNull(reader.GetOrdinal("IsDeleted")) ? null : reader.GetBoolean(reader.GetOrdinal("IsDeleted"))
+                    IsDeleted = null
                 };
             }
 

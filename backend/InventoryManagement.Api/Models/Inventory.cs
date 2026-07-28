@@ -289,33 +289,34 @@ namespace InventoryManagement.Api.Models
     // Stock Audit models
     public class StockAudit
     {
-        public Guid Id { get; set; }
-        public Guid StoreId { get; set; }
-        public Guid BranchId { get; set; }
+        public int Id { get; set; }
+        public int StoreId { get; set; }
+        public int BranchId { get; set; }
         public DateTime StockAuditDate { get; set; }
         public string? Remarks { get; set; }
         public bool IsActive { get; set; }
-        public Guid? CreatedById { get; set; }
+        public int? CreatedById { get; set; }
         public DateTime CreatedOn { get; set; }
-        public Guid? ModifiedById { get; set; }
+        public int? ModifiedById { get; set; }
         public DateTime? ModifiedOn { get; set; }
         public bool? IsDeleted { get; set; }
     }
 
     public class StockAuditRequest
     {
-        public Guid StoreId { get; set; }
-        public Guid BranchId { get; set; }
+        public int StoreId { get; set; }
+        public int BranchId { get; set; }
         public DateTime StockAuditDate { get; set; }
         public string? Remarks { get; set; }
-        public Guid? CreatedById { get; set; }
+        public int? CreatedById { get; set; }
     }
 
     public class StockAuditSearchRequest
     {
-        public Guid? BranchId { get; set; }
-        public Guid? StoreId { get; set; }
+        public int? BranchId { get; set; }
+        public int? StoreId { get; set; }
         public int? ItemTypeId { get; set; }
+        public int? StockTypeId { get; set; }
         public string? ItemIds { get; set; }
         public string? ManufacturerIds { get; set; }
     }
@@ -341,10 +342,9 @@ namespace InventoryManagement.Api.Models
         public int? StoreId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public string ItemType { get; set; } = "All";
+        public int? ItemTypeId { get; set; }
         public string? ItemIds { get; set; }
         public int? StockTypeId { get; set; }
-        public string Type { get; set; } = "All";
         public string SaleType { get; set; } = "OverAll";
     }
 

@@ -37,7 +37,7 @@ const PackingList = ({ onEdit, onAdd }) => {
       await packingApi.delete(id);
       await loadPackings(); // Refresh the list
     } catch (err) {
-      setError('Failed to delete packing: ' + (err.response?.data || err.message));
+      setError('Failed to delete packing: ' + (err.response?.data?.message || err.response?.data || err.message));
       console.error('Error deleting packing:', err);
     }
   };

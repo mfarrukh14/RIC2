@@ -7,7 +7,6 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import demandRequestApi from '../services/demandRequestApi';
-import { branchApi } from '../services/branchApi';
 import { getAllStores } from '../services/storeApi';
 import stockTypesApi from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
@@ -103,7 +102,6 @@ const PlaceDemandPage = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [lookups, setLookups] = useState({
-    branches: [],
     stores: [],
     stockTypes: [],
     items: []
@@ -115,10 +113,14 @@ const PlaceDemandPage = () => {
     loadLookups();
   }, []);
 
-  // "Branch Request By" is always scoped to the logged-in user's own branch.
+  // "Branch Request By" (filter) and "Branch Request To" (create form) are both
+  // always scoped to the logged-in user's own branch, same as everywhere else in
+  // this app - a demand request is placed BY your branch, not on behalf of any
+  // branch you pick from a list.
   useEffect(() => {
     if (session?.branchId) {
       setFilters((current) => ({ ...current, branchId: session.branchId }));
+      setFormData((current) => ({ ...current, branchId: session.branchId }));
     }
   }, [session?.branchId]);
 
@@ -132,15 +134,13 @@ const PlaceDemandPage = () => {
 
   const loadLookups = async () => {
     try {
-      const [branches, stores, stockTypes, items] = await Promise.all([
-        branchApi.getAll(),
+      const [stores, stockTypes, items] = await Promise.all([
         getAllStores(),
         stockTypesApi.getAllStockTypes(),
         itemApi.getAll()
       ]);
 
       setLookups({
-        branches,
         stores,
         stockTypes,
         items
@@ -224,7 +224,7 @@ const PlaceDemandPage = () => {
   };
 
   const resetForm = () => {
-    setFormData(emptyForm());
+    setFormData({ ...emptyForm(), branchId: session?.branchId || '' });
   };
 
   const openCreateModal = () => {
@@ -562,23 +562,7 @@ const PlaceDemandPage = () => {
 
             <form onSubmit={handleSubmit} className="px-4 py-5 sm:px-6">
               <div className="grid grid-cols-1 gap-x-4 gap-y-6 lg:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Branch Request To<span className="text-rose-500">*</span></label>
-                  <select
-                    name="branchId"
-                    value={formData.branchId}
-                    onChange={handleFormChange}
-                    className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
-                    required
-                  >
-                    <option value="">Select branch</option>
-                    {lookups.branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <BranchField label="Branch Request To" />
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Store Request To<span className="text-rose-500">*</span></label>

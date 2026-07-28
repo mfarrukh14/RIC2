@@ -44,6 +44,7 @@ builder.Services.AddScoped<IPackingService, PackingServiceSP>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeServiceSP>();
 builder.Services.AddScoped<IItemUnitService, ItemUnitServiceSP>();
 builder.Services.AddScoped<IAssetAllocationService, AssetAllocationService>();
+builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IGRNService, GRNService>();

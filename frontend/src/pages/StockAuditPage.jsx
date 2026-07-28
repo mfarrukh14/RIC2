@@ -35,7 +35,7 @@ const StockAuditPage = () => {
     categoryId: null,
     itemIds: '',
     manufacturerIds: '',
-    type: 'All'
+    stockTypeId: null
   });
 
   // Audit form
@@ -51,6 +51,7 @@ const StockAuditPage = () => {
   const [categories, setCategories] = useState([]);
   const [itemList, setItemList] = useState([]);
   const [manufacturers, setManufacturers] = useState([]);
+  const [stockTypes, setStockTypes] = useState([]);
   
   // Selected items and manufacturers for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
@@ -78,11 +79,12 @@ const StockAuditPage = () => {
       const data = await inventoryApi.getLookupData();
       setStores(normalizeStores(data.stores));
       setItemList(data.items || []);
-      setManufacturers((data.brands || []).map((brand) => ({
-        id: brand.id ?? brand.brandId,
-        name: brand.name ?? brand.brandName,
+      setManufacturers((data.manufacturers || []).map((manufacturer) => ({
+        id: manufacturer.id ?? manufacturer.manufacturerId,
+        name: manufacturer.name ?? manufacturer.manufacturerName,
       })));
       setCategories(data.categories || []);
+      setStockTypes(data.stockTypes || []);
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }
@@ -94,8 +96,9 @@ const StockAuditPage = () => {
     setSuccessMessage('');
     try {
       const searchFilters = {
-        ...filters,
-        storeId: filters.storeId ? convertStoreIdToGuid(filters.storeId) : null,
+        branchId: filters.branchId ? Number(filters.branchId) : null,
+        storeId: filters.storeId ? Number(filters.storeId) : null,
+        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
         itemIds: selectedItems.join(','),
         manufacturerIds: selectedManufacturers.join(',')
       };
@@ -107,14 +110,6 @@ const StockAuditPage = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const convertStoreIdToGuid = (storeId) => {
-    if (typeof storeId === 'number' || !storeId.includes('-')) {
-      const paddedId = String(storeId).padStart(8, '0');
-      return `${paddedId}-0000-0000-0000-000000000000`;
-    }
-    return storeId;
   };
 
   const handleFilterChange = (e) => {
@@ -178,8 +173,8 @@ const StockAuditPage = () => {
 
     try {
       const auditData = {
-        storeId: convertStoreIdToGuid(filters.storeId),
-        branchId: convertStoreIdToGuid(filters.branchId || 1),
+        storeId: Number(filters.storeId),
+        branchId: Number(filters.branchId || session?.branchId),
         stockAuditDate: new Date(auditForm.stockAuditDate).toISOString(),
         remarks: auditForm.remarks
       };
@@ -248,7 +243,7 @@ const StockAuditPage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="">ED OPD Store</option>
+              <option value="">Select Store</option>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -364,20 +359,23 @@ const StockAuditPage = () => {
             </select>
           </div>
 
-          {/* Type */}
+          {/* Stock Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Type
             </label>
             <select
-              name="type"
-              value={filters.type}
+              name="stockTypeId"
+              value={filters.stockTypeId || ''}
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="All">All</option>
-              <option value="Type1">Type 1</option>
-              <option value="Type2">Type 2</option>
+              <option value="">All</option>
+              {stockTypes.map((stockType) => (
+                <option key={stockType.id} value={stockType.id}>
+                  {stockType.name}
+                </option>
+              ))}
             </select>
           </div>
 

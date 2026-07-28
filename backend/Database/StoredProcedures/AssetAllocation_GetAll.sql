@@ -23,43 +23,10 @@ BEGIN
         IsActive BIT NOT NULL
     );
 
-    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
-    BEGIN
-        BEGIN TRY
-            CREATE TABLE #DropdownUsers
-            (
-                value INT NULL,
-                text NVARCHAR(4000) NULL
-            );
-
-            INSERT INTO #DropdownUsers (value, text)
-            EXEC [DropDown].[DD_Users];
-
-            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-            SELECT
-                du.value,
-                du.text,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                CAST(1 AS BIT)
-            FROM
-            (
-                SELECT
-                    value,
-                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-                FROM #DropdownUsers
-                WHERE value IS NOT NULL
-                GROUP BY value
-            ) du
-            WHERE du.text IS NOT NULL;
-        END TRY
-        BEGIN CATCH
-            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
-            -- Fall back to dbo.Users below instead of failing the whole procedure.
-        END CATCH
-    END
+    -- Note: DropDown.DD_Users is intentionally not used here. It requires mandatory
+    -- @UserTypeId/@BranchId/@OrganizationId parameters we have no generic value for,
+    -- and Microsoft.Data.SqlClient surfaces its parameter error as a SqlException even
+    -- when caught by TRY/CATCH in T-SQL. dbo.Users below is sufficient on its own.
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
         INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
@@ -118,8 +85,8 @@ BEGIN
         sd.Name as SubDepartmentName,
         aa.RoomId,
         r.Name as RoomName,
-        r.Building,
-        r.Floor,
+        bld.Name as Building,
+        flr.Name as Floor,
         aa.ItemId,
         aa.BranchId,
         b.Name as BranchName,
@@ -140,13 +107,15 @@ BEGIN
         aa.CreatedOn,
         aa.ModifiedById,
         aa.ModifiedOn
-    FROM dbo.AssetAllocations aa
+    FROM Inv.AssetAllocations aa
     LEFT JOIN #UserLookup u ON aa.UserId = u.Id
-    LEFT JOIN dbo.Departments d ON aa.DepartmentId = d.Id
-    LEFT JOIN dbo.SubDepartments sd ON aa.SubDepartmentId = sd.Id
-    LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
-    LEFT JOIN dbo.Branches b ON aa.BranchId = b.Id
-    LEFT JOIN dbo.Items i ON aa.ItemId = i.Id
-    WHERE aa.IsActive = 1
+    LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
+    LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
+    LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
+    LEFT JOIN dbo.Rooms dr ON aa.RoomId = dr.RID
+    LEFT JOIN dbo.Building bld ON dr.BID = bld.BID
+    LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
+    LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
+    LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
     ORDER BY aa.AllocatedDate DESC, aa.Id DESC;
 END

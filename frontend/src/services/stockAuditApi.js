@@ -1,4 +1,4 @@
-const API_URL = 'http://10.10.10.67:5100/api';
+const API_URL = 'http://localhost:5100/api';
 
 export const stockAuditApi = {
     // Search stock audit items

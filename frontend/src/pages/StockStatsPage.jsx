@@ -1,25 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { stockStatsApi } from '../services/stockStatsApi';
 import inventoryApi from '../services/inventoryApi';
+import { itemTypeApi } from '../services/itemTypeApi';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
+
+// Default to the last 30 days up to now, instead of a hardcoded stale range,
+// so the page shows recent activity out of the box.
+const toLocalDateTimeInput = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const getDefaultDateRange = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  start.setHours(0, 0, 0, 0);
+  return {
+    startDate: toLocalDateTimeInput(start),
+    endDate: toLocalDateTimeInput(end)
+  };
+};
 
 const StockStatsPage = () => {
   const { session } = useSession();
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Filters
   const [filters, setFilters] = useState({
     branchId: null,
     storeId: null,
-    startDate: '2025-09-01T00:00',
-    endDate: '2025-09-30T23:59',
-    itemType: 'All',
+    ...getDefaultDateRange(),
+    itemTypeId: null,
     itemIds: '',
     stockTypeId: null,
-    type: 'All',
     saleType: 'OverAll'
   });
 
@@ -27,6 +44,7 @@ const StockStatsPage = () => {
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   
   // Selected items for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
@@ -65,6 +83,13 @@ const StockStatsPage = () => {
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }
+
+    try {
+      const allItemTypes = await itemTypeApi.getAll();
+      setItemTypes((allItemTypes || []).filter((it) => it.isActive));
+    } catch (err) {
+      console.error('Error loading item types:', err);
+    }
   };
 
   const handleSearch = async () => {
@@ -73,6 +98,10 @@ const StockStatsPage = () => {
     try {
       const searchFilters = {
         ...filters,
+        branchId: filters.branchId ? Number(filters.branchId) : null,
+        storeId: filters.storeId ? Number(filters.storeId) : null,
+        itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
+        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
         itemIds: selectedItems.join(',')
       };
       const data = await stockStatsApi.searchStats(searchFilters);
@@ -184,57 +213,24 @@ const StockStatsPage = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Item Type Radio Buttons */}
+          {/* Item Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Item Type
             </label>
-            <div className="flex items-center gap-4 mt-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="All"
-                  checked={filters.itemType === 'All'}
-                  onChange={handleFilterChange}
-                  className="mr-1"
-                />
-                <span className="text-sm">All</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Medicine"
-                  checked={filters.itemType === 'Medicine'}
-                  onChange={handleFilterChange}
-                  className="mr-1"
-                />
-                <span className="text-sm">Medicine(s)</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Disposable"
-                  checked={filters.itemType === 'Disposable'}
-                  onChange={handleFilterChange}
-                  className="mr-1"
-                />
-                <span className="text-sm">Disposable(s)</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Item"
-                  checked={filters.itemType === 'Item'}
-                  onChange={handleFilterChange}
-                  className="mr-1"
-                />
-                <span className="text-sm">Item(s)</span>
-              </label>
-            </div>
+            <select
+              name="itemTypeId"
+              value={filters.itemTypeId || ''}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All</option>
+              {itemTypes.map((itemType) => (
+                <option key={itemType.id} value={itemType.id}>
+                  {itemType.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Stock Type */}
@@ -303,23 +299,6 @@ const StockStatsPage = () => {
               </select>
             </div>
           </div>
-
-          {/* Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type
-            </label>
-            <select
-              name="type"
-              value={filters.type}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="All">All</option>
-              <option value="Type1">Type 1</option>
-              <option value="Type2">Type 2</option>
-            </select>
-          </div>
         </div>
 
         {/* Sale Type Radio Buttons */}
@@ -384,6 +363,16 @@ const StockStatsPage = () => {
               <span className="text-sm">Out Door Pharmacy</span>
             </label>
           </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+          >
+            {loading ? 'Generating...' : 'Generate'}
+          </button>
         </div>
       </div>
 

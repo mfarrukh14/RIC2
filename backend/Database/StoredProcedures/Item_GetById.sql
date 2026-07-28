@@ -78,7 +78,7 @@ BEGIN
         i.PackageSize
     FROM dbo.Items i
     LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN dbo.Brands b ON i.BrandId = b.Id
+    LEFT JOIN Inv.Brands b ON i.BrandId = b.Id
     LEFT JOIN dbo.Packings p ON i.PackingId = p.Id
     LEFT JOIN dbo.ItemUnits u ON i.UnitId = u.Id
     LEFT JOIN dbo.Prices pr ON i.PriceId = pr.Id
@@ -91,6 +91,6 @@ BEGIN
     LEFT JOIN dbo.TaxRates tr ON i.TaxRateId = tr.Id
     LEFT JOIN dbo.TaxDescriptions td ON i.TaxDescriptionId = td.Id
     LEFT JOIN dbo.TaxTypes tt ON i.TaxTypeId = tt.Id
-    WHERE i.Id = @Id AND i.IsActive = 1;
+    WHERE i.Id = @Id;
 END
 GO

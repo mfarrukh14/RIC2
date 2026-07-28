@@ -59,43 +59,10 @@ BEGIN
         IsActive BIT NOT NULL
     );
 
-    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
-    BEGIN
-        BEGIN TRY
-            CREATE TABLE #DropdownUsers
-            (
-                value INT NULL,
-                text NVARCHAR(4000) NULL
-            );
-
-            INSERT INTO #DropdownUsers (value, text)
-            EXEC [DropDown].[DD_Users];
-
-            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-            SELECT
-                du.value,
-                du.text,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                CAST(1 AS BIT)
-            FROM
-            (
-                SELECT
-                    value,
-                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-                FROM #DropdownUsers
-                WHERE value IS NOT NULL
-                GROUP BY value
-            ) du
-            WHERE du.text IS NOT NULL;
-        END TRY
-        BEGIN CATCH
-            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
-            -- Fall back to dbo.Users below instead of failing the whole procedure.
-        END CATCH
-    END
+    -- Note: DropDown.DD_Users is intentionally not used here. It requires mandatory
+    -- @UserTypeId/@BranchId/@OrganizationId parameters we have no generic value for,
+    -- and Microsoft.Data.SqlClient surfaces its parameter error as a SqlException even
+    -- when caught by TRY/CATCH in T-SQL. dbo.Users below is sufficient on its own.
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
         INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
@@ -138,9 +105,8 @@ BEGIN
                   WHERE existing.Id = raw.Id
               );';
     END
-    END
 
-    SELECT 
+    SELECT
         aa.Id,
         aa.Notes AS Remarks,
         aa.AllocatedDate,
@@ -177,13 +143,13 @@ BEGIN
         aa.CreatedOn,
         aa.ModifiedById,
         aa.ModifiedOn
-    FROM dbo.AssetAllocations aa
+    FROM Inv.AssetAllocations aa
     LEFT JOIN #UserLookup u ON aa.UserId = u.Id
-    LEFT JOIN dbo.Departments d ON aa.DepartmentId = d.Id
-    LEFT JOIN dbo.SubDepartments sd ON aa.SubDepartmentId = sd.Id
-    LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
-    LEFT JOIN dbo.Branches b ON aa.BranchId = b.Id
-    LEFT JOIN dbo.Items i ON aa.ItemId = i.Id
+    LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
+    LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
+    LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
+    LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
+    LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
     WHERE aa.IsActive = 1
     ORDER BY aa.AllocatedDate DESC, aa.Id DESC;
 END
@@ -207,43 +173,10 @@ BEGIN
         IsActive BIT NOT NULL
     );
 
-    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
-    BEGIN
-        BEGIN TRY
-            CREATE TABLE #DropdownUsers
-            (
-                value INT NULL,
-                text NVARCHAR(4000) NULL
-            );
-
-            INSERT INTO #DropdownUsers (value, text)
-            EXEC [DropDown].[DD_Users];
-
-            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-            SELECT
-                du.value,
-                du.text,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                CAST(1 AS BIT)
-            FROM
-            (
-                SELECT
-                    value,
-                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-                FROM #DropdownUsers
-                WHERE value IS NOT NULL
-                GROUP BY value
-            ) du
-            WHERE du.text IS NOT NULL;
-        END TRY
-        BEGIN CATCH
-            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
-            -- Fall back to dbo.Users below instead of failing the whole procedure.
-        END CATCH
-    END
+    -- Note: DropDown.DD_Users is intentionally not used here. It requires mandatory
+    -- @UserTypeId/@BranchId/@OrganizationId parameters we have no generic value for,
+    -- and Microsoft.Data.SqlClient surfaces its parameter error as a SqlException even
+    -- when caught by TRY/CATCH in T-SQL. dbo.Users below is sufficient on its own.
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
         INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
@@ -287,7 +220,7 @@ BEGIN
               );';
     END
 
-    SELECT 
+    SELECT
         aa.Id,
         aa.Notes AS Remarks,
         aa.AllocatedDate,
@@ -324,13 +257,13 @@ BEGIN
         aa.CreatedOn,
         aa.ModifiedById,
         aa.ModifiedOn
-    FROM dbo.AssetAllocations aa
+    FROM Inv.AssetAllocations aa
     LEFT JOIN #UserLookup u ON aa.UserId = u.Id
-    LEFT JOIN dbo.Departments d ON aa.DepartmentId = d.Id
-    LEFT JOIN dbo.SubDepartments sd ON aa.SubDepartmentId = sd.Id
-    LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
-    LEFT JOIN dbo.Branches b ON aa.BranchId = b.Id
-    LEFT JOIN dbo.Items i ON aa.ItemId = i.Id
+    LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
+    LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
+    LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
+    LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
+    LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
     WHERE aa.Id = @Id AND aa.IsActive = 1;
 END
 GO
@@ -357,7 +290,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.AssetAllocations (
+    INSERT INTO Inv.AssetAllocations (
         Remarks, AllocatedDate, UserId, DepartmentId, SubDepartmentId,
         RoomId, ItemId, BranchId, Quantity, InventoryItemId,
         SysBatchNo, BatchNo, IsActive, CreatedById, CreatedOn,
@@ -375,7 +308,7 @@ BEGIN
     -- Update inventory item status to 'Allocated' if InventoryItemId is provided
     IF @InventoryItemId IS NOT NULL
     BEGIN
-        UPDATE dbo.InventoryItems 
+        UPDATE Inv.InventoryItems 
         SET Status = 'Allocated', ModifiedOn = GETUTCDATE()
         WHERE Id = @InventoryItemId;
     END
@@ -411,10 +344,10 @@ BEGIN
     -- Get the current InventoryItemId before update
     DECLARE @CurrentInventoryItemId INT;
     SELECT @CurrentInventoryItemId = InventoryItemId 
-    FROM dbo.AssetAllocations 
+    FROM Inv.AssetAllocations 
     WHERE Id = @Id;
     
-    UPDATE dbo.AssetAllocations
+    UPDATE Inv.AssetAllocations
     SET
         Remarks = @Remarks,
         AllocatedDate = @AllocatedDate,
@@ -442,14 +375,14 @@ BEGIN
         IF @IsReturn = 1
         BEGIN
             -- Item is being returned
-            UPDATE dbo.InventoryItems 
+            UPDATE Inv.InventoryItems 
             SET Status = 'Available', ModifiedOn = GETUTCDATE()
             WHERE Id = @InventoryItemId;
         END
         ELSE
         BEGIN
             -- Item is still allocated
-            UPDATE dbo.InventoryItems 
+            UPDATE Inv.InventoryItems 
             SET Status = 'Allocated', ModifiedOn = GETUTCDATE()
             WHERE Id = @InventoryItemId;
         END
@@ -458,7 +391,7 @@ BEGIN
     -- If the inventory item changed, update the previous item status
     IF @CurrentInventoryItemId IS NOT NULL AND @CurrentInventoryItemId != @InventoryItemId
     BEGIN
-        UPDATE dbo.InventoryItems 
+        UPDATE Inv.InventoryItems 
         SET Status = 'Available', ModifiedOn = GETUTCDATE()
         WHERE Id = @CurrentInventoryItemId;
     END
@@ -478,10 +411,10 @@ BEGIN
     -- Get the InventoryItemId before soft delete
     DECLARE @InventoryItemId INT;
     SELECT @InventoryItemId = InventoryItemId 
-    FROM dbo.AssetAllocations 
+    FROM Inv.AssetAllocations 
     WHERE Id = @Id;
     
-    UPDATE dbo.AssetAllocations
+    UPDATE Inv.AssetAllocations
     SET
         IsActive = 0,
         IsDeleted = 1,
@@ -492,7 +425,7 @@ BEGIN
     -- Update inventory item status back to available
     IF @InventoryItemId IS NOT NULL
     BEGIN
-        UPDATE dbo.InventoryItems 
+        UPDATE Inv.InventoryItems 
         SET Status = 'Available', ModifiedOn = GETUTCDATE()
         WHERE Id = @InventoryItemId;
     END
@@ -518,38 +451,10 @@ BEGIN
         IsActive BIT NOT NULL
     );
 
-    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
-    BEGIN
-        CREATE TABLE #DropdownUsers
-        (
-            value INT NULL,
-            text NVARCHAR(4000) NULL
-        );
-
-        INSERT INTO #DropdownUsers (value, text)
-        EXEC [DropDown].[DD_Users];
-
-        INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-        SELECT
-            du.value AS Id,
-            du.text AS Name,
-            NULL AS Email,
-            NULL AS UserName,
-            NULL AS Department,
-            NULL AS Designation,
-            CAST(1 AS BIT) AS IsActive
-        FROM
-        (
-            SELECT
-                value,
-                MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-            FROM #DropdownUsers
-            WHERE value IS NOT NULL
-            GROUP BY value
-        ) du
-        WHERE du.text IS NOT NULL;
-    END
-
+    -- Note: DropDown.DD_Users is intentionally not used here. It requires mandatory
+    -- @UserTypeId/@BranchId/@OrganizationId parameters we have no generic value for,
+    -- and Microsoft.Data.SqlClient surfaces its parameter error as a SqlException even
+    -- when caught by TRY/CATCH in T-SQL. dbo.Users below is sufficient on its own.
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
         INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
@@ -621,7 +526,7 @@ BEGIN
         Building,
         Capacity,
         IsActive
-    FROM dbo.Rooms
+    FROM Inv.Rooms
     WHERE IsActive = 1
     ORDER BY Building, Floor, Name;
 END
@@ -639,7 +544,7 @@ BEGIN
         Description,
         Head,
         IsActive
-    FROM dbo.Departments
+    FROM Inv.Departments
     WHERE IsActive = 1
     ORDER BY Name;
 END
@@ -658,8 +563,8 @@ BEGIN
         sd.DepartmentId,
         d.Name as DepartmentName,
         sd.IsActive
-    FROM dbo.SubDepartments sd
-    LEFT JOIN dbo.Departments d ON sd.DepartmentId = d.Id
+    FROM Inv.SubDepartments sd
+    LEFT JOIN Inv.Departments d ON sd.DepartmentId = d.Id
     WHERE sd.IsActive = 1
     ORDER BY d.Name, sd.Name;
 END
@@ -693,12 +598,12 @@ BEGIN
         ii.BranchId,
         br.Name as BranchName,
         ii.IsActive
-    FROM dbo.InventoryItems ii
-    LEFT JOIN dbo.Brands b ON ii.BrandId = b.Id
-    LEFT JOIN dbo.ItemTypes it ON ii.ItemTypeId = it.Id
-    LEFT JOIN dbo.ItemUnits iu ON ii.ItemUnitId = iu.Id
-    LEFT JOIN dbo.Manufacturers m ON ii.ManufacturerId = m.Id
-    LEFT JOIN dbo.Branches br ON ii.BranchId = br.Id
+    FROM Inv.InventoryItems ii
+    LEFT JOIN Inv.Brands b ON ii.BrandId = b.Id
+    LEFT JOIN Inv.ItemTypes it ON ii.ItemTypeId = it.Id
+    LEFT JOIN Inv.ItemUnits iu ON ii.ItemUnitId = iu.Id
+    LEFT JOIN Inv.Manufacturers m ON ii.ManufacturerId = m.Id
+    LEFT JOIN Inv.Branches br ON ii.BranchId = br.Id
     WHERE ii.IsActive = 1 AND ii.Status IN ('Available', 'Good')
     ORDER BY ii.Name;
 END

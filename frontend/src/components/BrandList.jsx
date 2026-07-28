@@ -16,7 +16,7 @@ const BrandList = ({ onEdit, onAdd }) => {
   const fetchBrands = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://10.10.10.67:5100/api/brands');
+      const response = await fetch('http://localhost:5100/api/brands');
       if (!response.ok) {
         throw new Error('Failed to fetch brands');
       }
@@ -29,20 +29,38 @@ const BrandList = ({ onEdit, onAdd }) => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this brand?')) {
-      try {
-        const response = await fetch(`http://10.10.10.67:5100/api/brands/${id}?modifiedById=1`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          fetchBrands(); // Refresh the list
-        } else {
-          alert('Failed to delete brand');
-        }
-      } catch (err) {
-        alert('Error deleting brand: ' + err.message);
+  const deleteBrand = async (id, force) => {
+    const response = await fetch(
+      `http://localhost:5100/api/brands/${id}?modifiedById=1&force=${force}`,
+      { method: 'DELETE' }
+    );
+
+    if (response.ok) {
+      fetchBrands(); // Refresh the list
+      return;
+    }
+
+    const data = await response.json().catch(() => null);
+
+    if (response.status === 409 && data?.requiresConfirmation) {
+      if (window.confirm(`${data.message} Continue?`)) {
+        await deleteBrand(id, true);
       }
+      return;
+    }
+
+    alert(data?.message || 'Failed to delete brand');
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this brand?')) {
+      return;
+    }
+
+    try {
+      await deleteBrand(id, false);
+    } catch (err) {
+      alert('Error deleting brand: ' + err.message);
     }
   };
 
@@ -169,8 +187,10 @@ const BrandList = ({ onEdit, onAdd }) => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    ✓
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    brand.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {brand.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

@@ -9,11 +9,11 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    SELECT 
+    SELECT
         Id,
         Name,
         CountryId
-    FROM dbo.StateOrProvinces
+    FROM Inv.StateOrProvinces
     WHERE CountryId = @CountryId
     ORDER BY Name;
 END

@@ -38,7 +38,7 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
         await assetAllocationApi.delete(id);
         await fetchAllocations();
       } catch (err) {
-        setError(err.message);
+        setError(err.response?.data?.message || err.response?.data || err.message);
       }
     }
   };

@@ -10,8 +10,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT Id, Name, Description, IsActive
-    FROM dbo.Categories
-    WHERE IsActive = 1
+    FROM Inv.Categories
     ORDER BY Name;
 END
 GO

@@ -52,44 +52,53 @@ const ItemsPage = () => {
   };
 
   const fetchLookupData = async () => {
-    try {
-      const [
-        itemTypesData,
-        brandsData,
-        categoriesData,
-        subCategoriesData,
-        packingsData,
-        itemUnitsData,
-        pricesData,
-        taxRatesData,
-        taxDescriptionsData,
-        taxTypesData,
-      ] = await Promise.all([
-        itemTypeApi.getAll(),
-        brandApi.getAll(),
-        itemApi.getCategories(),
-        itemApi.getSubCategories(),
-        packingApi.getAll(),
-        itemUnitApi.getAll(),
-        itemApi.getPrices(),
-        itemApi.getTaxRates(),
-        itemApi.getTaxDescriptions(),
-        itemApi.getTaxTypes(),
-      ]);
+    // Each lookup is fetched independently so one failing endpoint doesn't
+    // blank out every dropdown in the form (Promise.all would reject as a whole).
+    const safeFetch = async (label, fn) => {
+      try {
+        return await fn();
+      } catch (err) {
+        console.error(`Error fetching ${label}:`, err);
+        return [];
+      }
+    };
 
-      setItemTypes(itemTypesData);
-      setBrands(brandsData);
-      setCategories(categoriesData);
-      setSubCategories(subCategoriesData);
-      setPackings(packingsData);
-      setItemUnits(itemUnitsData);
-      setPrices(pricesData);
-      setTaxRates(taxRatesData);
-      setTaxDescriptions(taxDescriptionsData);
-      setTaxTypes(taxTypesData);
-    } catch (err) {
-      console.error('Error fetching lookup data:', err);
-    }
+    const onlyActive = (list) => (list || []).filter((entry) => entry.isActive !== false);
+
+    const [
+      itemTypesData,
+      brandsData,
+      categoriesData,
+      subCategoriesData,
+      packingsData,
+      itemUnitsData,
+      pricesData,
+      taxRatesData,
+      taxDescriptionsData,
+      taxTypesData,
+    ] = await Promise.all([
+      safeFetch('item types', itemTypeApi.getAll),
+      safeFetch('brands', brandApi.getAll),
+      safeFetch('categories', itemApi.getCategories),
+      safeFetch('sub-categories', itemApi.getSubCategories),
+      safeFetch('packings', packingApi.getAll),
+      safeFetch('item units', itemUnitApi.getAll),
+      safeFetch('prices', itemApi.getPrices),
+      safeFetch('tax rates', itemApi.getTaxRates),
+      safeFetch('tax descriptions', itemApi.getTaxDescriptions),
+      safeFetch('tax types', itemApi.getTaxTypes),
+    ]);
+
+    setItemTypes(onlyActive(itemTypesData));
+    setBrands(onlyActive(brandsData));
+    setCategories(onlyActive(categoriesData));
+    setSubCategories(onlyActive(subCategoriesData));
+    setPackings(onlyActive(packingsData));
+    setItemUnits(onlyActive(itemUnitsData));
+    setPrices(pricesData);
+    setTaxRates(taxRatesData);
+    setTaxDescriptions(taxDescriptionsData);
+    setTaxTypes(taxTypesData);
   };
 
   const filterItems = () => {
@@ -128,7 +137,7 @@ const ItemsPage = () => {
       await fetchItems();
     } catch (err) {
       console.error('Error deleting item:', err);
-      alert('Failed to delete item. Please try again.');
+      alert(err.response?.data?.message || 'Failed to delete item. Please try again.');
     }
   };
 

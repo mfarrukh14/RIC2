@@ -11,12 +11,16 @@ CREATE PROCEDURE [dbo].[InventoryItem_GetAvailable]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
-        ii.Id,
+
+    -- Base list is every active catalog item, not just items that happen to have a
+    -- received stock lot - items added but never yet stocked must still be selectable.
+    -- The most recent qualifying stock lot (if any) is used only to enrich the display
+    -- (serial number, manufacturer, branch); its absence must not hide the item.
+    SELECT
+        i.Id,
         i.Name,
         i.Description,
-        ii.RegistrationNumber AS SerialNumber,
+        stock.SerialNumber,
         i.Model,
         i.BrandId,
         b.Name as BrandName,
@@ -24,23 +28,28 @@ BEGIN
         it.Name as ItemTypeName,
         i.UnitId AS ItemUnitId,
         iu.Name as ItemUnitName,
-        ii.ManufacturerId,
+        stock.ManufacturerId,
         m.Name as ManufacturerName,
-        ii.CreatedOn AS PurchaseDate,
+        stock.PurchaseDate,
         NULL AS PurchasePrice,
         NULL AS CurrentValue,
         NULL AS Condition,
         NULL AS Status,
-        ii.BranchId,
+        stock.BranchId,
         br.Name as BranchName,
-        ii.IsActive
-    FROM dbo.InventoryItems ii
-    INNER JOIN dbo.Items i ON ii.ItemId = i.Id
-    LEFT JOIN dbo.Brands b ON i.BrandId = b.Id
-    LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN dbo.ItemUnits iu ON i.UnitId = iu.Id
-    LEFT JOIN dbo.Manufacturers m ON ii.ManufacturerId = m.Id
-    LEFT JOIN dbo.Branches br ON ii.BranchId = br.Id
-    WHERE ii.IsActive = 1 AND ii.BalanceTotalItems > 0
+        i.IsActive
+    FROM Inv.Items i
+    OUTER APPLY (
+        SELECT TOP 1 ii.RegistrationNumber AS SerialNumber, ii.ManufacturerId, ii.CreatedOn AS PurchaseDate, ii.BranchId
+        FROM Inv.InventoryItems ii
+        WHERE ii.ItemId = i.Id AND ii.IsActive = 1 AND ii.BalanceTotalItems > 0
+        ORDER BY ii.CreatedOn DESC
+    ) stock
+    LEFT JOIN Inv.Brands b ON i.BrandId = b.Id
+    LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
+    LEFT JOIN Inv.ItemUnits iu ON i.UnitId = iu.Id
+    LEFT JOIN Inv.Manufacturers m ON stock.ManufacturerId = m.Id
+    LEFT JOIN Inv.Branches br ON stock.BranchId = br.Id
+    WHERE i.IsActive = 1
     ORDER BY i.Name;
 END

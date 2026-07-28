@@ -38,7 +38,7 @@ const ItemUnitList = ({ onAdd, onEdit }) => {
         await itemUnitApi.delete(id);
         await fetchItemUnits();
       } catch (err) {
-        setError(err.message);
+        setError(err.response?.data?.message || err.response?.data || err.message);
       }
     }
   };

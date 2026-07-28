@@ -1,7 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowDownTrayIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import stockExpiringApi from '../services/stockExpiringApi';
 import inventoryApi from '../services/inventoryApi';
+
+// Default to today through 3 years out - expiry dates are inherently forward-looking,
+// so (unlike a historical transaction log) the sensible default here is a wide
+// look-ahead window rather than "the last N days".
+const toDateInput = (date) => date.toISOString().split('T')[0];
+
+const getDefaultDateRange = () => {
+  const start = new Date();
+  const end = new Date();
+  end.setFullYear(end.getFullYear() + 3);
+  return {
+    startDate: toDateInput(start),
+    endDate: toDateInput(end)
+  };
+};
 
 const StockExpiringPage = () => {
   const [items, setItems] = useState([]);
@@ -11,15 +26,12 @@ const StockExpiringPage = () => {
   const [stores, setStores] = useState([]);
   const [allItems, setAllItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
-  const [itemSearchTerm, setItemSearchTerm] = useState('');
-  const [showItemDropdown, setShowItemDropdown] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [filters, setFilters] = useState({
     storeId: '',
-    startDate: '',
-    endDate: '',
+    ...getDefaultDateRange(),
   });
 
   useEffect(() => {
@@ -96,28 +108,6 @@ const StockExpiringPage = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const addItem = (item) => {
-    if (!selectedItems.includes(item.id)) {
-      setSelectedItems([...selectedItems, item.id]);
-    }
-    setItemSearchTerm('');
-    setShowItemDropdown(false);
-  };
-
-  const removeItem = (itemId) => {
-    setSelectedItems(selectedItems.filter(id => id !== itemId));
-  };
-
-  const getItemName = (itemId) => {
-    const item = allItems.find(i => i.id === itemId);
-    return item ? item.name : '';
-  };
-
-  const filteredAvailableItems = allItems.filter(item =>
-    !selectedItems.includes(item.id) &&
-    item.name.toLowerCase().includes(itemSearchTerm.toLowerCase())
-  );
-
   const filteredItems = items.filter(item =>
     item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.stockType && item.stockType.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -173,92 +163,60 @@ const StockExpiringPage = () => {
                 onChange={handleFilterChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">ED OPD Store</option>
+                <option value="">All Stores</option>
                 {stores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
+                  <option key={store.storeId} value={store.storeId}>
+                    {store.storeName}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Date Range */}
+            {/* Date Range - same two-input pattern as Stock Flow, instead of prompt() dialogs */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date Range<span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                name="dateRange"
-                value={filters.startDate && filters.endDate ? `${filters.startDate} - ${filters.endDate}` : ''}
-                placeholder="16-10-2025 - 14-01-2026"
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer"
-                onClick={() => {
-                  // Simple date range implementation
-                  const start = prompt('Enter start date (YYYY-MM-DD):');
-                  const end = prompt('Enter end date (YYYY-MM-DD):');
-                  if (start && end) {
-                    setFilters(prev => ({
-                      ...prev,
-                      startDate: start,
-                      endDate: end
-                    }));
-                  }
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  name="startDate"
+                  value={filters.startDate}
+                  onChange={handleFilterChange}
+                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+                <span>-</span>
+                <input
+                  type="date"
+                  name="endDate"
+                  value={filters.endDate}
+                  onChange={handleFilterChange}
+                  min={filters.startDate}
+                  className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
             </div>
 
-            {/* Item Multi-Select */}
-            <div className="relative">
+            {/* Item - real dropdown of active items instead of free-text search */}
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Item
               </label>
-              <div className="border border-gray-300 rounded-lg p-2 min-h-[42px] bg-white">
-                <div className="flex flex-wrap gap-2">
-                  {selectedItems.map((itemId) => (
-                    <span
-                      key={itemId}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm"
-                    >
-                      {getItemName(itemId)}
-                      <button
-                        onClick={() => removeItem(itemId)}
-                        className="hover:text-blue-900"
-                      >
-                        <XMarkIcon className="w-4 h-4" />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    type="text"
-                    value={itemSearchTerm}
-                    onChange={(e) => {
-                      setItemSearchTerm(e.target.value);
-                      setShowItemDropdown(true);
-                    }}
-                    onFocus={() => setShowItemDropdown(true)}
-                    placeholder={selectedItems.length === 0 ? "Search items..." : ""}
-                    className="flex-1 min-w-[120px] outline-none text-sm"
-                  />
-                </div>
-              </div>
-              {showItemDropdown && filteredAvailableItems.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {filteredAvailableItems.slice(0, 20).map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addItem(item)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <select
+                value={selectedItems[0] || ''}
+                onChange={(e) => setSelectedItems(e.target.value ? [parseInt(e.target.value)] : [])}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Items</option>
+                {allItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          
+
           {/* Search Button */}
           <div className="mt-4">
             <button
@@ -347,7 +305,7 @@ const StockExpiringPage = () => {
                 </tr>
               ) : (
                 currentItems.map((item, index) => (
-                  <tr key={`${item.id}-${index}`} className="hover:bg-gray-50">
+                  <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{item.itemName}</div>
                     </td>

@@ -3,11 +3,7 @@
 -- Create date: 2025-10-03
 -- Description: Update existing item
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Item_Update')
-    DROP PROCEDURE [dbo].[Item_Update]
-GO
-
-CREATE PROCEDURE [dbo].[Item_Update]
+CREATE OR ALTER PROCEDURE [dbo].[Item_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
@@ -55,7 +51,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Items
+    UPDATE Inv.Items
     SET
         Name = @Name,
         Description = @Description,
@@ -70,15 +66,15 @@ BEGIN
         CategoryId = @CategoryId,
         SubCategoryId = @SubCategoryId,
         Frequency = @Frequency,
-        IsProduct = @IsProduct,
-        BatchExpiryRequired = @BatchExpiryRequired,
+        IsProduct = ISNULL(@IsProduct, 0),
+        BatchExpiryRequired = ISNULL(@BatchExpiryRequired, 0),
         DescriptionForSale = @DescriptionForSale,
         SaleUnitId = @SaleUnitId,
-        Conversion = @Conversion,
-        CaseContains = @CaseContains,
+        Conversion = ISNULL(@Conversion, 0),
+        CaseContains = ISNULL(TRY_CONVERT(INT, @CaseContains), 0),
         HSCode = @HSCode,
-        RetailPrice = @RetailPrice,
-        CostMethod = @CostMethod,
+        RetailPrice = ISNULL(@RetailPrice, 0),
+        CostMethod = ISNULL(@CostMethod, 0),
         SalesAccountId = @SalesAccountId,
         InventoryAccountId = @InventoryAccountId,
         ExpenseAccountId = @ExpenseAccountId,
@@ -101,7 +97,6 @@ BEGIN
         ModifiedById = @ModifiedById,
         ModifiedOn = GETUTCDATE()
     WHERE Id = @Id;
-    
+
     SELECT @@ROWCOUNT as AffectedRows;
 END
-GO

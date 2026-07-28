@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://10.10.10.67:5100/api/SaleSummaryStockNoDiscount';
+const API_URL = 'http://localhost:5100/api/SaleSummaryStockNoDiscount';
 
 export const getSaleSummaryStockNoDiscount = async (store, startDate, endDate) => {
   try {

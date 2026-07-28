@@ -8,10 +8,10 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    SELECT 
+    SELECT
         Id,
         Name
-    FROM dbo.Countries
+    FROM Inv.Countries
     WHERE IsActive = 1
     ORDER BY Name;
 END

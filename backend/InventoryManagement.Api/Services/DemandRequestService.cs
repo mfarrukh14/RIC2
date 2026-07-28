@@ -9,6 +9,13 @@ namespace InventoryManagement.Api.Services
         private readonly string _connectionString;
         private readonly ILogger<DemandRequestService> _logger;
         private readonly string _schemaPrefix;
+        // Inv.Stores is a small, disconnected legacy table (3 rows: Main Warehouse/OT
+        // Store/ER Store) - completely different from Inv.PharmacyStores, the real store
+        // list every dropdown in this app (including "Store Request To" here) is built
+        // from. Joining against Inv.Stores meant any store outside that tiny legacy set
+        // (i.e. almost every real store) made GetByIdAsync's INNER JOIN return nothing,
+        // surfacing as "created but could not be retrieved" right after a successful insert.
+        private readonly string _storesTable;
 
         public DemandRequestService(IConfiguration configuration, ILogger<DemandRequestService> logger)
         {
@@ -17,6 +24,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
             var builder = new SqlConnectionStringBuilder(_connectionString);
             _schemaPrefix = builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
+            _storesTable = _schemaPrefix == "Inv" ? "Inv.PharmacyStores" : "dbo.Stores";
         }
 
         private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
@@ -25,7 +33,7 @@ namespace InventoryManagement.Api.Services
         {
             var results = new List<DemandRequestSummary>();
 
-            const string sql = @"
+            string sql = $@"
 SELECT
     dr.Id AS DemandRequestId,
     dr.DemandRequestNumber AS DRNo,
@@ -48,8 +56,8 @@ SELECT
     STRING_AGG(COALESCE(i.Name, 'Unassigned Item'), ', ') AS ItemSummary
 FROM dbo.DemandRequests dr
 INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
-LEFT JOIN dbo.Stores rs ON rs.StoreId = dr.RequestingStoreId
-INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedToStoreId
+LEFT JOIN {_storesTable} rs ON rs.StoreId = dr.RequestingStoreId
+LEFT JOIN {_storesTable} s ON s.StoreId = dr.RequestedToStoreId
 LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
 LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
 LEFT JOIN dbo.DemandRequestItems dri
@@ -126,7 +134,7 @@ ORDER BY dr.CreatedOn DESC;";
 
         public async Task<DemandRequestDetails?> GetByIdAsync(int id)
         {
-            const string headerSql = @"
+            string headerSql = $@"
 SELECT
     dr.Id AS DemandRequestId,
     dr.DemandRequestNumber AS DRNo,
@@ -165,8 +173,8 @@ SELECT
         ) AS ItemSummary
 FROM dbo.DemandRequests dr
 INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
-LEFT JOIN dbo.Stores rs ON rs.StoreId = dr.RequestingStoreId
-INNER JOIN dbo.Stores s ON s.StoreId = dr.RequestedToStoreId
+LEFT JOIN {_storesTable} rs ON rs.StoreId = dr.RequestingStoreId
+LEFT JOIN {_storesTable} s ON s.StoreId = dr.RequestedToStoreId
 LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
 LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
 WHERE dr.Id = @DemandRequestId
@@ -399,7 +407,9 @@ INSERT INTO dbo.DemandRequests
     DemandNotes,
     IsActive,
     CreatedById,
-    CreatedOn
+    CreatedOn,
+    ModifiedById,
+    ModifiedOn
 )
 VALUES
 (
@@ -413,6 +423,8 @@ VALUES
     @Remarks,
     1,
     1,
+    SYSUTCDATETIME(),
+    NULL,
     SYSUTCDATETIME()
 );
 

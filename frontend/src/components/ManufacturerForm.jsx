@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { manufacturerApi } from '../services/manufacturerApi';
+import LocationFields from './LocationFields';
 
 const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false }) => {
   const [formData, setFormData] = useState({
@@ -64,7 +65,7 @@ const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false })
 
     try {
       if (isEditing && manufacturer) {
-        await manufacturerApi.update(manufacturer.id, formData);
+        await manufacturerApi.update(manufacturer.id, { ...formData, id: manufacturer.id });
       } else {
         await manufacturerApi.create(formData);
       }
@@ -186,89 +187,19 @@ const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false })
           {/* Address Information */}
           <div className="mb-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country *
-                </label>
-                <select
-                  name="country"
-                  value={formData.country}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Country</option>
-                  <option value="Pakistan">Pakistan</option>
-                  <option value="China">China</option>
-                  <option value="USA">USA</option>
-                  <option value="Germany">Germany</option>
-                  <option value="Japan">Japan</option>
-                  <option value="India">India</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State/Province *
-                </label>
-                <select
-                  name="stateProvince"
-                  value={formData.stateProvince}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Country First</option>
-                  {formData.country === 'Pakistan' && (
-                    <>
-                      <option value="Sindh">Sindh</option>
-                      <option value="Punjab">Punjab</option>
-                      <option value="KPK">KPK</option>
-                      <option value="Balochistan">Balochistan</option>
-                      <option value="Gilgit-Baltistan">Gilgit-Baltistan</option>
-                    </>
-                  )}
-                  {formData.country === 'China' && (
-                    <>
-                      <option value="Beijing">Beijing</option>
-                      <option value="Shanghai">Shanghai</option>
-                      <option value="Guangdong">Guangdong</option>
-                      <option value="Zhejiang">Zhejiang</option>
-                    </>
-                  )}
-                  {formData.country && formData.country !== 'Pakistan' && formData.country !== 'China' && (
-                    <option value="Other">Other</option>
-                  )}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City *
-                </label>
-                <select
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select State Or Province First</option>
-                  {formData.stateProvince === 'Sindh' && (
-                    <>
-                      <option value="Karachi">Karachi</option>
-                      <option value="Hyderabad">Hyderabad</option>
-                      <option value="Sukkur">Sukkur</option>
-                      <option value="Shahzadpur">Shahzadpur</option>
-                    </>
-                  )}
-                  {formData.stateProvince === 'Beijing' && (
-                    <>
-                      <option value="Beijing">Beijing</option>
-                      <option value="Chaoyang">Chaoyang</option>
-                      <option value="Haidian">Haidian</option>
-                    </>
-                  )}
-                  {formData.stateProvince && !['Sindh', 'Beijing'].includes(formData.stateProvince) && (
-                    <option value="Other">Other</option>
-                  )}
-                </select>
+              <div className="md:col-span-2">
+                <LocationFields
+                  countryValue={formData.country}
+                  stateValue={formData.stateProvince}
+                  cityValue={formData.city}
+                  countryFieldName="country"
+                  stateFieldName="stateProvince"
+                  cityFieldName="city"
+                  onLocationChange={(fields) => setFormData(prev => ({ ...prev, ...fields }))}
+                  requiredCountry
+                  requiredState
+                  requiredCity
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

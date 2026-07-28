@@ -12,19 +12,42 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         sa.Id,
         s.StoreName,
-        CAST('' AS NVARCHAR(MAX)) AS ItemNames,
-        CAST('' AS NVARCHAR(MAX)) AS StockType,
-        ISNULL(u.Name, '') AS ActionBy,
+        (
+            SELECT STRING_AGG(i.Name, ', ')
+            FROM Inv.StockAdjustmentDetails d
+            INNER JOIN Inv.Items i ON d.ItemId = i.Id
+            WHERE d.StockAdjustmentId = sa.Id AND d.IsDeleted = 0
+        ) AS ItemNames,
+        (
+            SELECT TOP 1 st.Name
+            FROM Inv.StockAdjustmentDetails d
+            LEFT JOIN Inv.StockTypes st ON d.StockTypeId = st.Id
+            WHERE d.StockAdjustmentId = sa.Id AND d.IsDeleted = 0
+        ) AS StockType,
+        ISNULL(e.FullName, (e.FirstName + ' ' + e.LastName)) AS ActionBy,
         sa.CreatedOn AS ActionOn,
-        CAST(0 AS DECIMAL(18,2)) AS TotalQuantity,
-        CAST(0 AS DECIMAL(18,2)) AS TotalPurchaseValue,
-        CAST(0 AS DECIMAL(18,2)) AS TotalSaleValue
-    FROM dbo.StockAdjustments sa
-    LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Users u ON sa.CreatedById = u.Id
+        ISNULL((
+            SELECT SUM(d.Quantity)
+            FROM Inv.StockAdjustmentDetails d
+            WHERE d.StockAdjustmentId = sa.Id AND d.IsDeleted = 0
+        ), 0) AS TotalQuantity,
+        ISNULL((
+            SELECT SUM(ISNULL(d.PurchaseValue, 0))
+            FROM Inv.StockAdjustmentDetails d
+            WHERE d.StockAdjustmentId = sa.Id AND d.IsDeleted = 0
+        ), 0) AS TotalPurchaseValue,
+        ISNULL((
+            SELECT SUM(ISNULL(d.SaleValue, 0))
+            FROM Inv.StockAdjustmentDetails d
+            WHERE d.StockAdjustmentId = sa.Id AND d.IsDeleted = 0
+        ), 0) AS TotalSaleValue
+    FROM Inv.StockAdjustments sa
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN dbo.Users u ON sa.CreatedById = u.UserID
+    LEFT JOIN dbo.Employee e ON e.EmpID = u.EmpID
     WHERE sa.IsDeleted = 0
         AND (@BranchId IS NULL OR sa.BranchId = @BranchId)
         AND (@StoreId IS NULL OR sa.StoreId = @StoreId)
@@ -42,12 +65,12 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Get main stock adjustment
-    SELECT 
+    SELECT
         sa.Id,
         sa.StoreId,
         s.StoreName,
         sa.Type,
-        CASE sa.Type 
+        CASE sa.Type
             WHEN 1 THEN 'Less/Decrease'
             WHEN 2 THEN 'Issue'
             ELSE 'Unknown'
@@ -56,32 +79,33 @@ BEGIN
         sa.BranchId,
         b.Name AS BranchName,
         sa.CreatedById,
-        ISNULL(cu.Name, '') AS CreatedByName,
+        ISNULL(e.FullName, (e.FirstName + ' ' + e.LastName)) AS CreatedByName,
         sa.CreatedOn,
         sa.ModifiedById,
         sa.ModifiedOn,
         sa.IsActive,
         sa.IsDeleted
-    FROM dbo.StockAdjustments sa
-    LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Branches b ON sa.BranchId = b.Id
-    LEFT JOIN dbo.Users cu ON sa.CreatedById = cu.Id
+    FROM Inv.StockAdjustments sa
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN Inv.Branches b ON sa.BranchId = b.Id
+    LEFT JOIN dbo.Users cu ON sa.CreatedById = cu.UserID
+    LEFT JOIN dbo.Employee e ON e.EmpID = cu.EmpID
     WHERE sa.Id = @Id AND sa.IsDeleted = 0;
 
     -- Get details
-    SELECT 
+    SELECT
         sad.Id,
         sad.StockAdjustmentId,
         sad.ItemId,
         i.Name AS ItemName,
         sad.Type,
-        CASE sad.Type 
+        CASE sad.Type
             WHEN 1 THEN 'Less/Decrease'
             WHEN 2 THEN 'Issue'
             ELSE 'Unknown'
         END AS TypeName,
         sad.StockTypeId,
-        st.StockTypeName,
+        st.Name AS StockTypeName,
         sad.Quantity,
         sad.BranchId,
         sad.CreatedById,
@@ -92,9 +116,9 @@ BEGIN
         sad.IsDeleted,
         sad.SaleValue,
         sad.PurchaseValue
-    FROM dbo.StockAdjustmentDetails sad
-    LEFT JOIN dbo.InventoryItems i ON sad.ItemId = i.Id
-    LEFT JOIN dbo.StockTypes st ON sad.StockTypeId = st.StockTypeId
+    FROM Inv.StockAdjustmentDetails sad
+    LEFT JOIN Inv.Items i ON sad.ItemId = i.Id
+    LEFT JOIN Inv.StockTypes st ON sad.StockTypeId = st.Id
     WHERE sad.StockAdjustmentId = @Id AND sad.IsDeleted = 0;
 END
 GO
@@ -111,13 +135,13 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.StockAdjustments (
+    INSERT INTO Inv.StockAdjustments (
         StoreId, Type, BranchId, CreatedById, CreatedOn, IsActive, IsDeleted
     )
     VALUES (
         @StoreId, @Type, @BranchId, @CreatedById, @CreatedOn, 1, 0
     );
-    
+
     SET @Id = SCOPE_IDENTITY();
 END
 GO
@@ -134,8 +158,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.StockAdjustments
-    SET 
+    UPDATE Inv.StockAdjustments
+    SET
         StoreId = @StoreId,
         Type = @Type,
         BranchId = @BranchId,
@@ -152,11 +176,11 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.StockAdjustments
+    UPDATE Inv.StockAdjustments
     SET IsDeleted = 1
     WHERE Id = @Id;
 
-    UPDATE dbo.StockAdjustmentDetails
+    UPDATE Inv.StockAdjustmentDetails
     SET IsDeleted = 1
     WHERE StockAdjustmentId = @Id;
 END
@@ -178,15 +202,15 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.StockAdjustmentDetails (
-        StockAdjustmentId, ItemId, Type, StockTypeId, Quantity, 
+    INSERT INTO Inv.StockAdjustmentDetails (
+        StockAdjustmentId, ItemId, Type, StockTypeId, Quantity,
         SaleValue, BranchId, CreatedById, CreatedOn, IsActive, IsDeleted
     )
     VALUES (
         @StockAdjustmentId, @ItemId, @Type, @StockTypeId, @Quantity,
         @SaleValue, @BranchId, @CreatedById, @CreatedOn, 1, 0
     );
-    
+
     SET @Id = SCOPE_IDENTITY();
 END
 GO
@@ -198,7 +222,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.StockAdjustmentDetails
+    UPDATE Inv.StockAdjustmentDetails
     SET IsDeleted = 1
     WHERE StockAdjustmentId = @StockAdjustmentId;
 END

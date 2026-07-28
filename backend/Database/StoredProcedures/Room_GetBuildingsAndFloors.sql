@@ -11,11 +11,11 @@ CREATE PROCEDURE [dbo].[Room_GetBuildings]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT DISTINCT Building
-    FROM dbo.Rooms
-    WHERE IsActive = 1 AND Building IS NOT NULL
-    ORDER BY Building;
+
+    SELECT Name AS Building
+    FROM dbo.Building
+    WHERE Status = 1
+    ORDER BY Name;
 END
 GO
 
@@ -33,12 +33,12 @@ CREATE PROCEDURE [dbo].[Room_GetFloorsByBuilding]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT DISTINCT Floor
-    FROM dbo.Rooms
-    WHERE IsActive = 1 
-        AND Floor IS NOT NULL
-        AND (@Building IS NULL OR Building = @Building)
-    ORDER BY Floor;
+
+    SELECT f.Name AS Floor
+    FROM dbo.Floors f
+    JOIN dbo.Building b ON f.BID = b.BID
+    WHERE f.Status = 1
+        AND (@Building IS NULL OR b.Name = @Building)
+    ORDER BY f.Name;
 END
 GO

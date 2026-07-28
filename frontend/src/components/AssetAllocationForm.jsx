@@ -7,8 +7,6 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
     remarks: "",
     allocatedDate: new Date().toISOString().split('T')[0],
     userId: "",
-    departmentId: "",
-    subDepartmentId: "",
     roomId: "",
     quantity: 1,
     inventoryItemId: "",
@@ -18,11 +16,14 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
     isActive: true,
   });
 
+  const [building, setBuilding] = useState("");
+  const [floor, setFloor] = useState("");
+
   const [lookupData, setLookupData] = useState({
     users: [],
     rooms: [],
-    departments: [],
-    subDepartments: [],
+    buildings: [],
+    floors: [],
     inventoryItems: []
   });
 
@@ -37,8 +38,6 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
         remarks: allocationToEdit.remarks || "",
         allocatedDate: allocationToEdit.allocatedDate ? allocationToEdit.allocatedDate.split('T')[0] : new Date().toISOString().split('T')[0],
         userId: allocationToEdit.userId || "",
-        departmentId: allocationToEdit.departmentId || "",
-        subDepartmentId: allocationToEdit.subDepartmentId || "",
         roomId: allocationToEdit.roomId || "",
         quantity: allocationToEdit.quantity || 1,
         inventoryItemId: allocationToEdit.inventoryItemId || "",
@@ -47,7 +46,7 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
         returnRemarks: allocationToEdit.returnRemarks || "",
         isActive: allocationToEdit.isActive !== undefined ? allocationToEdit.isActive : true,
       });
-      
+
       // Determine allocation type based on existing data
       if (allocationToEdit.userId) {
         setAllocationType("User");
@@ -57,23 +56,44 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
     }
   }, [allocationToEdit]);
 
+  // Once rooms are loaded, pre-select the Building/Floor filters to match the
+  // allocation's existing room (edit mode) so the room stays visible in the list.
+  useEffect(() => {
+    if (allocationToEdit?.roomId && lookupData.rooms.length > 0) {
+      const room = lookupData.rooms.find(r => r.id === allocationToEdit.roomId);
+      if (room) {
+        setBuilding(room.building || "");
+        setFloor(room.floor || "");
+      }
+    }
+  }, [allocationToEdit, lookupData.rooms]);
+
+  useEffect(() => {
+    if (building) {
+      assetAllocationApi.getFloors(building)
+        .then(floors => setLookupData(prev => ({ ...prev, floors })))
+        .catch(() => setLookupData(prev => ({ ...prev, floors: [] })));
+    } else {
+      setLookupData(prev => ({ ...prev, floors: [] }));
+    }
+  }, [building]);
+
   const fetchLookupData = async () => {
     try {
-      const [users, rooms, departments, subDepartments, inventoryItems] = await Promise.all([
+      const [users, rooms, buildings, inventoryItems] = await Promise.all([
         assetAllocationApi.getUsers(),
         assetAllocationApi.getRooms(),
-        assetAllocationApi.getDepartments(),
-        assetAllocationApi.getSubDepartments(),
+        assetAllocationApi.getBuildings(),
         assetAllocationApi.getAvailableInventoryItems()
       ]);
 
-      setLookupData({
+      setLookupData(prev => ({
+        ...prev,
         users,
         rooms,
-        departments,
-        subDepartments,
+        buildings,
         inventoryItems
-      });
+      }));
     } catch (err) {
       setError(err.message);
     }
@@ -87,13 +107,33 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
     }));
   };
 
+  const handleBuildingChange = (e) => {
+    setBuilding(e.target.value);
+    setFloor("");
+    setFormData(prev => ({ ...prev, roomId: "" }));
+  };
+
+  const handleFloorChange = (e) => {
+    setFloor(e.target.value);
+    setFormData(prev => ({ ...prev, roomId: "" }));
+  };
+
+  const getFilteredRooms = () => {
+    let filtered = lookupData.rooms;
+    if (building) filtered = filtered.filter(r => r.building === building);
+    if (floor) filtered = filtered.filter(r => r.floor === floor);
+    return filtered;
+  };
+
   const handleAllocationTypeChange = (type) => {
     setAllocationType(type);
     // Clear opposite allocation fields
     if (type === "Room") {
       setFormData(prev => ({ ...prev, userId: "" }));
     } else {
-      setFormData(prev => ({ ...prev, roomId: "", departmentId: "", subDepartmentId: "" }));
+      setFormData(prev => ({ ...prev, roomId: "" }));
+      setBuilding("");
+      setFloor("");
     }
   };
 
@@ -109,8 +149,6 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
         // Clear unused fields based on allocation type
         userId: allocationType === "User" ? formData.userId || null : null,
         roomId: allocationType === "Room" ? formData.roomId || null : null,
-        departmentId: allocationType === "Room" ? formData.departmentId || null : null,
-        subDepartmentId: allocationType === "Room" ? formData.subDepartmentId || null : null,
         // Convert dates to proper format
         allocatedDate: new Date(formData.allocatedDate).toISOString(),
         returnDate: formData.returnDate ? new Date(formData.returnDate).toISOString() : null,
@@ -127,13 +165,6 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getFilteredSubDepartments = () => {
-    if (!formData.departmentId) return [];
-    return lookupData.subDepartments.filter(
-      sd => sd.departmentId === parseInt(formData.departmentId)
-    );
   };
 
   return (
@@ -271,41 +302,38 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
                 {/* Building/Floor/Room Selection */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <label htmlFor="departmentId" className="block text-sm font-medium text-gray-700 mb-2">
-                      Building <span className="text-red-500">*</span>
+                    <label htmlFor="building" className="block text-sm font-medium text-gray-700 mb-2">
+                      Building
                     </label>
                     <select
-                      id="departmentId"
-                      name="departmentId"
-                      value={formData.departmentId}
-                      onChange={handleChange}
+                      id="building"
+                      name="building"
+                      value={building}
+                      onChange={handleBuildingChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="">Select Building</option>
-                      {lookupData.departments.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
+                      <option value="">Please Select</option>
+                      {lookupData.buildings.map((b) => (
+                        <option key={b} value={b}>{b}</option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label htmlFor="subDepartmentId" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="floor" className="block text-sm font-medium text-gray-700 mb-2">
                       Floor
                     </label>
                     <select
-                      id="subDepartmentId"
-                      name="subDepartmentId"
-                      value={formData.subDepartmentId}
-                      onChange={handleChange}
+                      id="floor"
+                      name="floor"
+                      value={floor}
+                      onChange={handleFloorChange}
+                      disabled={!building}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Please Select</option>
-                      {getFilteredSubDepartments().map((subDept) => (
-                        <option key={subDept.id} value={subDept.id}>
-                          {subDept.name}
-                        </option>
+                      {lookupData.floors.map((f) => (
+                        <option key={f} value={f}>{f}</option>
                       ))}
                     </select>
                   </div>
@@ -323,7 +351,7 @@ const AssetAllocationForm = ({ onBack, allocationToEdit }) => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Please Select</option>
-                      {lookupData.rooms.map((room) => (
+                      {getFilteredRooms().map((room) => (
                         <option key={room.id} value={room.id}>
                           {room.name} {room.building && room.floor ? `(${room.building}, ${room.floor})` : ''}
                         </option>

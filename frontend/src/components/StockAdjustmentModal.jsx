@@ -24,7 +24,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
     branchId: '',
     type: 1, // 1 = Less/Decrease, 2 = Issue
     itemId: '',
-    stockTypeId: 1, // Regular by default
+    stockTypeId: '', // defaults to the real "Regular" stock type once lookup data loads
     quantity: 1,
     saleValue: 0,
     remarks: ''
@@ -67,7 +67,17 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
     try {
       const data = await inventoryApi.getLookupData();
       setItems(normalizeLookupOptions(data.items, ['id', 'itemId'], ['name', 'itemName'], 'Item'));
-      setStockTypes(normalizeLookupOptions(data.stockTypes, ['id', 'stockTypeId'], ['name', 'stockTypeName'], 'Stock Type'));
+      const loadedStockTypes = normalizeLookupOptions(data.stockTypes, ['id', 'stockTypeId'], ['name', 'stockTypeName'], 'Stock Type');
+      setStockTypes(loadedStockTypes);
+
+      // Default new adjustments to the real "Regular" stock type instead of faking it
+      // with a duplicate hardcoded option.
+      if (!adjustment) {
+        const regular = loadedStockTypes.find((t) => t.name?.trim().toLowerCase() === 'regular');
+        if (regular) {
+          setFormData((prev) => ({ ...prev, stockTypeId: prev.stockTypeId || regular.id }));
+        }
+      }
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }
@@ -140,6 +150,27 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Store - Full Width with Select Dropdown */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Store<span className="text-red-500">*</span>
+              </label>
+              <select
+                name="storeId"
+                value={formData.storeId}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select</option>
+                {(stores || []).map(store => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Item - Full Width with Select Dropdown */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -190,7 +221,7 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value={1}>Regular</option>
+                  <option value="">Select</option>
                   {stockTypes.map(st => (
                     <option key={st.id} value={st.id}>
                       {st.name}

@@ -95,6 +95,7 @@ const StoreManagementPage = () => {
       ...prev,
       ...(name === 'buildingId' ? { floorId: '', roomId: '' } : {}),
       ...(name === 'floorId' ? { roomId: '' } : {}),
+      ...(name === 'storeType' && value === 'Main Store' ? { parentStoreId: '' } : {}),
       [name]: type === 'checkbox' ? checked : value
     }));
   };
@@ -327,9 +328,8 @@ const StoreManagementPage = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded"
                   >
                     <option value="">Select Store Type</option>
-                    <option value="General Store">General Store</option>
+                    <option value="Main Store">Main Store</option>
                     <option value="Sub Store">Sub Store</option>
-                    <option value="Medicine Store">Medicine Store</option>
                   </select>
                 </div>
 
@@ -381,15 +381,19 @@ const StoreManagementPage = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Parent Store<span className="text-red-500">*</span>
+                    Parent Store{formData.storeType === 'Sub Store' && <span className="text-red-500">*</span>}
                   </label>
                   <select
                     name="parentStoreId"
                     value={formData.parentStoreId}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded"
+                    disabled={formData.storeType !== 'Sub Store'}
+                    required={formData.storeType === 'Sub Store'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded disabled:bg-gray-100 disabled:text-gray-400"
                   >
-                    <option value="">Select Parent Store</option>
+                    <option value="">
+                      {formData.storeType === 'Sub Store' ? 'Select Parent Store' : 'Not applicable for Main Store'}
+                    </option>
                     {stores.filter(s => s.storeId !== formData.storeId).map(store => (
                       <option key={store.storeId} value={store.storeId}>
                         {store.storeName}

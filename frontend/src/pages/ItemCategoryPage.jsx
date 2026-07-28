@@ -112,7 +112,7 @@ const ItemCategoryPage = () => {
       setError(null);
     } catch (err) {
       console.error('Error saving category:', err);
-      setError('Failed to save item category. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save item category. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -130,7 +130,7 @@ const ItemCategoryPage = () => {
       setError(null);
     } catch (err) {
       console.error('Error deleting category:', err);
-      setError('Failed to delete item category. Please try again.');
+      setError(err.response?.data?.message || 'Failed to delete item category. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -3,12 +3,12 @@
 -- Create date: 2025-09-30
 -- Description: Get all brands with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[Brand_GetAll]
+CREATE OR ALTER PROCEDURE [dbo].[Brand_GetAll]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    SELECT
         b.Id,
         b.Name,
         b.Description,
@@ -19,8 +19,7 @@ BEGIN
         b.ModifiedById,
         b.ModifiedOn,
         br.Name as BranchName
-    FROM dbo.Brands b
-    LEFT JOIN dbo.Branches br ON b.BranchId = br.Id
-    WHERE b.IsActive = 1
+    FROM Inv.Brands b
+    LEFT JOIN Inv.Branches br ON b.BranchId = br.Id
     ORDER BY b.Name;
 END

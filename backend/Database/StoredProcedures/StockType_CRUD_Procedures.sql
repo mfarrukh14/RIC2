@@ -16,8 +16,7 @@ BEGIN
         Name,
         Description,
         IsActive
-    FROM dbo.StockTypes
-    WHERE IsActive = 1
+    FROM Inv.StockTypes
     ORDER BY Name;
 END
 GO
@@ -36,7 +35,7 @@ BEGIN
         Name,
         Description,
         IsActive
-    FROM dbo.StockTypes
+    FROM Inv.StockTypes
     WHERE Id = @Id;
 END
 GO
@@ -52,7 +51,7 @@ BEGIN
     SET NOCOUNT ON;
     
     BEGIN TRY
-        INSERT INTO dbo.StockTypes (Name, Description, IsActive)
+        INSERT INTO Inv.StockTypes (Name, Description, IsActive)
         VALUES (@Name, @Description, 1);
         
         SELECT SCOPE_IDENTITY() AS Id;
@@ -75,7 +74,7 @@ BEGIN
     SET NOCOUNT ON;
     
     BEGIN TRY
-        UPDATE dbo.StockTypes
+        UPDATE Inv.StockTypes
         SET 
             Name = @Name,
             Description = @Description
@@ -90,19 +89,18 @@ END
 GO
 
 -- =============================================
--- Delete Stock Type (Soft Delete)
+-- Delete Stock Type (permanent)
 -- =============================================
 CREATE OR ALTER PROCEDURE StockType_Delete
     @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     BEGIN TRY
-        UPDATE dbo.StockTypes
-        SET IsActive = 0
+        DELETE FROM Inv.StockTypes
         WHERE Id = @Id;
-        
+
         SELECT @@ROWCOUNT AS RowsAffected;
     END TRY
     BEGIN CATCH

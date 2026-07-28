@@ -187,7 +187,7 @@ const StockAdjustmentPage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Academic Affair Store, General Store</option>
+              <option value="">Select Store</option>
               {stores.map(store => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -220,6 +220,16 @@ const StockAdjustmentPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
+          >
+            {loading ? 'Generating...' : 'Generate'}
+          </button>
         </div>
       </div>
 

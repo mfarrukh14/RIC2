@@ -23,57 +23,24 @@ BEGIN
         IsActive BIT NOT NULL
     );
 
-    IF OBJECT_ID('DropDown.DD_Users', 'P') IS NOT NULL
-    BEGIN
-        BEGIN TRY
-            CREATE TABLE #DropdownUsers
-            (
-                value INT NULL,
-                text NVARCHAR(4000) NULL
-            );
-
-            INSERT INTO #DropdownUsers (value, text)
-            EXEC [DropDown].[DD_Users];
-
-            INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
-            SELECT
-                du.value AS Id,
-                du.text AS Name,
-                NULL AS Email,
-                NULL AS UserName,
-                NULL AS Department,
-                NULL AS Designation,
-                CAST(1 AS BIT) AS IsActive
-            FROM
-            (
-                SELECT
-                    value,
-                    MAX(NULLIF(LTRIM(RTRIM(text)), '')) AS text
-                FROM #DropdownUsers
-                WHERE value IS NOT NULL
-                GROUP BY value
-            ) du
-            WHERE du.text IS NOT NULL;
-        END TRY
-        BEGIN CATCH
-            -- DropDown.DD_Users signature can vary across HMS deployments (e.g. requires @UserTypeId).
-            -- Fall back to dbo.Users below instead of failing the whole procedure.
-        END CATCH
-    END
-
+    -- Note: DropDown.DD_Users is intentionally not used here. It requires mandatory
+    -- @UserTypeId/@BranchId/@OrganizationId parameters we have no generic value for,
+    -- and Microsoft.Data.SqlClient surfaces its parameter error as a SqlException even
+    -- when caught by TRY/CATCH in T-SQL. dbo.Users below is sufficient on its own.
     IF COL_LENGTH('dbo.Users', 'UserID') IS NOT NULL
     BEGIN
         INSERT INTO #UserLookup (Id, Name, Email, UserName, Department, Designation, IsActive)
         EXEC sp_executesql N'
             SELECT
                 raw.UserID AS Id,
-                COALESCE(NULLIF(LTRIM(RTRIM(raw.UserName)), ''''), CONCAT(''User '', CAST(raw.UserID AS NVARCHAR(20)))) AS Name,
+                COALESCE(NULLIF(LTRIM(RTRIM(emp.FullName)), ''''), NULLIF(LTRIM(RTRIM(raw.UserName)), ''''), CONCAT(''User '', CAST(raw.UserID AS NVARCHAR(20)))) AS Name,
                 CAST(NULL AS NVARCHAR(256)) AS Email,
                 raw.UserName,
                 CAST(NULL AS NVARCHAR(256)) AS Department,
                 CAST(NULL AS NVARCHAR(256)) AS Designation,
                 CAST(CASE WHEN ISNULL(raw.Status, 1) = 1 THEN 1 ELSE 0 END AS BIT) AS IsActive
             FROM dbo.Users raw
+            LEFT JOIN dbo.Employee emp ON emp.EmpID = raw.EmpID
             WHERE ISNULL(raw.Status, 1) = 1
               AND NULLIF(LTRIM(RTRIM(raw.UserName)), '''') IS NOT NULL
               AND NOT EXISTS (

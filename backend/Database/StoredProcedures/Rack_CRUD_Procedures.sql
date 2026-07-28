@@ -23,8 +23,7 @@ BEGIN
         r.BranchId,
         r.IsActive,
         r.CreatedOn
-    FROM dbo.Racks r
-    WHERE r.IsActive = 1
+    FROM Inv.Racks r
     ORDER BY r.CreatedOn DESC;
 END
 GO
@@ -51,7 +50,7 @@ BEGIN
         r.BranchId,
         r.IsActive,
         r.CreatedOn
-    FROM dbo.Racks r
+    FROM Inv.Racks r
     WHERE r.Id = @Id;
 END
 GO
@@ -74,7 +73,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.Racks (
+    INSERT INTO Inv.Racks (
         Name,
         StoreId,
         Description,
@@ -123,7 +122,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Racks
+    UPDATE Inv.Racks
     SET 
         Name = @Name,
         StoreId = @StoreId,
@@ -142,20 +141,15 @@ END
 GO
 
 -- =============================================
--- Delete Rack (Soft Delete)
+-- Delete Rack (permanent)
 -- =============================================
 CREATE OR ALTER PROCEDURE Rack_Delete
-    @Id INT,
-    @ModifiedById INT
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    UPDATE dbo.Racks
-    SET 
-        IsActive = 0,
-        ModifiedById = @ModifiedById,
-        ModifiedOn = GETDATE()
+
+    DELETE FROM Inv.Racks
     WHERE Id = @Id;
 END
 GO

@@ -50,6 +50,12 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
   const [profitMargin, setProfitMargin] = useState(0);
   const [profitPerItem, setProfitPerItem] = useState(0);
 
+  // Tracks the header/detail row this form is actually writing to, so a retry after a
+  // failed submit (e.g. the detail insert fails validation) updates the same records
+  // instead of creating a new orphaned header every attempt.
+  const [savedInventoryId, setSavedInventoryId] = useState(null);
+  const [savedDetailId, setSavedDetailId] = useState(null);
+
   useEffect(() => {
     fetchLookupData();
   }, []);
@@ -61,42 +67,72 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
     }
   }, [inventory, session?.branchId]);
 
+  // Default new entries to the "Regular" stock type once the real list loads,
+  // instead of faking it with a duplicate placeholder option.
   useEffect(() => {
-    if (inventory) {
-      setFormData({
-        vendorId: inventory.vendorId || '',
-        storeId: inventory.storeId || '',
-        branchId: inventory.branchId || '',
-        stockTypeId: inventory.stockTypeId || '',
-        vendorInvoiceNumber: inventory.vendorInvoiceNumber || '',
-        vendorInvoiceTimestamp: inventory.vendorInvoiceTimestamp ? 
-          new Date(inventory.vendorInvoiceTimestamp).toISOString().split('T')[0] : '',
-        itemId: '',
-        manufacturerId: '',
-        mfgDate: '',
-        expiryDate: '',
-        noOfBoxes: '',
-        noOfPackets: '',
-        itemsPerPacket: '',
-        totalItems: '',
-        packQuantity: '',
-        unitBuyingPrice: '',
-        totalBuyingPrice: '',
-        advanceTaxPercentage: '',
-        advanceTaxAmount: '',
-        discount: false,
-        discountAmount: '',
-        retailCharges: false,
-        retailChargesAmount: '',
-        gstCharges: false,
-        gstChargesAmount: '',
-        unitSellingPrice: '',
-        totalSellingPrice: '',
-        registrationNumber: '',
-        batch: '',
-        lotNumber: ''
-      });
+    if (!inventory && !formData.stockTypeId && lookupData.stockTypes.length > 0) {
+      const regular = lookupData.stockTypes.find((t) => t.name?.trim().toLowerCase() === 'regular');
+      if (regular) {
+        setFormData((prev) => ({ ...prev, stockTypeId: prev.stockTypeId || regular.id }));
+      }
     }
+  }, [inventory, lookupData.stockTypes]);
+
+  useEffect(() => {
+    if (!inventory) return;
+
+    // The row passed in from the list only has header fields - fetch the full
+    // record (with its detail line) so editing doesn't wipe out the item/quantity/
+    // pricing data the user already entered when this inventory was created.
+    let cancelled = false;
+    (async () => {
+      try {
+        const full = await inventoryApi.getById(inventory.id);
+        if (cancelled) return;
+
+        const detail = full.details?.[0] || null;
+        setSavedInventoryId(full.id);
+        setSavedDetailId(detail?.id || null);
+
+        setFormData({
+          vendorId: full.vendorId || '',
+          storeId: full.storeId || '',
+          branchId: full.branchId || '',
+          stockTypeId: full.stockTypeId || '',
+          vendorInvoiceNumber: full.vendorInvoiceNumber || '',
+          vendorInvoiceTimestamp: full.vendorInvoiceTimestamp ?
+            new Date(full.vendorInvoiceTimestamp).toISOString().split('T')[0] : '',
+          itemId: detail?.itemId || '',
+          manufacturerId: detail?.manufacturerId || '',
+          mfgDate: detail?.mfgDate ? new Date(detail.mfgDate).toISOString().split('T')[0] : '',
+          expiryDate: detail?.expiryDate ? new Date(detail.expiryDate).toISOString().split('T')[0] : '',
+          noOfBoxes: detail?.noOfBoxes ?? '',
+          noOfPackets: detail?.noOfPackets ?? '',
+          itemsPerPacket: detail?.itemsPerPacket ?? '',
+          totalItems: detail?.totalItems ?? '',
+          packQuantity: detail?.packQuantity ?? '',
+          unitBuyingPrice: detail?.unitBuyingPrice ?? '',
+          totalBuyingPrice: detail?.totalBuyingPrice ?? '',
+          advanceTaxPercentage: detail?.advanceTaxPercentage ?? '',
+          advanceTaxAmount: detail?.advanceTaxAmount ?? '',
+          discount: detail?.discount || false,
+          discountAmount: detail?.discountAmount ?? '',
+          retailCharges: detail?.retailCharges || false,
+          retailChargesAmount: detail?.retailChargesAmount ?? '',
+          gstCharges: detail?.gstCharges || false,
+          gstChargesAmount: detail?.gstChargesAmount ?? '',
+          unitSellingPrice: detail?.unitSellingPrice ?? '',
+          totalSellingPrice: detail?.totalSellingPrice ?? '',
+          registrationNumber: full.registrationNumber || '',
+          batch: full.batch || '',
+          lotNumber: full.lotNumber || ''
+        });
+      } catch (err) {
+        console.error('Error loading inventory details:', err);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [inventory]);
 
   useEffect(() => {
@@ -130,7 +166,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
     const unitSellingPrice = parseFloat(formData.unitSellingPrice) || 0;
 
     // Calculate total items
-    const totalItems = (boxes * packets * itemsPerPacket) + (packets * itemsPerPacket);
+    const totalItems = boxes * packets * itemsPerPacket;
     
     // Calculate total buying price
     let totalBuying = totalItems * unitBuyingPrice;
@@ -202,12 +238,19 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
         vendorInvoiceTimestamp: formData.vendorInvoiceTimestamp ? new Date(formData.vendorInvoiceTimestamp).toISOString() : null
       };
 
-      if (inventory?.id) {
-        await inventoryApi.update(inventory.id, headerData);
-        inventoryId = inventory.id;
+      // Reuse the header this form already wrote (editing an existing inventory, or a
+      // prior submit attempt in this session that got far enough to create one) instead
+      // of creating a new one every time - otherwise a retry after a failed detail insert
+      // leaves behind an orphaned duplicate header with no items.
+      const existingInventoryId = inventory?.id || savedInventoryId;
+
+      if (existingInventoryId) {
+        await inventoryApi.update(existingInventoryId, headerData);
+        inventoryId = existingInventoryId;
       } else {
         const result = await inventoryApi.create(headerData);
         inventoryId = result.id;
+        setSavedInventoryId(inventoryId);
       }
 
       // Then create the detail line item
@@ -238,8 +281,14 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
         profitPerItem: profitPerItem
       };
 
-      await inventoryApi.createDetail(detailData);
-      
+      const existingDetailId = savedDetailId;
+      if (existingDetailId) {
+        await inventoryApi.updateDetail(existingDetailId, detailData);
+      } else {
+        const detailResult = await inventoryApi.createDetail(detailData);
+        setSavedDetailId(detailResult.id);
+      }
+
       onSave();
     } catch (err) {
       console.error('Error saving inventory:', err);
@@ -312,7 +361,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Regular</option>
+              <option value="">Select Stock Type</option>
               {lookupData.stockTypes.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}

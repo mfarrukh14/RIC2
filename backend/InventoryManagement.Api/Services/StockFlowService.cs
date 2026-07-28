@@ -46,11 +46,11 @@ namespace InventoryManagement.Api.Services
                     stockFlows.Add(new StockFlow
                     {
                         DateTime = reader.GetDateTime(reader.GetOrdinal("DateTime")),
-                        TransactionType = reader.GetString(reader.GetOrdinal("TransactionType")),
+                        TransactionType = reader.IsDBNull(reader.GetOrdinal("TransactionType")) ? "" : reader.GetString(reader.GetOrdinal("TransactionType")),
                         RefNumber = reader.IsDBNull(reader.GetOrdinal("RefNumber")) ? "" : reader.GetString(reader.GetOrdinal("RefNumber")),
-                        ItemName = reader.GetString(reader.GetOrdinal("ItemName")),
+                        ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? "" : reader.GetString(reader.GetOrdinal("ItemName")),
                         DemandRequestedStore = reader.IsDBNull(reader.GetOrdinal("DemandRequestedStore")) ? "" : reader.GetString(reader.GetOrdinal("DemandRequestedStore")),
-                        StockType = reader.GetString(reader.GetOrdinal("StockType")),
+                        StockType = reader.IsDBNull(reader.GetOrdinal("StockType")) ? "" : reader.GetString(reader.GetOrdinal("StockType")),
                         OpeningQuantity = reader.GetDecimal(reader.GetOrdinal("OpeningQuantity")),
                         ReceivedQuantity = reader.GetDecimal(reader.GetOrdinal("ReceivedQuantity")),
                         IssuedQuantity = reader.GetDecimal(reader.GetOrdinal("IssuedQuantity")),

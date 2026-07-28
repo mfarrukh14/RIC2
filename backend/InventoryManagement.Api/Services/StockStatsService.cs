@@ -24,10 +24,9 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StartDate", (object?)request.StartDate ?? DBNull.Value);
             command.Parameters.AddWithValue("@EndDate", (object?)request.EndDate ?? DBNull.Value);
-            command.Parameters.AddWithValue("@ItemType", request.ItemType);
+            command.Parameters.AddWithValue("@ItemTypeId", (object?)request.ItemTypeId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ItemIds", (object?)request.ItemIds ?? DBNull.Value);
             command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
-            command.Parameters.AddWithValue("@Type", request.Type);
             command.Parameters.AddWithValue("@SaleType", request.SaleType);
 
             await connection.OpenAsync();

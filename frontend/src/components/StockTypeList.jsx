@@ -48,7 +48,7 @@ const StockTypeList = ({ onEdit, onAdd }) => {
       await stockTypesApi.deleteStockType(id);
       await loadStockTypes(); // Refresh the list
     } catch (err) {
-      setError('Failed to delete stock type: ' + (err.response?.data || err.message));
+      setError('Failed to delete stock type: ' + (err.response?.data?.message || err.response?.data || err.message));
       console.error('Error deleting stock type:', err);
     }
   };

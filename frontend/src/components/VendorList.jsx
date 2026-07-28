@@ -51,7 +51,7 @@ const VendorList = ({ onEdit, onAdd }) => {
       await vendorApi.delete(id);
       await loadVendors(); // Refresh the list
     } catch (err) {
-      setError('Failed to delete vendor: ' + (err.response?.data || err.message));
+      setError('Failed to delete vendor: ' + (err.response?.data?.message || err.response?.data || err.message));
       console.error('Error deleting vendor:', err);
     }
   };

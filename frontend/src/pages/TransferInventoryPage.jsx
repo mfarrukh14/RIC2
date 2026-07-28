@@ -205,8 +205,8 @@ const TransferInventoryPage = () => {
                 >
                   <option value="">Select From Store</option>
                   {lookupData.stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
+                    <option key={store.storeId} value={store.storeId}>
+                      {store.storeName}
                     </option>
                   ))}
                 </select>
@@ -225,8 +225,8 @@ const TransferInventoryPage = () => {
                 >
                   <option value="">Select Store</option>
                   {lookupData.stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
+                    <option key={store.storeId} value={store.storeId}>
+                      {store.storeName}
                     </option>
                   ))}
                 </select>

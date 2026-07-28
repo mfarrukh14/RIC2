@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://10.10.10.67:5100/api';
+const API_BASE_URL = 'http://localhost:5100/api';
 
 export const assetAllocationApi = {
   // Asset Allocations CRUD
@@ -85,6 +85,24 @@ export const assetAllocationApi = {
     const response = await fetch(`${API_BASE_URL}/assetallocations/sub-departments`);
     if (!response.ok) {
       throw new Error('Failed to fetch sub-departments');
+    }
+    return response.json();
+  },
+
+  getBuildings: async () => {
+    const response = await fetch(`${API_BASE_URL}/assetallocations/buildings`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch buildings');
+    }
+    return response.json();
+  },
+
+  getFloors: async (building) => {
+    const url = new URL(`${API_BASE_URL}/assetallocations/floors`);
+    if (building) url.searchParams.set('building', building);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Failed to fetch floors');
     }
     return response.json();
   },

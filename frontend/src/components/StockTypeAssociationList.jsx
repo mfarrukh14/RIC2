@@ -48,7 +48,7 @@ const StockTypeAssociationList = ({ onEdit, onAdd }) => {
       await stockTypeAssociationsApi.deleteStockTypeAssociation(id);
       await loadAssociations(); // Refresh the list
     } catch (err) {
-      setError('Failed to delete stock type association: ' + (err.response?.data || err.message));
+      setError('Failed to delete stock type association: ' + (err.response?.data?.message || err.response?.data || err.message));
       console.error('Error deleting stock type association:', err);
     }
   };

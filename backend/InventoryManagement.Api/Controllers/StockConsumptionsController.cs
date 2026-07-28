@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using InventoryManagement.Api.Models;
 using InventoryManagement.Api.Services;
 
@@ -70,6 +71,12 @@ namespace InventoryManagement.Api.Controllers
                 var stockConsumption = await _stockConsumptionService.CreateAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id = stockConsumption.Id }, stockConsumption);
             }
+            catch (SqlException sqlEx) when (sqlEx.Number == 50001)
+            {
+                // Raised deliberately by StockConsumptionDetail_Insert when the store doesn't
+                // have enough stock - surface the real reason instead of a generic 500.
+                return BadRequest(new { message = sqlEx.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating stock consumption");
@@ -94,6 +101,10 @@ namespace InventoryManagement.Api.Controllers
 
                 var stockConsumption = await _stockConsumptionService.UpdateAsync(request);
                 return Ok(stockConsumption);
+            }
+            catch (SqlException sqlEx) when (sqlEx.Number == 50001)
+            {
+                return BadRequest(new { message = sqlEx.Message });
             }
             catch (Exception ex)
             {

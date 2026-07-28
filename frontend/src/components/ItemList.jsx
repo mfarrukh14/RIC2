@@ -15,6 +15,9 @@ const ItemList = ({ items, onEdit, onDelete }) => {
                 Item Type
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Brand
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Category
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -40,7 +43,7 @@ const ItemList = ({ items, onEdit, onDelete }) => {
           <tbody className="bg-white divide-y divide-gray-200">
             {items.length === 0 ? (
               <tr>
-                <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan="10" className="px-6 py-4 text-center text-sm text-gray-500">
                   No items found
                 </td>
               </tr>
@@ -52,6 +55,13 @@ const ItemList = ({ items, onEdit, onDelete }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {item.itemTypeName || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {item.brandName ? (
+                      <span className="text-gray-500">{item.brandName}</span>
+                    ) : (
+                      <span className="text-red-600 font-medium">No Brand</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {item.categoryName || '-'}

@@ -1,21 +1,16 @@
 -- =============================================
 -- Author: System Generated
 -- Create date: 2025-09-30
--- Description: Delete packing (soft delete)
+-- Description: Permanently delete a packing
 -- =============================================
-CREATE PROCEDURE [dbo].[Packing_Delete]
-    @Id INT,
-    @ModifiedById INT
+CREATE OR ALTER PROCEDURE [dbo].[Packing_Delete]
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    UPDATE dbo.Packings
-    SET
-        IsActive = 0,
-        ModifiedById = @ModifiedById,
-        ModifiedOn = GETUTCDATE()
+
+    DELETE FROM Inv.Packings
     WHERE Id = @Id;
-    
+
     SELECT @@ROWCOUNT as AffectedRows;
 END

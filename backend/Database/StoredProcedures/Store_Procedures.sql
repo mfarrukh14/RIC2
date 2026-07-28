@@ -341,7 +341,11 @@ GO
 
 -- =============================================
 -- Procedure: Store_Delete
--- Description: Delete a store (soft delete by setting IsActive = 0)
+-- Description: Permanently delete a store. Blocked if the store has
+-- associated racks/space allocations (checked here for a friendly message)
+-- or any other dependent record enforced by a database foreign key
+-- (e.g. queue tokens, challan forms, medicine stocks, patient pharmacy
+-- records) - those surface as a raw FK violation from SQL Server.
 -- =============================================
 IF OBJECT_ID('dbo.Store_Delete', 'P') IS NOT NULL
     DROP PROCEDURE dbo.Store_Delete;
@@ -354,21 +358,19 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Check if store has dependent records
-    IF EXISTS (SELECT 1 FROM dbo.Racks WHERE StoreId = @StoreId)
+    IF EXISTS (SELECT 1 FROM Inv.Racks WHERE StoreId = @StoreId)
     BEGIN
         RAISERROR('Cannot delete store. It has associated racks.', 16, 1);
         RETURN;
     END
 
-    IF EXISTS (SELECT 1 FROM dbo.SpaceAllocations WHERE StoreId = @StoreId)
+    IF EXISTS (SELECT 1 FROM Inv.SpaceAllocations WHERE StoreId = @StoreId)
     BEGIN
         RAISERROR('Cannot delete store. It has associated space allocations.', 16, 1);
         RETURN;
     END
 
-    -- Soft delete
-    UPDATE dbo.Stores
-    SET IsActive = 0, ModifiedOn = GETDATE()
+    DELETE FROM Inv.PharmacyStores
     WHERE StoreId = @StoreId;
 END
 GO

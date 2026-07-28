@@ -28,7 +28,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.AssetAllocations (
+    INSERT INTO Inv.AssetAllocations (
         Notes, AllocatedDate, UserId, DepartmentId, SubDepartmentId,
         RoomId, ItemId, BranchId, Quantity,
         IsActive, CreatedById, CreatedOn

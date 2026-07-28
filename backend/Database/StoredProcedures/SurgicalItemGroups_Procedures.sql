@@ -3,71 +3,59 @@
 -- =============================================
 
 -- 1. Get All Surgical Item Groups
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_GetAll')
-    DROP PROCEDURE SurgicalItemGroups_GetAll;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_GetAll
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_GetAll
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         sg.Id,
         sg.Name,
         sg.Description,
         sg.BranchId,
         b.Name AS BranchName,
-        sg.SubServiceId,
+        sg.SubServiceName AS SubServiceId,
         sg.IsActive,
         sg.CreatedById,
         sg.CreatedOn,
         sg.ModifiedById,
         sg.ModifiedOn,
         sg.IsDeleted
-    FROM dbo.SurgicalItemGroups sg
-    LEFT JOIN dbo.Branches b ON sg.BranchId = b.Id
+    FROM Inv.SurgicalGroups sg
+    LEFT JOIN Inv.Branches b ON sg.BranchId = b.Id
     WHERE sg.IsDeleted = 0 AND sg.IsActive = 1
     ORDER BY sg.CreatedOn DESC;
 END
 GO
 
 -- 2. Get Surgical Item Group By Id
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_GetById')
-    DROP PROCEDURE SurgicalItemGroups_GetById;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_GetById
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_GetById
     @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         sg.Id,
         sg.Name,
         sg.Description,
         sg.BranchId,
         b.Name AS BranchName,
-        sg.SubServiceId,
+        sg.SubServiceName AS SubServiceId,
         sg.IsActive,
         sg.CreatedById,
         sg.CreatedOn,
         sg.ModifiedById,
         sg.ModifiedOn,
         sg.IsDeleted
-    FROM dbo.SurgicalItemGroups sg
-    LEFT JOIN dbo.Branches b ON sg.BranchId = b.Id
+    FROM Inv.SurgicalGroups sg
+    LEFT JOIN Inv.Branches b ON sg.BranchId = b.Id
     WHERE sg.Id = @Id AND sg.IsDeleted = 0;
 END
 GO
 
 -- 3. Insert Surgical Item Group
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_Insert')
-    DROP PROCEDURE SurgicalItemGroups_Insert;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_Insert
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_Insert
     @Name NVARCHAR(MAX) = NULL,
     @Description NVARCHAR(MAX) = NULL,
     @BranchId INT,
@@ -77,11 +65,14 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.SurgicalItemGroups (
+    -- SubServiceId is a free-text service label from the UI, not a real
+    -- foreign key (the underlying column is an unrelated int), so it is
+    -- stored in SubServiceName instead.
+    INSERT INTO Inv.SurgicalGroups (
         Name,
         Description,
         BranchId,
-        SubServiceId,
+        SubServiceName,
         CreatedById,
         CreatedOn,
         IsDeleted,
@@ -92,7 +83,7 @@ BEGIN
         @Description,
         @BranchId,
         @SubServiceId,
-        @CreatedById,
+        TRY_CONVERT(INT, @CreatedById),
         GETDATE(),
         0,
         1
@@ -103,11 +94,7 @@ END
 GO
 
 -- 4. Update Surgical Item Group
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_Update')
-    DROP PROCEDURE SurgicalItemGroups_Update;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_Update
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_Update
     @Id INT,
     @Name NVARCHAR(MAX) = NULL,
     @Description NVARCHAR(MAX) = NULL,
@@ -118,13 +105,13 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.SurgicalItemGroups
-    SET 
+    UPDATE Inv.SurgicalGroups
+    SET
         Name = @Name,
         Description = @Description,
         BranchId = @BranchId,
-        SubServiceId = @SubServiceId,
-        ModifiedById = @ModifiedById,
+        SubServiceName = @SubServiceId,
+        ModifiedById = TRY_CONVERT(INT, @ModifiedById),
         ModifiedOn = GETDATE()
     WHERE Id = @Id AND IsDeleted = 0;
 
@@ -133,18 +120,14 @@ END
 GO
 
 -- 5. Delete Surgical Item Group (Soft Delete)
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_Delete')
-    DROP PROCEDURE SurgicalItemGroups_Delete;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_Delete
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_Delete
     @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.SurgicalItemGroups
-    SET 
+    UPDATE Inv.SurgicalGroups
+    SET
         IsDeleted = 1,
         IsActive = 0,
         ModifiedOn = GETDATE()
@@ -155,20 +138,16 @@ END
 GO
 
 -- 6. Get Lookup Data
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'SurgicalItemGroups_GetLookupData')
-    DROP PROCEDURE SurgicalItemGroups_GetLookupData;
-GO
-
-CREATE PROCEDURE SurgicalItemGroups_GetLookupData
+CREATE OR ALTER PROCEDURE SurgicalItemGroups_GetLookupData
 AS
 BEGIN
     SET NOCOUNT ON;
 
     -- Branches
-    SELECT 
+    SELECT
         Id,
         Name
-    FROM dbo.Branches
+    FROM Inv.Branches
     WHERE IsActive = 1
     ORDER BY Name;
 END

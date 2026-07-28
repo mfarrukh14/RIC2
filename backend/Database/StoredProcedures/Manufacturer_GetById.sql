@@ -38,10 +38,10 @@ BEGIN
         m.CreatedOn,
         m.ModifiedById,
         m.ModifiedOn
-    FROM dbo.Manufacturers m
-    LEFT JOIN dbo.Countries c ON m.CountryId = c.Id
-    LEFT JOIN dbo.StateOrProvinces sp ON m.StateOrProvinceId = sp.Id
-    LEFT JOIN dbo.Cities ct ON m.CityId = ct.Id
-    LEFT JOIN dbo.Branches b ON m.BranchId = b.Id
+    FROM Inv.Manufacturers m
+    LEFT JOIN Inv.Countries c ON m.CountryId = c.Id
+    LEFT JOIN Inv.StateOrProvinces sp ON m.StateOrProvinceId = sp.Id
+    LEFT JOIN Inv.Cities ct ON m.CityId = ct.Id
+    LEFT JOIN Inv.Branches b ON m.BranchId = b.Id
     WHERE m.Id = @Id;
 END

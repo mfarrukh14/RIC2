@@ -94,8 +94,13 @@ const AssetAllocationReportPage = () => {
     setError(null);
 
     try {
-      console.log('Generating report with filters:', filters);
-      const data = await assetAllocationReportApi.getReport(filters);
+      const payload = {
+        ...filters,
+        startDate: filters.startDate || null,
+        endDate: filters.endDate || null,
+      };
+      console.log('Generating report with filters:', payload);
+      const data = await assetAllocationReportApi.getReport(payload);
       console.log('Report data received:', data);
       setReportData(data);
       if (data.length === 0) {

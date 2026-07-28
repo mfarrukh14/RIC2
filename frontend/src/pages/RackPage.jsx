@@ -82,7 +82,7 @@ const RackPage = () => {
         await racksApi.deleteRack(id);
         await loadRacks();
       } catch (err) {
-        alert('Failed to delete rack');
+        alert(err.response?.data?.message || err.response?.data || 'Failed to delete rack');
         console.error('Error deleting rack:', err);
       }
     }

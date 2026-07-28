@@ -120,7 +120,12 @@ const ItemForm = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
+    if (!formData.categoryId) {
+      alert('Category is required');
+      return;
+    }
+
     // Convert empty strings to null for numeric and foreign key fields
     const cleanedData = {
       ...formData,
@@ -209,7 +214,7 @@ const ItemForm = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category
+              Category *
             </label>
             <select
               name="categoryId"

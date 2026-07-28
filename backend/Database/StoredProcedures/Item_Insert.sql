@@ -3,11 +3,7 @@
 -- Create date: 2025-10-03
 -- Description: Insert new item
 -- =============================================
-IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Item_Insert')
-    DROP PROCEDURE [dbo].[Item_Insert]
-GO
-
-CREATE PROCEDURE [dbo].[Item_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[Item_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @Model NVARCHAR(MAX) = NULL,
@@ -55,8 +51,8 @@ BEGIN
     SET NOCOUNT ON;
     
     DECLARE @NewId INT;
-    
-    INSERT INTO dbo.Items (
+
+    INSERT INTO Inv.Items (
         Name, Description, Model, BarCode, Specification,
         ItemTypeId, BrandId, PackingId, UnitId, PriceId,
         CategoryId, SubCategoryId, Frequency, IsProduct,
@@ -67,24 +63,23 @@ BEGIN
         TaxTypeId, Colour, MinimumPanicLevel, IsHidePanicFromBill,
         QuantityPerPacket, IsConsumptionItem, IsFridgeItem,
         Code, MarketPrice, MinimumOrderPrice, MinimumOrderQuantity,
-        PackageType, PackageSize, IsActive, CreatedById, CreatedOn
+        PackageType, PackageSize, IsActive, CreatedById, CreatedOn, ModifiedOn
     )
     VALUES (
         @Name, @Description, @Model, @BarCode, @Specification,
         @ItemTypeId, @BrandId, @PackingId, @UnitId, @PriceId,
-        @CategoryId, @SubCategoryId, @Frequency, @IsProduct,
-        @BatchExpiryRequired, @DescriptionForSale, @SaleUnitId,
-        @Conversion, @CaseContains, @HSCode, @RetailPrice,
-        @CostMethod, @SalesAccountId, @InventoryAccountId,
+        @CategoryId, @SubCategoryId, @Frequency, ISNULL(@IsProduct, 0),
+        ISNULL(@BatchExpiryRequired, 0), @DescriptionForSale, @SaleUnitId,
+        ISNULL(@Conversion, 0), ISNULL(TRY_CONVERT(INT, @CaseContains), 0), @HSCode, ISNULL(@RetailPrice, 0),
+        ISNULL(@CostMethod, 0), @SalesAccountId, @InventoryAccountId,
         @ExpenseAccountId, @TaxRateId, @TaxDescriptionId,
         @TaxTypeId, @Colour, @MinimumPanicLevel, @IsHidePanicFromBill,
         @QuantityPerPacket, @IsConsumptionItem, @IsFridgeItem,
         @Code, @MarketPrice, @MinimumOrderPrice, @MinimumOrderQuantity,
-        @PackageType, @PackageSize, @IsActive, @CreatedById, GETUTCDATE()
+        @PackageType, @PackageSize, @IsActive, @CreatedById, GETUTCDATE(), GETUTCDATE()
     );
-    
+
     SET @NewId = SCOPE_IDENTITY();
-    
+
     SELECT @NewId as Id;
 END
-GO

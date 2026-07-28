@@ -51,7 +51,7 @@ const PackingForm = ({ packing, onSave, onCancel, isEditing = false }) => {
       };
 
       if (isEditing && packing) {
-        await packingApi.update(packing.id, submitData);
+        await packingApi.update(packing.id, { ...submitData, id: packing.id });
       } else {
         await packingApi.create(submitData);
       }

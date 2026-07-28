@@ -1,21 +1,16 @@
 -- =============================================
 -- Author: System Generated
 -- Create date: 2025-09-30
--- Description: Delete item unit (soft delete)
+-- Description: Permanently delete an item unit
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemUnit_Delete]
-    @Id INT,
-    @ModifiedById INT
+CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_Delete]
+    @Id INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    UPDATE dbo.ItemUnits
-    SET
-        IsActive = 0,
-        ModifiedById = @ModifiedById,
-        ModifiedOn = GETUTCDATE()
+
+    DELETE FROM Inv.ItemUnits
     WHERE Id = @Id;
-    
+
     SELECT @@ROWCOUNT as AffectedRows;
 END

@@ -37,7 +37,7 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
       await manufacturerApi.delete(id);
       await loadManufacturers(); // Refresh the list
     } catch (err) {
-      setError('Failed to delete manufacturer: ' + (err.response?.data || err.message));
+      setError('Failed to delete manufacturer: ' + (err.response?.data?.message || err.response?.data || err.message));
       console.error('Error deleting manufacturer:', err);
     }
   };

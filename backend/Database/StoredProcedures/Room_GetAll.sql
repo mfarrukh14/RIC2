@@ -11,16 +11,19 @@ CREATE PROCEDURE [dbo].[Room_GetAll]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
-        Id,
-        Name,
-        Description,
-        Floor,
-        Building,
-        Capacity,
-        IsActive
-    FROM dbo.Rooms
-    WHERE IsActive = 1
-    ORDER BY Building, Floor, Name;
+
+    SELECT
+        r.Id,
+        r.Name,
+        r.Description,
+        flr.Name AS Floor,
+        bld.Name AS Building,
+        r.Capacity,
+        r.IsActive
+    FROM Inv.Rooms r
+    LEFT JOIN dbo.Rooms dr ON r.Id = dr.RID
+    LEFT JOIN dbo.Building bld ON dr.BID = bld.BID
+    LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
+    WHERE r.IsActive = 1
+    ORDER BY bld.Name, flr.Name, r.Name;
 END

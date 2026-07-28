@@ -28,7 +28,8 @@ BEGIN
         cb.BillDate AS PurchaseOrderDate,
         cb.VendorId,
         v.Name AS VendorName,
-        NULL AS BudgetSetupId,
+        CAST(cb.BudgetHeadId AS NVARCHAR(450)) AS BudgetSetupId,
+        d.Name AS BudgetSetupName,
         cb.BillNumber AS BillNo,
         cb.BillDate,
         CAST(NULL AS REAL) AS BudgetAllotment,
@@ -71,10 +72,12 @@ BEGIN
     FROM dbo.ContingentBills cb
     LEFT JOIN dbo.Vendors v ON cb.VendorId = v.Id
     LEFT JOIN dbo.Branches b ON cb.BranchId = b.Id
+    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.Id
     WHERE cb.IsActive = 1
         AND (@VendorId IS NULL OR cb.VendorId = @VendorId)
         AND (@DateStart IS NULL OR cb.BillDate >= @DateStart)
         AND (@DateEnd IS NULL OR cb.BillDate <= @DateEnd)
+        AND (@BudgetSetupId IS NULL OR cb.BudgetHeadId = TRY_CAST(@BudgetSetupId AS INT))
     ORDER BY cb.CreatedOn DESC;
 END
 GO
@@ -99,7 +102,8 @@ BEGIN
         cb.BillDate AS PurchaseOrderDate,
         cb.VendorId,
         v.Name AS VendorName,
-        NULL AS BudgetSetupId,
+        CAST(cb.BudgetHeadId AS NVARCHAR(450)) AS BudgetSetupId,
+        d.Name AS BudgetSetupName,
         cb.BillNumber AS BillNo,
         cb.BillDate,
         CAST(NULL AS REAL) AS BudgetAllotment,
@@ -142,6 +146,7 @@ BEGIN
     FROM dbo.ContingentBills cb
     LEFT JOIN dbo.Vendors v ON cb.VendorId = v.Id
     LEFT JOIN dbo.Branches b ON cb.BranchId = b.Id
+    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.Id
     WHERE cb.Id = @Id;
 END
 GO
@@ -194,6 +199,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    DECLARE @DefaultStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreId);
+
     INSERT INTO dbo.ContingentBills (
         BillNumber,
         Amount,
@@ -201,6 +208,7 @@ BEGIN
         BranchId,
         StoreId,
         VendorId,
+        BudgetHeadId,
         Status,
         Notes,
         IsActive,
@@ -212,8 +220,9 @@ BEGIN
         @BillAmount,
         @BillDate,
         @BranchId,
-        NULL,
+        @DefaultStoreId,
         @VendorId,
+        TRY_CAST(@BudgetSetupId AS INT),
         'Pending',
         @Remarks,
         1,
@@ -274,11 +283,12 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE dbo.ContingentBills
-    SET 
+    SET
         BillNumber = @BillNo,
         Amount = @BillAmount,
         BillDate = @BillDate,
         VendorId = @VendorId,
+        BudgetHeadId = TRY_CAST(@BudgetSetupId AS INT),
         Notes = @Remarks,
         ModifiedById = CASE WHEN @ModifiedById IS NOT NULL THEN TRY_CAST(@ModifiedById AS INT) ELSE NULL END,
         ModifiedOn = GETDATE()
@@ -344,11 +354,25 @@ BEGIN
     ORDER BY Name;
 
     -- Branches
-    SELECT 
+    SELECT
         Id,
         Name
     FROM dbo.Branches
     WHERE IsActive = 1
+    ORDER BY Name;
+
+    -- Departments (used as Budget Head for now). dbo.Departments has many
+    -- duplicate Name rows; collapse to one row per distinct Name (lowest Id).
+    ;WITH DedupedDepartments AS (
+        SELECT
+            Id, Name,
+            ROW_NUMBER() OVER (PARTITION BY Name ORDER BY Id) AS rn
+        FROM dbo.Departments
+        WHERE IsActive = 1
+    )
+    SELECT Id, Name
+    FROM DedupedDepartments
+    WHERE rn = 1
     ORDER BY Name;
 END
 GO

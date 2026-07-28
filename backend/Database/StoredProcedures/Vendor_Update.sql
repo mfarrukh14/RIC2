@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Update existing vendor
 -- =============================================
-CREATE PROCEDURE [dbo].[Vendor_Update]
+CREATE OR ALTER PROCEDURE [dbo].[Vendor_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
@@ -37,7 +37,8 @@ CREATE PROCEDURE [dbo].[Vendor_Update]
     @CreditLimit INT = NULL,
     @FaxNo NVARCHAR(MAX) = NULL,
     @IsVerified BIT = 0,
-    @ModifiedById INT
+    @ModifiedById INT,
+    @IsActive BIT = 1
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -76,6 +77,7 @@ BEGIN
         CreditLimit = @CreditLimit,
         FaxNo = @FaxNo,
         IsVerified = @IsVerified,
+        IsActive = @IsActive,
         ModifiedById = @ModifiedById,
         ModifiedOn = GETUTCDATE()
     WHERE Id = @Id;

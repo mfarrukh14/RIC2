@@ -19,8 +19,8 @@ BEGIN
         sd.DepartmentId,
         d.Name as DepartmentName,
         sd.IsActive
-    FROM dbo.SubDepartments sd
-    LEFT JOIN dbo.Departments d ON sd.DepartmentId = d.Id
+    FROM Inv.SubDepartments sd
+    LEFT JOIN Inv.Departments d ON sd.DepartmentId = d.Id
     WHERE sd.IsActive = 1
     ORDER BY d.Name, sd.Name;
 END

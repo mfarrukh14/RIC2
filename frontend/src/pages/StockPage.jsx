@@ -58,7 +58,8 @@ const StockPage = () => {
       setStores(data.stores || []);
       setItems(data.items || []);
       setStockTypes(data.stockTypes || []);
-      // Note: Item types and categories need to be loaded separately if available
+      setCategories(data.categories || []);
+      // Note: Item types need to be loaded separately if available
     } catch (err) {
       console.error('Error loading lookup data:', err);
     }
@@ -200,23 +201,28 @@ const StockPage = () => {
             </select>
           </div>
 
-          {/* Category(s) */}
+          {/* Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category(s)
+              Category
             </label>
             <select
-              multiple
-              size={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedCategories[0] || ''}
               onChange={(e) => {
-                const options = Array.from(e.target.selectedOptions);
-                setSelectedCategories(options.map(opt => opt.value));
+                setSelectedCategories(e.target.value ? [e.target.value] : []);
               }}
             >
-              <option value="">Please Select</option>
-              <option value="1">Category 1</option>
-              <option value="2">Category 2</option>
+              <option value="">All Categories</option>
+              {categories.map((category, index) => {
+                const categoryId = category.id ?? category.categoryId ?? '';
+                const categoryName = category.name ?? category.categoryName ?? `Category ${index + 1}`;
+                return (
+                  <option key={`category-${categoryId || index}`} value={categoryId}>
+                    {categoryName}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

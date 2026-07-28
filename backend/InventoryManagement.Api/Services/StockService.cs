@@ -172,7 +172,9 @@ ORDER BY i.Name ASC;",
                 ItemName = reader.GetString(reader.GetOrdinal("ItemName")),
                 StockType = reader.IsDBNull(reader.GetOrdinal("StockType")) ? null : reader.GetString(reader.GetOrdinal("StockType")),
                 TotalItems = reader.IsDBNull(reader.GetOrdinal("TotalItems")) ? null : reader.GetInt32(reader.GetOrdinal("TotalItems")),
-                MinimumPanicLevel = reader.IsDBNull(reader.GetOrdinal("MinimumPanicLevel")) ? null : reader.GetInt32(reader.GetOrdinal("MinimumPanicLevel")),
+                // COALESCE(s.MinimumPanicLevel [int], i.MinimumPanicLevel [real], 0) gets promoted to
+                // real by SQL Server's type precedence rules, so the reader hands back a Single here.
+                MinimumPanicLevel = reader.IsDBNull(reader.GetOrdinal("MinimumPanicLevel")) ? null : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("MinimumPanicLevel"))),
                 StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),

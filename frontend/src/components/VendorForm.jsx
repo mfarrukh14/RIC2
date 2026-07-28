@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { vendorApi } from '../services/api';
+import LocationFields from './LocationFields';
 
 const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
   const [formData, setFormData] = useState({
@@ -34,6 +35,7 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [duplicateMessage, setDuplicateMessage] = useState(null);
 
   useEffect(() => {
     if (vendor) {
@@ -81,6 +83,7 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setDuplicateMessage(null);
 
     try {
       if (isEditing && vendor) {
@@ -90,11 +93,16 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
       }
       onSave();
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 
-                          err.response?.data || 
-                          err.message || 
+      const errorMessage = err.response?.data?.message ||
+                          err.response?.data ||
+                          err.message ||
                           'An error occurred';
-      setError(errorMessage);
+
+      if (err.response?.status === 409) {
+        setDuplicateMessage(errorMessage);
+      } else {
+        setError(errorMessage);
+      }
       console.error('Error saving vendor:', err);
     } finally {
       setLoading(false);
@@ -190,8 +198,8 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
             <h4 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-200">
               Address Information
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Address *
                 </label>
@@ -204,33 +212,16 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
                   placeholder="Address"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City
-                </label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="City"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State
-                </label>
-                <input
-                  type="text"
-                  name="state"
-                  value={formData.state}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="State"
-                />
-              </div>
-              <div>
+              <LocationFields
+                countryValue={formData.country}
+                stateValue={formData.state}
+                cityValue={formData.city}
+                countryFieldName="country"
+                stateFieldName="state"
+                cityFieldName="city"
+                onLocationChange={(fields) => setFormData(prev => ({ ...prev, ...fields }))}
+              />
+              <div className="md:w-1/3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Postal Code
                 </label>
@@ -242,25 +233,6 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="12345"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country
-                </label>
-                <select
-                  name="country"
-                  value={formData.country}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Country</option>
-                  <option value="USA">USA</option>
-                  <option value="Canada">Canada</option>
-                  <option value="UK">United Kingdom</option>
-                  <option value="India">India</option>
-                  <option value="Pakistan">Pakistan</option>
-                  <option value="Other">Other</option>
-                </select>
               </div>
             </div>
           </div>
@@ -580,6 +552,31 @@ const VendorForm = ({ vendor, onSave, onCancel, isEditing = false }) => {
         </form>
         </div>
       </div>
+
+      {duplicateMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-red-100">
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900">Duplicate Vendor</h3>
+                <p className="mt-1 text-sm text-gray-600">{duplicateMessage}</p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDuplicateMessage(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

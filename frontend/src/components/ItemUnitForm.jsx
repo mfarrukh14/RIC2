@@ -36,9 +36,13 @@ const ItemUnitForm = ({ onBack, itemUnitToEdit }) => {
 
     try {
       if (itemUnitToEdit) {
-        await itemUnitApi.update(itemUnitToEdit.id, formData);
+        await itemUnitApi.update(itemUnitToEdit.id, {
+          ...formData,
+          id: itemUnitToEdit.id,
+          modifiedById: 1,
+        });
       } else {
-        await itemUnitApi.create(formData);
+        await itemUnitApi.create({ ...formData, createdById: 1 });
       }
       onBack(); // Navigate back after successful save
     } catch (err) {

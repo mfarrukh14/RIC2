@@ -41,7 +41,7 @@ namespace InventoryManagement.Api.Services
                     expiredStocks.Add(new ExpiredStock
                     {
                         Name = reader.GetString(reader.GetOrdinal("Name")),
-                        StockType = reader.GetString(reader.GetOrdinal("StockType")),
+                        StockType = reader.IsDBNull(reader.GetOrdinal("StockType")) ? string.Empty : reader.GetString(reader.GetOrdinal("StockType")),
                         BatchNo = reader.IsDBNull(reader.GetOrdinal("BatchNo")) ? null : reader.GetString(reader.GetOrdinal("BatchNo")),
                         MfgDate = reader.IsDBNull(reader.GetOrdinal("MfgDate")) ? null : reader.GetDateTime(reader.GetOrdinal("MfgDate")),
                         ExpDate = reader.IsDBNull(reader.GetOrdinal("ExpDate")) ? null : reader.GetDateTime(reader.GetOrdinal("ExpDate")),

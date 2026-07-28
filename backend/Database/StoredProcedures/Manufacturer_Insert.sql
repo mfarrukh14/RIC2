@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Insert new manufacturer
 -- =============================================
-CREATE PROCEDURE [dbo].[Manufacturer_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[Manufacturer_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @Email NVARCHAR(MAX) = NULL,
@@ -27,25 +27,25 @@ CREATE PROCEDURE [dbo].[Manufacturer_Insert]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     DECLARE @NewId INT;
-    
-    INSERT INTO dbo.Manufacturers (
-        Name, Description, Email, Address, CNo, NTN, STN,
+
+    INSERT INTO Pharmacy.Manufacturers (
+        Name, Description, Email, Address, MobileNo, NTN, STN,
         CPName1, CPEmail1, CPContactNumber1,
         CPName2, CPEmail2, CPContactNumber2,
         CountryId, StateOrProvinceId, CityId, BranchId,
-        RegisteredOwner, IsActive, CreatedById, CreatedOn
+        RegisteredOwner, IsActive, IsDeleted, CreatedById, CreatedOn
     )
     VALUES (
         @Name, @Description, @Email, @Address, @CNo, @NTN, @STN,
         @CPName1, @CPEmail1, @CPContactNumber1,
         @CPName2, @CPEmail2, @CPContactNumber2,
         @CountryId, @StateOrProvinceId, @CityId, @BranchId,
-        @RegisteredOwner, @IsActive, @CreatedById, GETUTCDATE()
+        @RegisteredOwner, @IsActive, 0, @CreatedById, GETUTCDATE()
     );
-    
+
     SET @NewId = SCOPE_IDENTITY();
-    
+
     SELECT @NewId as Id;
 END
