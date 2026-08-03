@@ -87,5 +87,42 @@ namespace InventoryManagement.Api.Services
 
             throw new Exception("Failed to create stock audit");
         }
+
+        public async Task<List<StockAuditListItem>> GetAllAsync(StockAuditListRequest request)
+        {
+            using var connection = new SqlConnection(_connectionString);
+            using var command = new SqlCommand("StockAudit_GetAll", connection);
+            command.CommandType = CommandType.StoredProcedure;
+
+            command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@StartDate", (object?)request.StartDate ?? DBNull.Value);
+            command.Parameters.AddWithValue("@EndDate", (object?)request.EndDate ?? DBNull.Value);
+
+            await connection.OpenAsync();
+            using var reader = await command.ExecuteReaderAsync();
+
+            var items = new List<StockAuditListItem>();
+            while (await reader.ReadAsync())
+            {
+                items.Add(new StockAuditListItem
+                {
+                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                    AuditDate = reader.GetDateTime(reader.GetOrdinal("AuditDate")),
+                    StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
+                    StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
+                    BranchId = reader.GetInt32(reader.GetOrdinal("BranchId")),
+                    BranchName = reader.IsDBNull(reader.GetOrdinal("BranchName")) ? null : reader.GetString(reader.GetOrdinal("BranchName")),
+                    Remarks = reader.IsDBNull(reader.GetOrdinal("Remarks")) ? null : reader.GetString(reader.GetOrdinal("Remarks")),
+                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                    CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
+                    CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
+                    ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),
+                    ModifiedOn = reader.IsDBNull(reader.GetOrdinal("ModifiedOn")) ? null : reader.GetDateTime(reader.GetOrdinal("ModifiedOn"))
+                });
+            }
+
+            return items;
+        }
     }
 }

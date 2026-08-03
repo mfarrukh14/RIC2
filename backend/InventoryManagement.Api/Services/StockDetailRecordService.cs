@@ -44,13 +44,17 @@ namespace InventoryManagement.Api.Services
                 int sr = 1;
                 while (await reader.ReadAsync())
                 {
+                    var stockTypeOrdinal = reader.GetOrdinal("StockType");
+                    var buyingPriceOrdinal = reader.GetOrdinal("BuyingPrice");
+                    var sellingPriceOrdinal = reader.GetOrdinal("SellingPrice");
+
                     records.Add(new StockDetailRecord
                     {
                         Sr = sr++,
                         Name = reader.GetString(reader.GetOrdinal("Name")),
-                        StockType = reader.GetString(reader.GetOrdinal("StockType")),
-                        BuyingPrice = reader.GetDecimal(reader.GetOrdinal("BuyingPrice")),
-                        SellingPrice = reader.GetDecimal(reader.GetOrdinal("SellingPrice")),
+                        StockType = reader.IsDBNull(stockTypeOrdinal) ? string.Empty : reader.GetString(stockTypeOrdinal),
+                        BuyingPrice = reader.IsDBNull(buyingPriceOrdinal) ? 0 : reader.GetDecimal(buyingPriceOrdinal),
+                        SellingPrice = reader.IsDBNull(sellingPriceOrdinal) ? 0 : reader.GetDecimal(sellingPriceOrdinal),
                         Opening = reader.GetInt32(reader.GetOrdinal("Opening")),
                         Received = reader.GetInt32(reader.GetOrdinal("Received")),
                         Issued = reader.GetInt32(reader.GetOrdinal("Issued")),

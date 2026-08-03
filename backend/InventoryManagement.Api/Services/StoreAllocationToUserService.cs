@@ -185,49 +185,34 @@ namespace InventoryManagement.Api.Services
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                if (await TryLoadEmployeeDropdownAsync(
-                        connection,
-                        employees,
-                        "DropDown.DD_Users",
-                        CommandType.StoredProcedure,
-                        "value",
-                        "text"))
-                {
-                    return employees;
-                }
-
-                if (await TryLoadEmployeeDropdownAsync(
-                        connection,
-                        employees,
-                        @"
+                // Resolves each user's real person name (Employee.FullName, falling back to
+                // First+Last) instead of their login UserName. Admin-tier accounts
+                // (UserTypes.Value <= 3: Super Admin / Organization Admin / Branch Admin)
+                // are excluded - they already have implicit access to every store, so they
+                // don't need, and shouldn't need, an explicit allocation row.
+                const string sql = @"
 SELECT
-    UserID AS Value,
-    UserName AS Text
-FROM dbo.Users
-WHERE ISNULL(Status, 1) = 1
-  AND NULLIF(LTRIM(RTRIM(UserName)), '') IS NOT NULL
-ORDER BY UserName;",
-                        CommandType.Text,
-                        "Value",
-                        "Text"))
-                {
-                    return employees;
-                }
+    u.UserID AS Value,
+    ISNULL(e.FullName, NULLIF(LTRIM(RTRIM(ISNULL(e.FirstName, '') + ' ' + ISNULL(e.LastName, ''))), '')) AS Text
+FROM dbo.Users u
+INNER JOIN dbo.Employee e ON u.EmpID = e.EmpID
+INNER JOIN MemberShip.UserTypes ut ON ut.UTId = u.UserTypeId
+WHERE ISNULL(u.Status, 1) = 1
+  AND ut.Value > 3
+  AND ISNULL(e.FullName, NULLIF(LTRIM(RTRIM(ISNULL(e.FirstName, '') + ' ' + ISNULL(e.LastName, ''))), '')) IS NOT NULL
+ORDER BY Text;";
 
-                await TryLoadEmployeeDropdownAsync(
-                    connection,
-                    employees,
-                    @"
-SELECT
-    Id AS Value,
-    Name AS Text
-FROM dbo.Users
-WHERE ISNULL(IsActive, 1) = 1
-  AND NULLIF(LTRIM(RTRIM(Name)), '') IS NOT NULL
-ORDER BY Name;",
-                    CommandType.Text,
-                    "Value",
-                    "Text");
+                using var command = new SqlCommand(sql, connection);
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    employees.Add(new DropdownItem
+                    {
+                        Value = reader.GetInt32(reader.GetOrdinal("Value")),
+                        Text = reader.GetString(reader.GetOrdinal("Text"))
+                    });
+                }
 
                 return employees;
             }
@@ -255,44 +240,5 @@ ORDER BY Name;",
             };
         }
 
-        private async Task<bool> TryLoadEmployeeDropdownAsync(
-            SqlConnection connection,
-            List<DropdownItem> target,
-            string commandText,
-            CommandType commandType,
-            string valueColumn,
-            string textColumn)
-        {
-            try
-            {
-                using var command = new SqlCommand(commandText, connection)
-                {
-                    CommandType = commandType
-                };
-
-                using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    if (reader.IsDBNull(reader.GetOrdinal(valueColumn)) || reader.IsDBNull(reader.GetOrdinal(textColumn)))
-                    {
-                        continue;
-                    }
-
-                    target.Add(new DropdownItem
-                    {
-                        Value = Convert.ToInt32(reader.GetValue(reader.GetOrdinal(valueColumn))),
-                        Text = reader.GetString(reader.GetOrdinal(textColumn))
-                    });
-                }
-
-                return target.Count > 0;
-            }
-            catch (SqlException ex)
-            {
-                _logger.LogDebug(ex, "Employee dropdown source failed: {CommandText}", commandText);
-                target.Clear();
-                return false;
-            }
-        }
     }
 }

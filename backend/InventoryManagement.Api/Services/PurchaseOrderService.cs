@@ -43,7 +43,7 @@ SELECT
     COUNT(poi.Id) AS ItemsCount,
     STRING_AGG(COALESCE(i.Name, 'Unassigned Item'), ', ') AS ItemSummary
 FROM dbo.PurchaseOrders po
-INNER JOIN dbo.Stores s ON s.StoreId = po.StoreId
+INNER JOIN dbo.PharmacyStores s ON s.StoreId = po.StoreId
 INNER JOIN dbo.Vendors v ON v.Id = po.VendorId
 LEFT JOIN dbo.PurchaseOrderItems poi ON poi.PurchaseOrderId = po.PurchaseOrderId AND poi.IsActive = 1
 LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
@@ -135,7 +135,7 @@ SELECT
           AND poi.IsActive = 1
     ) AS ItemSummary
 FROM dbo.PurchaseOrders po
-INNER JOIN dbo.Stores s ON s.StoreId = po.StoreId
+INNER JOIN dbo.PharmacyStores s ON s.StoreId = po.StoreId
 INNER JOIN dbo.Vendors v ON v.Id = po.VendorId
 WHERE po.PurchaseOrderId = @PurchaseOrderId
   AND po.IsActive = 1;";

@@ -16,6 +16,20 @@ namespace InventoryManagement.Api.Controllers
             _stockAuditService = stockAuditService;
         }
 
+        [HttpGet]
+        public async Task<ActionResult<List<StockAuditListItem>>> GetAll([FromQuery] StockAuditListRequest request)
+        {
+            try
+            {
+                var audits = await _stockAuditService.GetAllAsync(request);
+                return Ok(audits);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving stock audits", error = ex.Message });
+            }
+        }
+
         [HttpPost("search")]
         public async Task<ActionResult<List<StockAuditItem>>> SearchStockAuditItems([FromBody] StockAuditSearchRequest request)
         {

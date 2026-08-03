@@ -269,6 +269,12 @@ namespace InventoryManagement.Api.Models
         public string? CategoryName { get; set; }
         public bool? IsFridgeItem { get; set; }
         public bool? IsConsumptionItem { get; set; }
+        public string? Location { get; set; }
+    }
+
+    public class UpdateMinimumPanicLevelRequest
+    {
+        public int MinimumPanicLevel { get; set; }
     }
 
     public class StockSearchRequest
@@ -309,6 +315,30 @@ namespace InventoryManagement.Api.Models
         public DateTime StockAuditDate { get; set; }
         public string? Remarks { get; set; }
         public int? CreatedById { get; set; }
+    }
+
+    public class StockAuditListRequest
+    {
+        public int? BranchId { get; set; }
+        public int? StoreId { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+
+    public class StockAuditListItem
+    {
+        public int Id { get; set; }
+        public DateTime AuditDate { get; set; }
+        public int StoreId { get; set; }
+        public string? StoreName { get; set; }
+        public int BranchId { get; set; }
+        public string? BranchName { get; set; }
+        public string? Remarks { get; set; }
+        public bool IsActive { get; set; }
+        public int? CreatedById { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public int? ModifiedById { get; set; }
+        public DateTime? ModifiedOn { get; set; }
     }
 
     public class StockAuditSearchRequest

@@ -70,6 +70,10 @@ namespace InventoryManagement.Api.Controllers
                 var stockAdjustment = await _stockAdjustmentService.CreateAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id = stockAdjustment.Id }, stockAdjustment);
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating stock adjustment");
@@ -95,6 +99,10 @@ namespace InventoryManagement.Api.Controllers
                 var stockAdjustment = await _stockAdjustmentService.UpdateAsync(request);
                 return Ok(stockAdjustment);
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating stock adjustment with ID {Id}", id);
@@ -115,6 +123,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {

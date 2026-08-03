@@ -78,8 +78,19 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest(new { message = "Name is required" });
                 }
 
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot create a rack row." });
+                }
+
+                request.BranchId = branchId;
+
                 var createdRow = await _rackRowService.CreateRackRowAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id = createdRow.Id }, createdRow);
+            }
+            catch (SqlException ex) when (ex.Message.Contains("already exists"))
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -98,6 +109,13 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest(new { message = "Name is required" });
                 }
 
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot update this rack row." });
+                }
+
+                request.BranchId = branchId;
+
                 var success = await _rackRowService.UpdateRackRowAsync(id, request);
                 if (!success)
                 {
@@ -105,6 +123,10 @@ namespace InventoryManagement.Api.Controllers
                 }
 
                 return NoContent();
+            }
+            catch (SqlException ex) when (ex.Message.Contains("already exists"))
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {

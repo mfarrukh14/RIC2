@@ -62,8 +62,17 @@ namespace InventoryManagement.API.Controllers
         {
             try
             {
-                var returnInventory = await _returnInventoryService.CreateAsync(request);
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot create a return." });
+                }
+
+                var returnInventory = await _returnInventoryService.CreateAsync(request, branchId, UserId);
                 return CreatedAtAction(nameof(GetById), new { id = returnInventory.Id }, returnInventory);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -77,7 +86,7 @@ namespace InventoryManagement.API.Controllers
         {
             try
             {
-                var success = await _returnInventoryService.UpdateAsync(id, request);
+                var success = await _returnInventoryService.UpdateAsync(id, request, UserId);
                 if (!success)
                 {
                     return NotFound(new { message = $"Return inventory with ID {id} not found" });
@@ -96,7 +105,7 @@ namespace InventoryManagement.API.Controllers
         {
             try
             {
-                var success = await _returnInventoryService.DeleteAsync(id);
+                var success = await _returnInventoryService.DeleteAsync(id, UserId);
                 if (!success)
                 {
                     return NotFound(new { message = $"Return inventory with ID {id} not found" });

@@ -141,21 +141,29 @@ namespace InventoryManagement.Api.Services
                     // Insert details
                     foreach (var detail in request.Details)
                     {
-                        using var detailCommand = new SqlCommand("StockAdjustmentDetail_Insert", connection, transaction);
-                        detailCommand.CommandType = CommandType.StoredProcedure;
-                        var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
-                        detailCommand.Parameters.Add(detailIdParam);
-                        detailCommand.Parameters.AddWithValue("@StockAdjustmentId", stockAdjustmentId);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
-                        detailCommand.Parameters.AddWithValue("@Type", detail.Type);
-                        detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
-                        detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
-                        detailCommand.Parameters.AddWithValue("@SaleValue", (object?)detail.SaleValue ?? DBNull.Value);
-                        detailCommand.Parameters.AddWithValue("@BranchId", request.BranchId);
-                        detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
-                        detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
+                        using (var detailCommand = new SqlCommand("StockAdjustmentDetail_Insert", connection, transaction))
+                        {
+                            detailCommand.CommandType = CommandType.StoredProcedure;
+                            var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
+                            detailCommand.Parameters.Add(detailIdParam);
+                            detailCommand.Parameters.AddWithValue("@StockAdjustmentId", stockAdjustmentId);
+                            detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                            detailCommand.Parameters.AddWithValue("@Type", detail.Type);
+                            detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
+                            detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
+                            detailCommand.Parameters.AddWithValue("@SaleValue", (object?)detail.SaleValue ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@BranchId", request.BranchId);
+                            detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.CreatedById ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
 
-                        await detailCommand.ExecuteNonQueryAsync();
+                            await detailCommand.ExecuteNonQueryAsync();
+                        }
+
+                        // This is the actual stock effect - previously the insert above was
+                        // all that happened, so an adjustment was just a log entry that never
+                        // touched Inv.Stocks regardless of Type. Type 2 ("Issue") adds stock
+                        // into this store; Type 1 ("Less/Decrease") removes it.
+                        await ApplyStockEffectAsync(connection, transaction, detail.ItemId, request.StoreId, request.BranchId, detail.Type, detail.Quantity);
                     }
 
                     await transaction.CommitAsync();
@@ -167,6 +175,10 @@ namespace InventoryManagement.Api.Services
                     await transaction.RollbackAsync();
                     throw;
                 }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -186,6 +198,21 @@ namespace InventoryManagement.Api.Services
 
                 try
                 {
+                    // Undo whatever the previous save of this adjustment already did to
+                    // Inv.Stocks before applying the new lines - otherwise editing an
+                    // adjustment would double up its effect instead of correcting it. Reverse
+                    // against the OLD store, since the store itself may also be getting
+                    // changed by this edit.
+                    var previousStoreId = await GetAdjustmentStoreIdAsync(connection, transaction, request.Id);
+                    if (previousStoreId.HasValue)
+                    {
+                        var previousDetails = await GetActiveDetailsAsync(connection, transaction, request.Id);
+                        foreach (var previous in previousDetails)
+                        {
+                            await ReverseStockEffectAsync(connection, transaction, previous.ItemId, previousStoreId.Value, previous.Type, previous.Quantity);
+                        }
+                    }
+
                     // Update main stock adjustment
                     using (var command = new SqlCommand("StockAdjustment_Update", connection, transaction))
                     {
@@ -211,21 +238,25 @@ namespace InventoryManagement.Api.Services
                     // Insert new details
                     foreach (var detail in request.Details)
                     {
-                        using var detailCommand = new SqlCommand("StockAdjustmentDetail_Insert", connection, transaction);
-                        detailCommand.CommandType = CommandType.StoredProcedure;
-                        var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
-                        detailCommand.Parameters.Add(detailIdParam);
-                        detailCommand.Parameters.AddWithValue("@StockAdjustmentId", request.Id);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
-                        detailCommand.Parameters.AddWithValue("@Type", detail.Type);
-                        detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
-                        detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
-                        detailCommand.Parameters.AddWithValue("@SaleValue", (object?)detail.SaleValue ?? DBNull.Value);
-                        detailCommand.Parameters.AddWithValue("@BranchId", request.BranchId);
-                        detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.ModifiedById ?? DBNull.Value);
-                        detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
+                        using (var detailCommand = new SqlCommand("StockAdjustmentDetail_Insert", connection, transaction))
+                        {
+                            detailCommand.CommandType = CommandType.StoredProcedure;
+                            var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
+                            detailCommand.Parameters.Add(detailIdParam);
+                            detailCommand.Parameters.AddWithValue("@StockAdjustmentId", request.Id);
+                            detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                            detailCommand.Parameters.AddWithValue("@Type", detail.Type);
+                            detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
+                            detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
+                            detailCommand.Parameters.AddWithValue("@SaleValue", (object?)detail.SaleValue ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@BranchId", request.BranchId);
+                            detailCommand.Parameters.AddWithValue("@CreatedById", (object?)request.ModifiedById ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@CreatedOn", DateTime.UtcNow);
 
-                        await detailCommand.ExecuteNonQueryAsync();
+                            await detailCommand.ExecuteNonQueryAsync();
+                        }
+
+                        await ApplyStockEffectAsync(connection, transaction, detail.ItemId, request.StoreId, request.BranchId, detail.Type, detail.Quantity);
                     }
 
                     await transaction.CommitAsync();
@@ -237,6 +268,10 @@ namespace InventoryManagement.Api.Services
                     await transaction.RollbackAsync();
                     throw;
                 }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -250,23 +285,181 @@ namespace InventoryManagement.Api.Services
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand("StockAdjustment_Delete", connection)
-                {
-                    CommandType = CommandType.StoredProcedure
-                };
-
-                command.Parameters.AddWithValue("@Id", id);
-
                 await connection.OpenAsync();
-                var result = await command.ExecuteNonQueryAsync();
+                using var transaction = connection.BeginTransaction();
 
-                return result > 0;
+                try
+                {
+                    // Deleting an adjustment voids it - undo whatever it did to Inv.Stocks,
+                    // same as reversing on edit, so a deleted adjustment doesn't leave a
+                    // permanent, invisible effect on the store's balance.
+                    var storeId = await GetAdjustmentStoreIdAsync(connection, transaction, id);
+                    if (!storeId.HasValue)
+                    {
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    var details = await GetActiveDetailsAsync(connection, transaction, id);
+                    foreach (var detail in details)
+                    {
+                        await ReverseStockEffectAsync(connection, transaction, detail.ItemId, storeId.Value, detail.Type, detail.Quantity);
+                    }
+
+                    using (var command = new SqlCommand("StockAdjustment_Delete", connection, transaction)
+                    {
+                        CommandType = CommandType.StoredProcedure
+                    })
+                    {
+                        command.Parameters.AddWithValue("@Id", id);
+                        // StockAdjustment_Delete has SET NOCOUNT ON, so ExecuteNonQueryAsync's
+                        // return value is unreliable (-1, not the actual row count) - existence
+                        // was already confirmed above via GetAdjustmentStoreIdAsync, so that is
+                        // the source of truth for whether this delete succeeded, not this call.
+                        await command.ExecuteNonQueryAsync();
+                    }
+
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting stock adjustment with ID {Id}", id);
                 throw;
             }
+        }
+
+        // Type 2 ("Issue") adds stock into the store; Type 1 ("Less/Decrease", and anything
+        // else) removes it. Reversing simply applies the opposite direction for the same
+        // quantity - used when an adjustment is edited or deleted so its old effect doesn't
+        // linger or get double-counted.
+        private async Task ApplyStockEffectAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int type, decimal quantity)
+        {
+            var qty = (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
+            if (qty <= 0)
+            {
+                return;
+            }
+
+            if (type == 2)
+            {
+                await AddStockAsync(connection, transaction, itemId, storeId, branchId, qty);
+            }
+            else
+            {
+                var itemName = await GetItemNameAsync(connection, transaction, itemId);
+                await RemoveStockAsync(connection, transaction, itemId, itemName, storeId, qty);
+            }
+        }
+
+        private async Task ReverseStockEffectAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int type, decimal quantity)
+        {
+            var qty = (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
+            if (qty <= 0)
+            {
+                return;
+            }
+
+            if (type == 2)
+            {
+                var itemName = await GetItemNameAsync(connection, transaction, itemId);
+                await RemoveStockAsync(connection, transaction, itemId, itemName, storeId, qty);
+            }
+            else
+            {
+                // BranchId isn't needed when reversing a decrease back to an increase - the
+                // store already had a stock row (that's what made the original decrease
+                // possible), so this always takes the update branch of AddStockAsync's upsert.
+                await AddStockAsync(connection, transaction, itemId, storeId, 0, qty);
+            }
+        }
+
+        private async Task<string> GetItemNameAsync(SqlConnection connection, SqlTransaction transaction, int itemId)
+        {
+            using var command = new SqlCommand("SELECT Name FROM Inv.Items WHERE Id = @ItemId;", connection, transaction);
+            command.Parameters.AddWithValue("@ItemId", itemId);
+            var result = await command.ExecuteScalarAsync();
+            return result as string ?? $"Item #{itemId}";
+        }
+
+        private async Task<int?> GetAdjustmentStoreIdAsync(SqlConnection connection, SqlTransaction transaction, int stockAdjustmentId)
+        {
+            using var command = new SqlCommand("SELECT StoreId FROM Inv.StockAdjustments WHERE Id = @Id AND IsDeleted = 0;", connection, transaction);
+            command.Parameters.AddWithValue("@Id", stockAdjustmentId);
+            var result = await command.ExecuteScalarAsync();
+            return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
+        }
+
+        private async Task<List<(int ItemId, int Type, decimal Quantity)>> GetActiveDetailsAsync(SqlConnection connection, SqlTransaction transaction, int stockAdjustmentId)
+        {
+            var details = new List<(int, int, decimal)>();
+            using var command = new SqlCommand(
+                "SELECT ItemId, Type, Quantity FROM Inv.StockAdjustmentDetails WHERE StockAdjustmentId = @Id AND IsDeleted = 0;",
+                connection, transaction);
+            command.Parameters.AddWithValue("@Id", stockAdjustmentId);
+            using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                details.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2)));
+            }
+            return details;
+        }
+
+        // Deducts stock, guarding against removing more than is actually on hand (same check
+        // used for demand-request issuance).
+        private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, string itemName, int storeId, int quantity)
+        {
+            int available;
+            using (var selectCommand = new SqlCommand(
+                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                connection, transaction))
+            {
+                selectCommand.Parameters.AddWithValue("@ItemId", itemId);
+                selectCommand.Parameters.AddWithValue("@StoreId", storeId);
+                var result = await selectCommand.ExecuteScalarAsync();
+                available = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
+
+            if (available < quantity)
+            {
+                throw new InvalidOperationException($"Cannot decrease '{itemName}' by {quantity} - only {available} available in this store.");
+            }
+
+            using var updateCommand = new SqlCommand(
+                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                connection, transaction);
+            updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+            updateCommand.Parameters.AddWithValue("@StoreId", storeId);
+            updateCommand.Parameters.AddWithValue("@Quantity", quantity);
+            await updateCommand.ExecuteNonQueryAsync();
+        }
+
+        // Credits stock, upserting since the store may never have held this item before.
+        private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int quantity)
+        {
+            using var command = new SqlCommand(@"
+IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1)
+    UPDATE Inv.Stocks
+    SET TotalItems = ISNULL(TotalItems, 0) + @Quantity, ModifiedOn = GETDATE()
+    WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;
+ELSE
+    INSERT INTO Inv.Stocks (ItemId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
+    VALUES (@ItemId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());", connection, transaction);
+            command.Parameters.AddWithValue("@ItemId", itemId);
+            command.Parameters.AddWithValue("@StoreId", storeId);
+            command.Parameters.AddWithValue("@BranchId", branchId);
+            command.Parameters.AddWithValue("@Quantity", quantity);
+            await command.ExecuteNonQueryAsync();
         }
 
         private StockAdjustment MapToStockAdjustment(SqlDataReader reader)

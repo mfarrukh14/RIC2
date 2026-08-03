@@ -10,5 +10,6 @@ namespace InventoryManagement.Api.Services
         Task<bool> UpdateAsync(int id, TransferInventoryUpdateRequest request);
         Task<bool> DeleteAsync(int id);
         Task<TransferInventoryLookupData> GetLookupDataAsync();
+        Task<int> GetAvailableQuantityAsync(int storeId, int itemId);
     }
 }

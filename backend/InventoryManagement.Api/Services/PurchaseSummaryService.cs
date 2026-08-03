@@ -285,10 +285,13 @@ namespace InventoryManagement.API.Services
             return new PurchaseSummary
             {
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                PurchaseDate = reader.GetDateTime(reader.GetOrdinal("PurchaseDate")),
+                PurchaseDate = reader.IsDBNull(reader.GetOrdinal("PurchaseDate")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("PurchaseDate")),
                 BatchNo = reader.IsDBNull(reader.GetOrdinal("BatchNo")) ? null : reader.GetString(reader.GetOrdinal("BatchNo")),
                 ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
-                ItemName = reader.GetString(reader.GetOrdinal("ItemName")),
+                // The referenced Item can be missing (hard-deleted after the GRN line was
+                // created, since Items support hard delete) - fall back to a placeholder
+                // instead of crashing the whole report on one bad row.
+                ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? "(item not found)" : reader.GetString(reader.GetOrdinal("ItemName")),
                 StoreId = reader.IsDBNull(reader.GetOrdinal("StoreId")) ? null : reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
                 VendorId = reader.IsDBNull(reader.GetOrdinal("VendorId")) ? null : reader.GetInt32(reader.GetOrdinal("VendorId")),

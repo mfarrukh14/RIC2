@@ -94,6 +94,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@TransferDate", (object?)request.TransferDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Status", (object?)request.Status ?? "Pending");
                 command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
+                command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@CreatedById", 1); // TODO: Get from current user
 
                 await connection.OpenAsync();
@@ -222,6 +223,30 @@ namespace InventoryManagement.Api.Services
             }
 
             return lookupData;
+        }
+
+        public async Task<int> GetAvailableQuantityAsync(int storeId, int itemId)
+        {
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("TransferInventory_GetAvailableQuantity", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+
+                command.Parameters.AddWithValue("@StoreId", storeId);
+                command.Parameters.AddWithValue("@ItemId", itemId);
+
+                await connection.OpenAsync();
+                var result = await command.ExecuteScalarAsync();
+                return Convert.ToInt32(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving available quantity for item {ItemId} in store {StoreId}", itemId, storeId);
+                throw;
+            }
         }
 
         private static TransferInventory MapToTransferInventory(SqlDataReader reader)

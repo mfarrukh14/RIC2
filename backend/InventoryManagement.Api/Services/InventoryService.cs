@@ -216,7 +216,7 @@ namespace InventoryManagement.Api.Services
                 };
 
                 command.Parameters.AddWithValue("@Id", id);
-                AddDetailParameters(command, request);
+                AddDetailParameters(command, request, includeInventoryId: false);
 
                 await connection.OpenAsync();
                 var affectedRows = await command.ExecuteScalarAsync();
@@ -377,9 +377,14 @@ namespace InventoryManagement.Api.Services
             return lookupData;
         }
 
-        private static void AddDetailParameters(SqlCommand command, InventoryDetailCreateRequest request)
+        private static void AddDetailParameters(SqlCommand command, InventoryDetailCreateRequest request, bool includeInventoryId = true)
         {
-            command.Parameters.AddWithValue("@InventoryId", request.InventoryId);
+            // InventoryDetail_Update has no @InventoryId parameter - a detail's
+            // parent inventory can't be changed via update, only Insert accepts it.
+            if (includeInventoryId)
+            {
+                command.Parameters.AddWithValue("@InventoryId", request.InventoryId);
+            }
             command.Parameters.AddWithValue("@ItemId", request.ItemId);
             command.Parameters.AddWithValue("@ManufacturerId", (object?)request.ManufacturerId ?? DBNull.Value);
             command.Parameters.AddWithValue("@MfgDate", (object?)request.MfgDate ?? DBNull.Value);

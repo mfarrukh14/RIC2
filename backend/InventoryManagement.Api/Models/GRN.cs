@@ -89,6 +89,8 @@ namespace InventoryManagement.Api.Models
     // DTOs
     public class GRNCreateRequest
     {
+        [Required]
+        public int PurchaseOrderId { get; set; }
         public string PONumber { get; set; } = string.Empty;
         [Required]
         public int VendorId { get; set; }
@@ -148,5 +150,15 @@ namespace InventoryManagement.Api.Models
         public List<Vendor> Vendors { get; set; } = new();
         public List<StockType> StockTypes { get; set; } = new();
         public List<Manufacturer> Manufacturers { get; set; } = new();
+        public List<PurchaseOrderOption> PurchaseOrders { get; set; } = new();
+    }
+
+    // Purchase Order picker for the GRN "receive against this PO" dropdown - the store
+    // that gets credited on receipt is resolved from the selected PO's StoreId.
+    public class PurchaseOrderOption
+    {
+        public int Id { get; set; }
+        public string PONumber { get; set; } = string.Empty;
+        public string? VendorName { get; set; }
     }
 }

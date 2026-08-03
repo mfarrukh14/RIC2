@@ -184,6 +184,7 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
 
+                command.Parameters.AddWithValue("@PurchaseOrderId", request.PurchaseOrderId);
                 command.Parameters.AddWithValue("@PONumber", request.PONumber);
                 command.Parameters.AddWithValue("@VendorId", request.VendorId);
                 command.Parameters.AddWithValue("@InvoiceNo", (object?)request.InvoiceNo ?? DBNull.Value);
@@ -317,6 +318,20 @@ namespace InventoryManagement.Api.Services
                         {
                             Id = reader.GetInt32("Id"),
                             Name = reader.GetString("Name")
+                        });
+                    }
+                }
+
+                // Purchase Orders (to receive against)
+                if (await reader.NextResultAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        lookupData.PurchaseOrders.Add(new PurchaseOrderOption
+                        {
+                            Id = reader.GetInt32("Id"),
+                            PONumber = reader.GetString("PONumber"),
+                            VendorName = reader.IsDBNull("VendorName") ? null : reader.GetString("VendorName")
                         });
                     }
                 }

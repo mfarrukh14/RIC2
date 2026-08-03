@@ -16,6 +16,57 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
+        // Used by the Place Demand item picker so it can show a live quantity next to every
+        // item for the currently selected Requested Store - LEFT JOIN so items with no
+        // Inv.Stocks row at that store still appear, at 0, instead of vanishing.
+        public async Task<Dictionary<int, int>> GetQuantitiesByStoreAsync(int storeId)
+        {
+            var quantities = new Dictionary<int, int>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand(@"
+SELECT i.Id AS ItemId, ISNULL(s.TotalItems, 0) AS Quantity
+FROM Inv.Items i
+LEFT JOIN Inv.Stocks s ON s.ItemId = i.Id AND s.StoreId = @StoreId AND s.IsActive = 1
+WHERE i.IsActive = 1;", connection);
+                command.Parameters.Add("@StoreId", SqlDbType.Int).Value = storeId;
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    quantities[reader.GetInt32(0)] = reader.GetInt32(1);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving stock quantities for store {StoreId}", storeId);
+                throw;
+            }
+
+            return quantities;
+        }
+
+        // Updates the reorder/panic-level threshold for a single Inv.Stocks row - the
+        // one field on this screen the old system's "Update" action actually edits
+        // (item name, store, on-hand quantity are all derived/transactional, not
+        // directly editable from the Stock list).
+        public async Task<bool> UpdateMinimumPanicLevelAsync(int stockId, int minimumPanicLevel)
+        {
+            using var connection = new SqlConnection(_connectionString);
+            using var command = new SqlCommand(
+                "UPDATE Inv.Stocks SET MinimumPanicLevel = @MinimumPanicLevel, ModifiedOn = GETDATE() WHERE Id = @Id AND IsActive = 1;",
+                connection);
+            command.Parameters.Add("@Id", SqlDbType.Int).Value = stockId;
+            command.Parameters.Add("@MinimumPanicLevel", SqlDbType.Int).Value = minimumPanicLevel;
+
+            await connection.OpenAsync();
+            var rowsAffected = await command.ExecuteNonQueryAsync();
+            return rowsAffected > 0;
+        }
+
         public async Task<IEnumerable<Stock>> SearchStocksAsync(StockSearchRequest request)
         {
             var stocks = new List<Stock>();
@@ -97,7 +148,8 @@ SELECT
     it.Name AS ItemTypeName,
     c.Name AS CategoryName,
     i.IsFridgeItem,
-    i.IsConsumptionItem
+    i.IsConsumptionItem,
+    loc.Location
 FROM Inv.Stocks s
 INNER JOIN Inv.Items i ON s.ItemId = i.Id
 LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
@@ -113,6 +165,23 @@ OUTER APPLY
     ORDER BY COALESCE(inv.ModifiedOn, inv.CreatedOn) DESC, inv.Id DESC
 ) latestInventory
 LEFT JOIN Inv.StockTypes st ON latestInventory.StockTypeId = st.Id
+-- Rack.Row.Column[.Drawer] shelf location, same concept as the old system's
+-- SpaceAllocations-based Location column on this same report.
+OUTER APPLY
+(
+    SELECT TOP 1
+        r.Name + ISNULL('.' + rr.Name, '') + ISNULL('.' + rc.Name, '') + ISNULL('.' + rd.Name, '') AS Location
+    FROM Inv.SpaceAllocations sa
+    INNER JOIN Inv.Racks r ON r.Id = sa.RackId
+    LEFT JOIN Inv.RackRows rr ON rr.Id = sa.RackRowId
+    LEFT JOIN Inv.RackColumns rc ON rc.Id = sa.RackColumnId
+    LEFT JOIN Inv.RackDrawrs rd ON rd.Id = sa.RackDrawrId
+    WHERE sa.ItemId = s.ItemId
+      AND sa.StoreId = s.StoreId
+      AND ISNULL(sa.IsDeleted, 0) = 0
+      AND sa.IsActive = 1
+    ORDER BY sa.Id DESC
+) loc
 WHERE s.IsActive = 1
   AND (@BranchId IS NULL OR s.BranchId = @BranchId)
   AND (@StoreId IS NULL OR s.StoreId = @StoreId)
@@ -183,7 +252,8 @@ ORDER BY i.Name ASC;",
                 ItemTypeName = reader.IsDBNull(reader.GetOrdinal("ItemTypeName")) ? null : reader.GetString(reader.GetOrdinal("ItemTypeName")),
                 CategoryName = reader.IsDBNull(reader.GetOrdinal("CategoryName")) ? null : reader.GetString(reader.GetOrdinal("CategoryName")),
                 IsFridgeItem = reader.IsDBNull(reader.GetOrdinal("IsFridgeItem")) ? null : reader.GetBoolean(reader.GetOrdinal("IsFridgeItem")),
-                IsConsumptionItem = reader.IsDBNull(reader.GetOrdinal("IsConsumptionItem")) ? null : reader.GetBoolean(reader.GetOrdinal("IsConsumptionItem"))
+                IsConsumptionItem = reader.IsDBNull(reader.GetOrdinal("IsConsumptionItem")) ? null : reader.GetBoolean(reader.GetOrdinal("IsConsumptionItem")),
+                Location = reader.IsDBNull(reader.GetOrdinal("Location")) ? null : reader.GetString(reader.GetOrdinal("Location"))
             };
         }
     }

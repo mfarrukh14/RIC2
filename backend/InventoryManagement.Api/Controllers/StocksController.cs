@@ -32,5 +32,39 @@ namespace InventoryManagement.Api.Controllers
                 return StatusCode(500, "An error occurred while searching stocks");
             }
         }
+
+        [HttpPut("{id:int}/minimum-panic-level")]
+        public async Task<ActionResult> UpdateMinimumPanicLevel(int id, [FromBody] UpdateMinimumPanicLevelRequest request)
+        {
+            try
+            {
+                var updated = await _stockService.UpdateMinimumPanicLevelAsync(id, request.MinimumPanicLevel);
+                if (!updated)
+                {
+                    return NotFound(new { message = $"Stock record with ID {id} not found" });
+                }
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating minimum panic level for stock {Id}", id);
+                return StatusCode(500, "An error occurred while updating the minimum panic level.");
+            }
+        }
+
+        [HttpGet("quantities-by-store/{storeId:int}")]
+        public async Task<ActionResult<Dictionary<int, int>>> GetQuantitiesByStore(int storeId)
+        {
+            try
+            {
+                var quantities = await _stockService.GetQuantitiesByStoreAsync(storeId);
+                return Ok(quantities);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving stock quantities for store {StoreId}", storeId);
+                return StatusCode(500, "An error occurred while retrieving stock quantities.");
+            }
+        }
     }
 }

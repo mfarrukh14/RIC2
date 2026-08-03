@@ -6,9 +6,9 @@ namespace InventoryManagement.API.Services
     {
         Task<List<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null);
         Task<ReturnInventory?> GetByIdAsync(int id);
-        Task<ReturnInventory> CreateAsync(ReturnInventoryCreateRequest request);
-        Task<bool> UpdateAsync(int id, ReturnInventoryUpdateRequest request);
-        Task<bool> DeleteAsync(int id);
+        Task<ReturnInventory> CreateAsync(ReturnInventoryCreateRequest request, int branchId, int createdById);
+        Task<bool> UpdateAsync(int id, ReturnInventoryUpdateRequest request, int modifiedById);
+        Task<bool> DeleteAsync(int id, int modifiedById);
         Task<ReturnInventoryLookupData> GetLookupDataAsync();
     }
 }

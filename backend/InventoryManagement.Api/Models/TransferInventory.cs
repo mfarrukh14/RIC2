@@ -44,10 +44,11 @@ namespace InventoryManagement.Api.Models
         [Required]
         [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1")]
         public int Quantity { get; set; }
-        
+
         public DateTime? TransferDate { get; set; }
         public string? Status { get; set; }
         public string? Notes { get; set; }
+        public int? BranchId { get; set; }
     }
 
     public class TransferInventoryUpdateRequest

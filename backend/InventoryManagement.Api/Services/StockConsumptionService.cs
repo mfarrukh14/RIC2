@@ -245,17 +245,33 @@ namespace InventoryManagement.Api.Services
             try
             {
                 using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand("StockConsumption_Delete", connection)
+                await connection.OpenAsync();
+
+                // StockConsumption_Delete has SET NOCOUNT ON, so ExecuteNonQueryAsync's
+                // return value is unreliable (-1, not the actual row count) - same bug
+                // fixed for StockAdjustment_Delete. Check existence up front instead and
+                // use that as the source of truth for whether this delete succeeded.
+                using (var existsCommand = new SqlCommand(
+                    "SELECT 1 FROM Inv.StockConsumptions WHERE Id = @Id AND IsDeleted = 0;", connection))
+                {
+                    existsCommand.Parameters.AddWithValue("@Id", id);
+                    var exists = await existsCommand.ExecuteScalarAsync();
+                    if (exists == null)
+                    {
+                        return false;
+                    }
+                }
+
+                using (var command = new SqlCommand("StockConsumption_Delete", connection)
                 {
                     CommandType = CommandType.StoredProcedure
-                };
+                })
+                {
+                    command.Parameters.AddWithValue("@Id", id);
+                    await command.ExecuteNonQueryAsync();
+                }
 
-                command.Parameters.AddWithValue("@Id", id);
-
-                await connection.OpenAsync();
-                var result = await command.ExecuteNonQueryAsync();
-
-                return result > 0;
+                return true;
             }
             catch (Exception ex)
             {

@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using InventoryManagement.API.Models;
+using System.Data;
 
 namespace InventoryManagement.API.Services
 {
@@ -10,7 +11,7 @@ namespace InventoryManagement.API.Services
 
         public ReturnInventoryService(IConfiguration configuration, ILogger<ReturnInventoryService> logger)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection") 
+            _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
         }
@@ -27,11 +28,9 @@ namespace InventoryManagement.API.Services
                 using var command = new SqlCommand("ReturnInventory_GetAll", connection);
                 command.CommandType = System.Data.CommandType.StoredProcedure;
 
-                // Add filter parameters
                 command.Parameters.AddWithValue("@BranchId", (object?)filter?.BranchId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@StoreId", (object?)filter?.StoreId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ItemTypeId", (object?)filter?.ItemTypeId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemType", (object?)filter?.ItemType ?? DBNull.Value);
                 command.Parameters.AddWithValue("@StartDate", (object?)filter?.StartDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", (object?)filter?.EndDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)filter?.PurchaseOrderNo ?? DBNull.Value);
@@ -79,34 +78,78 @@ namespace InventoryManagement.API.Services
             return null;
         }
 
-        public async Task<ReturnInventory> CreateAsync(ReturnInventoryCreateRequest request)
+        // Processes an actual return: validates stock is on hand, decrements it,
+        // optionally decrements the matching Purchase Order / GRN line the stock
+        // originally came in on, then records the return - all in one transaction
+        // so a failure at any step leaves nothing partially applied.
+        public async Task<ReturnInventory> CreateAsync(ReturnInventoryCreateRequest request, int branchId, int createdById)
         {
+            if (request.StoreId is not int storeId)
+            {
+                throw new InvalidOperationException("Store is required.");
+            }
+
+            if (request.ItemTypeId is not int itemTypeId)
+            {
+                throw new InvalidOperationException("Item Type is required.");
+            }
+
             try
             {
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
+                using var transaction = connection.BeginTransaction();
 
-                using var command = new SqlCommand("ReturnInventory_Insert", connection);
-                command.CommandType = System.Data.CommandType.StoredProcedure;
+                try
+                {
+                    var itemName = await GetItemNameAsync(connection, transaction, request.ItemId);
 
-                command.Parameters.AddWithValue("@InventoryNo", (object?)request.InventoryNo ?? DBNull.Value);
-                command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)request.PurchaseOrderNo ?? DBNull.Value);
-                command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemTypeId", (object?)request.ItemTypeId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemId", request.ItemId);
-                command.Parameters.AddWithValue("@ItemName", request.ItemName);
-                command.Parameters.AddWithValue("@ReturnQuantity", request.ReturnQuantity);
-                command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@VendorId", (object?)request.VendorId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ReturnDate", (object?)request.ReturnDate ?? DBNull.Value);
-                command.Parameters.AddWithValue("@Reason", (object?)request.Reason ?? DBNull.Value);
-                command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
-                command.Parameters.AddWithValue("@CreatedById", 1); // TODO: Get from current user
+                    await DecrementStoreStockAsync(connection, transaction, request.ItemId, itemName, storeId, request.ReturnQuantity);
 
-                var id = await command.ExecuteScalarAsync();
-                var returnInventory = await GetByIdAsync(Convert.ToInt32(id));
-                return returnInventory ?? throw new Exception("Failed to retrieve created return inventory");
+                    if (!string.IsNullOrWhiteSpace(request.PurchaseOrderNo))
+                    {
+                        await ReducePurchaseOrderQuantityAsync(connection, transaction, request.PurchaseOrderNo.Trim(), request.ItemId, itemName, request.ReturnQuantity);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.InventoryNo))
+                    {
+                        await ReduceGrnRemainingQuantityAsync(connection, transaction, request.InventoryNo.Trim(), request.ItemId, itemName, request.ReturnQuantity);
+                    }
+
+                    int newId;
+                    using (var command = new SqlCommand("ReturnInventory_Insert", connection, transaction))
+                    {
+                        command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@InventoryNo", DBNull.Value);
+                        command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)request.PurchaseOrderNo ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@BranchId", branchId);
+                        command.Parameters.AddWithValue("@StoreId", storeId);
+                        command.Parameters.AddWithValue("@ItemTypeId", itemTypeId);
+                        command.Parameters.AddWithValue("@ItemId", request.ItemId);
+                        command.Parameters.AddWithValue("@ReturnQuantity", request.ReturnQuantity);
+                        command.Parameters.AddWithValue("@VendorId", (object?)request.VendorId ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@ReturnDate", (object?)request.ReturnDate ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@Reason", (object?)request.Reason ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
+                        command.Parameters.AddWithValue("@CreatedById", createdById);
+
+                        var result = await command.ExecuteScalarAsync();
+                        newId = Convert.ToInt32(result);
+                    }
+
+                    await transaction.CommitAsync();
+
+                    return await GetByIdAsync(newId) ?? throw new Exception("Failed to retrieve created return inventory");
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -115,7 +158,7 @@ namespace InventoryManagement.API.Services
             }
         }
 
-        public async Task<bool> UpdateAsync(int id, ReturnInventoryUpdateRequest request)
+        public async Task<bool> UpdateAsync(int id, ReturnInventoryUpdateRequest request, int modifiedById)
         {
             try
             {
@@ -126,20 +169,14 @@ namespace InventoryManagement.API.Services
                 command.CommandType = System.Data.CommandType.StoredProcedure;
 
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@InventoryNo", (object?)request.InventoryNo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)request.PurchaseOrderNo ?? DBNull.Value);
-                command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StoreId", request.StoreId);
                 command.Parameters.AddWithValue("@ItemTypeId", (object?)request.ItemTypeId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ItemId", request.ItemId);
-                command.Parameters.AddWithValue("@ItemName", request.ItemName);
-                command.Parameters.AddWithValue("@ReturnQuantity", request.ReturnQuantity);
-                command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@VendorId", (object?)request.VendorId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ReturnDate", request.ReturnDate);
                 command.Parameters.AddWithValue("@Reason", (object?)request.Reason ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@ModifiedById", modifiedById);
 
                 var rowsAffected = await command.ExecuteScalarAsync();
                 return Convert.ToInt32(rowsAffected) > 0;
@@ -151,7 +188,7 @@ namespace InventoryManagement.API.Services
             }
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<bool> DeleteAsync(int id, int modifiedById)
         {
             try
             {
@@ -161,7 +198,7 @@ namespace InventoryManagement.API.Services
                 using var command = new SqlCommand("ReturnInventory_Delete", connection);
                 command.CommandType = System.Data.CommandType.StoredProcedure;
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@ModifiedById", modifiedById);
 
                 var rowsAffected = await command.ExecuteScalarAsync();
                 return Convert.ToInt32(rowsAffected) > 0;
@@ -187,7 +224,6 @@ namespace InventoryManagement.API.Services
 
                 using var reader = await command.ExecuteReaderAsync();
 
-                // Read Branches
                 while (await reader.ReadAsync())
                 {
                     lookupData.Branches.Add(new LookupItem
@@ -197,7 +233,6 @@ namespace InventoryManagement.API.Services
                     });
                 }
 
-                // Read Stores
                 await reader.NextResultAsync();
                 while (await reader.ReadAsync())
                 {
@@ -208,7 +243,6 @@ namespace InventoryManagement.API.Services
                     });
                 }
 
-                // Read Item Types
                 await reader.NextResultAsync();
                 while (await reader.ReadAsync())
                 {
@@ -219,33 +253,10 @@ namespace InventoryManagement.API.Services
                     });
                 }
 
-                // Read Stock Types
-                await reader.NextResultAsync();
-                while (await reader.ReadAsync())
-                {
-                    lookupData.StockTypes.Add(new LookupItem
-                    {
-                        Id = reader.GetInt32(0),
-                        Name = reader.GetString(1)
-                    });
-                }
-
-                // Read Vendors
                 await reader.NextResultAsync();
                 while (await reader.ReadAsync())
                 {
                     lookupData.Vendors.Add(new LookupItem
-                    {
-                        Id = reader.GetInt32(0),
-                        Name = reader.GetString(1)
-                    });
-                }
-
-                // Read Items
-                await reader.NextResultAsync();
-                while (await reader.ReadAsync())
-                {
-                    lookupData.Items.Add(new LookupItem
                     {
                         Id = reader.GetInt32(0),
                         Name = reader.GetString(1)
@@ -259,6 +270,155 @@ namespace InventoryManagement.API.Services
             }
 
             return lookupData;
+        }
+
+        private async Task<string> GetItemNameAsync(SqlConnection connection, SqlTransaction transaction, int itemId)
+        {
+            using var command = new SqlCommand("SELECT Name FROM Inv.Items WHERE Id = @ItemId;", connection, transaction);
+            command.Parameters.AddWithValue("@ItemId", itemId);
+            var result = await command.ExecuteScalarAsync();
+            return result as string ?? $"Item #{itemId}";
+        }
+
+        // Guards against returning more than is actually on hand, same check used
+        // for stock adjustments and demand-request issuance.
+        private async Task DecrementStoreStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, string itemName, int storeId, int quantity)
+        {
+            int available;
+            using (var selectCommand = new SqlCommand(
+                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                connection, transaction))
+            {
+                selectCommand.Parameters.AddWithValue("@ItemId", itemId);
+                selectCommand.Parameters.AddWithValue("@StoreId", storeId);
+                var result = await selectCommand.ExecuteScalarAsync();
+                available = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
+
+            if (available < quantity)
+            {
+                throw new InvalidOperationException($"Cannot return {quantity} of '{itemName}' - only {available} in stock at this store.");
+            }
+
+            using var updateCommand = new SqlCommand(
+                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                connection, transaction);
+            updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+            updateCommand.Parameters.AddWithValue("@StoreId", storeId);
+            updateCommand.Parameters.AddWithValue("@Quantity", quantity);
+            await updateCommand.ExecuteNonQueryAsync();
+        }
+
+        // When the return is tied to a Purchase Order number, the returned quantity
+        // is removed from that PO's line for the item (deactivating the line if it
+        // hits zero) and from the PO's total, so the PO no longer reflects stock
+        // that has since gone back out.
+        private async Task ReducePurchaseOrderQuantityAsync(SqlConnection connection, SqlTransaction transaction, string purchaseOrderNo, int itemId, string itemName, int quantity)
+        {
+            int purchaseOrderId;
+            using (var poCommand = new SqlCommand(
+                "SELECT TOP (1) PurchaseOrderId FROM Inv.PurchaseOrders WHERE PONumber = @PONumber AND IsActive = 1;",
+                connection, transaction))
+            {
+                poCommand.Parameters.AddWithValue("@PONumber", purchaseOrderNo);
+                var result = await poCommand.ExecuteScalarAsync();
+                if (result == null || result == DBNull.Value)
+                {
+                    throw new InvalidOperationException($"No Purchase Order found with number '{purchaseOrderNo}'.");
+                }
+                purchaseOrderId = Convert.ToInt32(result);
+            }
+
+            int lineId;
+            decimal lineQuantity;
+            using (var lineCommand = new SqlCommand(
+                "SELECT TOP (1) Id, UnitQuantity FROM Inv.PurchaseOrderItems WHERE PurchaseOrderId = @PurchaseOrderId AND ItemId = @ItemId AND IsActive = 1;",
+                connection, transaction))
+            {
+                lineCommand.Parameters.AddWithValue("@PurchaseOrderId", purchaseOrderId);
+                lineCommand.Parameters.AddWithValue("@ItemId", itemId);
+                using var reader = await lineCommand.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                {
+                    throw new InvalidOperationException($"Item '{itemName}' was not found on Purchase Order '{purchaseOrderNo}'.");
+                }
+                lineId = reader.GetInt32(0);
+                lineQuantity = reader.GetDecimal(1);
+            }
+
+            if (lineQuantity <= quantity)
+            {
+                using var deactivateCommand = new SqlCommand(
+                    "UPDATE Inv.PurchaseOrderItems SET UnitQuantity = 0, IsActive = 0, ModifiedOn = GETDATE() WHERE Id = @Id;",
+                    connection, transaction);
+                deactivateCommand.Parameters.AddWithValue("@Id", lineId);
+                await deactivateCommand.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                using var updateCommand = new SqlCommand(
+                    "UPDATE Inv.PurchaseOrderItems SET UnitQuantity = UnitQuantity - @Quantity, ModifiedOn = GETDATE() WHERE Id = @Id;",
+                    connection, transaction);
+                updateCommand.Parameters.AddWithValue("@Id", lineId);
+                updateCommand.Parameters.AddWithValue("@Quantity", quantity);
+                await updateCommand.ExecuteNonQueryAsync();
+            }
+
+            using var totalCommand = new SqlCommand(
+                "UPDATE Inv.PurchaseOrders SET TotalQuantity = CASE WHEN TotalQuantity - @Quantity < 0 THEN 0 ELSE TotalQuantity - @Quantity END, ModifiedOn = GETDATE() WHERE PurchaseOrderId = @PurchaseOrderId;",
+                connection, transaction);
+            totalCommand.Parameters.AddWithValue("@PurchaseOrderId", purchaseOrderId);
+            totalCommand.Parameters.AddWithValue("@Quantity", quantity);
+            await totalCommand.ExecuteNonQueryAsync();
+        }
+
+        // When the return is tied to a GRN invoice number, the returned quantity is
+        // removed from that GRN line's RemainingQuantity for the item - ReceivedQuantity
+        // is left untouched since it's the historical audit record of what actually came in.
+        private async Task ReduceGrnRemainingQuantityAsync(SqlConnection connection, SqlTransaction transaction, string inventoryNo, int itemId, string itemName, int quantity)
+        {
+            int grnId;
+            using (var grnCommand = new SqlCommand(
+                "SELECT TOP (1) Id FROM Inv.GoodsReceivingNotes WHERE InvoiceNo = @InvoiceNo AND IsActive = 1;",
+                connection, transaction))
+            {
+                grnCommand.Parameters.AddWithValue("@InvoiceNo", inventoryNo);
+                var result = await grnCommand.ExecuteScalarAsync();
+                if (result == null || result == DBNull.Value)
+                {
+                    throw new InvalidOperationException($"No goods receiving note found with invoice number '{inventoryNo}'.");
+                }
+                grnId = Convert.ToInt32(result);
+            }
+
+            int lineId;
+            int remaining;
+            using (var lineCommand = new SqlCommand(
+                "SELECT TOP (1) Id, ISNULL(RemainingQuantity, 0) FROM Inv.GRNItems WHERE GRNId = @GRNId AND ItemId = @ItemId;",
+                connection, transaction))
+            {
+                lineCommand.Parameters.AddWithValue("@GRNId", grnId);
+                lineCommand.Parameters.AddWithValue("@ItemId", itemId);
+                using var reader = await lineCommand.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                {
+                    throw new InvalidOperationException($"Item '{itemName}' was not found on GRN invoice '{inventoryNo}'.");
+                }
+                lineId = reader.GetInt32(0);
+                remaining = reader.GetInt32(1);
+            }
+
+            if (remaining < quantity)
+            {
+                throw new InvalidOperationException($"Cannot return {quantity} of '{itemName}' against invoice '{inventoryNo}' - only {remaining} remaining on that GRN.");
+            }
+
+            using var updateCommand = new SqlCommand(
+                "UPDATE Inv.GRNItems SET RemainingQuantity = RemainingQuantity - @Quantity WHERE Id = @Id;",
+                connection, transaction);
+            updateCommand.Parameters.AddWithValue("@Id", lineId);
+            updateCommand.Parameters.AddWithValue("@Quantity", quantity);
+            await updateCommand.ExecuteNonQueryAsync();
         }
 
         private ReturnInventory MapToReturnInventory(SqlDataReader reader)

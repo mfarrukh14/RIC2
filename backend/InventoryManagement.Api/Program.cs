@@ -82,12 +82,14 @@ builder.Services.AddScoped<IStoreAllocationToUserService, StoreAllocationToUserS
 builder.Services.AddScoped<IStockWithExpiryService, StockWithExpiryService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<IDemandRequestService, DemandRequestService>();
+builder.Services.AddScoped<IPharmacyService, PharmacyService>();
 builder.Services.AddScoped<IDemandRequestStatusService, DemandRequestStatusService>();
 builder.Services.AddScoped<IDemandWiseValueService, DemandWiseValueService>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IPurchaseOrderTypeService, PurchaseOrderTypeService>();
 builder.Services.AddScoped<IPurchaseOrderStatusService, PurchaseOrderStatusService>();
 builder.Services.AddScoped<IEstimatedPurchaseOrderService, EstimatedPurchaseOrderService>();
+builder.Services.AddScoped<IPurchaseRequisitionService, PurchaseRequisitionService>();
 
 // Add CORS
 builder.Services.AddCors(options =>

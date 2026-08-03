@@ -74,6 +74,27 @@ namespace InventoryManagement.Api.Controllers
             }
         }
 
+        [HttpGet("{id:int}/itemlogs")]
+        public async Task<ActionResult<IReadOnlyList<DemandRequestItemLogEntry>>> GetItemLogs(int id)
+        {
+            try
+            {
+                var demandRequest = await _demandRequestService.GetByIdAsync(id);
+                if (demandRequest == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                var entries = await _demandRequestService.GetItemLogsAsync(id);
+                return Ok(entries);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving demand request item logs for ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving the demand request item logs." });
+            }
+        }
+
         [HttpPost]
         public async Task<ActionResult<DemandRequestDetails>> Create([FromBody] DemandRequestCreateRequest request)
         {
@@ -117,10 +138,102 @@ namespace InventoryManagement.Api.Controllers
 
                 return Ok(updated);
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error receiving demand request with ID {DemandRequestId}", id);
                 return StatusCode(500, new { message = "An error occurred while receiving the demand request." });
+            }
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<DemandRequestDetails>> Update(int id, [FromBody] DemandRequestUpdateRequest request)
+        {
+            try
+            {
+                var updated = await _demandRequestService.UpdateAsync(id, request);
+                if (updated == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while updating the demand request." });
+            }
+        }
+
+        [HttpPost("{id:int}/approve")]
+        public async Task<ActionResult<DemandRequestDetails>> Approve(int id, [FromBody] DemandRequestUpdateRequest request)
+        {
+            try
+            {
+                var updated = await _demandRequestService.ApproveAsync(id, request);
+                if (updated == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error approving demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while approving the demand request." });
+            }
+        }
+
+        [HttpPost("{id:int}/dispatch")]
+        public async Task<ActionResult<DemandRequestDetails>> Dispatch(int id, [FromBody] DemandRequestDispatchRequest request)
+        {
+            try
+            {
+                var updated = await _demandRequestService.DispatchAsync(id, request);
+                if (updated == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error dispatching demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while dispatching the demand request." });
+            }
+        }
+
+        [HttpPost("{id:int}/reject")]
+        public async Task<ActionResult<DemandRequestDetails>> Reject(int id, [FromBody] DemandRequestRejectRequest request)
+        {
+            try
+            {
+                var updated = await _demandRequestService.RejectAsync(id, request);
+                if (updated == null)
+                {
+                    return NotFound(new { message = $"Demand request with ID {id} not found." });
+                }
+
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rejecting demand request with ID {DemandRequestId}", id);
+                return StatusCode(500, new { message = "An error occurred while rejecting the demand request." });
             }
         }
     }

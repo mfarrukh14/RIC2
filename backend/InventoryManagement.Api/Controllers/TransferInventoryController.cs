@@ -1,6 +1,7 @@
 using InventoryManagement.Api.Models;
 using InventoryManagement.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 
 namespace InventoryManagement.Api.Controllers
 {
@@ -57,8 +58,19 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot create a transfer." });
+                }
+
+                request.BranchId = branchId;
+
                 var transfer = await _transferInventoryService.CreateAsync(request);
                 return CreatedAtAction(nameof(GetById), new { id = transfer.Id }, transfer);
+            }
+            catch (SqlException ex) when (ex.Message.Contains("Cannot transfer"))
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -102,6 +114,21 @@ namespace InventoryManagement.Api.Controllers
             {
                 _logger.LogError(ex, "Error deleting transfer inventory with ID {Id}", id);
                 return StatusCode(500, new { message = "An error occurred while deleting the transfer inventory" });
+            }
+        }
+
+        [HttpGet("available-quantity")]
+        public async Task<ActionResult<object>> GetAvailableQuantity([FromQuery] int storeId, [FromQuery] int itemId)
+        {
+            try
+            {
+                var quantity = await _transferInventoryService.GetAvailableQuantityAsync(storeId, itemId);
+                return Ok(new { quantity });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving available quantity for item {ItemId} in store {StoreId}", itemId, storeId);
+                return StatusCode(500, new { message = "An error occurred while retrieving available quantity" });
             }
         }
 

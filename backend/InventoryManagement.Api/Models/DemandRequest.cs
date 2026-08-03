@@ -34,6 +34,13 @@ namespace InventoryManagement.Api.Models
         public string Status { get; set; } = string.Empty;
         public string? Remarks { get; set; }
         public DateTime CreatedOn { get; set; }
+        public string? RequestedByName { get; set; }
+        public DateTime? ApprovedDate { get; set; }
+        public DateTime? IssuedDate { get; set; }
+        public string? DriverName { get; set; }
+        public string? VehicleNumber { get; set; }
+        public string? ContactNumber { get; set; }
+        public string? Detail { get; set; }
     }
 
     public class DemandRequestDetails : DemandRequestSummary
@@ -75,6 +82,8 @@ namespace InventoryManagement.Api.Models
         public int? IssuedQuantity { get; set; }
         public int? IssuingQuantity { get; set; }
         public int? RemainingQuantity { get; set; }
+        public int AvailableQuantityInRequestingStore { get; set; }
+        public int AvailableQuantityInRequestedStore { get; set; }
     }
 
     public class DemandRequestCreateRequest
@@ -125,5 +134,62 @@ namespace InventoryManagement.Api.Models
     public class DemandRequestReceiveRequest
     {
         public string? IndentNo { get; set; }
+        public string? DriverName { get; set; }
+        public string? VehicleNumber { get; set; }
+        public string? ContactNumber { get; set; }
+        public string? Detail { get; set; }
+    }
+
+    public class DemandRequestItemLogEntry
+    {
+        public int Id { get; set; }
+        public int DemandRequestId { get; set; }
+        public int DemandRequestItemId { get; set; }
+        public int? ItemId { get; set; }
+        public string? ItemName { get; set; }
+        public string ActionType { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public int? IssuedQuantity { get; set; }
+        public int? ReceivedQuantity { get; set; }
+        public int? RemainingQuantity { get; set; }
+        public string? ActionBy { get; set; }
+        public DateTime CreatedOn { get; set; }
+    }
+
+    public class DemandRequestDispatchItem
+    {
+        public int Id { get; set; }
+        public int IssuingQuantity { get; set; }
+    }
+
+    public class DemandRequestDispatchRequest
+    {
+        public string? DriverName { get; set; }
+        public string? VehicleNumber { get; set; }
+        public string? ContactNumber { get; set; }
+        public string? Detail { get; set; }
+        public List<DemandRequestDispatchItem> Items { get; set; } = new();
+    }
+
+    public class DemandRequestUpdateItem
+    {
+        // Null/0 means this is a new item line being added to the demand.
+        public int? Id { get; set; }
+        public int? ItemId { get; set; }
+        public int RequestedQuantity { get; set; }
+        public int ApprovedQuantity { get; set; }
+        public string? Remarks { get; set; }
+    }
+
+    public class DemandRequestUpdateRequest
+    {
+        public string? IndentNo { get; set; }
+        public string? DemandNotes { get; set; }
+        public List<DemandRequestUpdateItem> Items { get; set; } = new();
+    }
+
+    public class DemandRequestRejectRequest
+    {
+        public string? Remarks { get; set; }
     }
 }
