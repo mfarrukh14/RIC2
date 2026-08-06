@@ -254,7 +254,9 @@ namespace InventoryManagement.Api.Services
             return new TransferInventory
             {
                 Id = reader.GetInt32("Id"),
-                DRNo = reader.GetString("DRNo"),
+                // TransferNumber (aliased DRNo) and Status are nullable on Inv.TransferInventory -
+                // legacy/migrated rows can have either unset.
+                DRNo = reader.IsDBNull("DRNo") ? string.Empty : reader.GetString("DRNo"),
                 FromStoreId = reader.GetInt32("FromStoreId"),
                 FromStoreName = reader.IsDBNull("FromStoreName") ? null : reader.GetString("FromStoreName"),
                 ToStoreId = reader.GetInt32("ToStoreId"),
@@ -265,7 +267,7 @@ namespace InventoryManagement.Api.Services
                 ItemName = reader.IsDBNull("ItemName") ? null : reader.GetString("ItemName"),
                 Quantity = reader.GetInt32("Quantity"),
                 TransferDate = reader.GetDateTime("TransferDate"),
-                Status = reader.GetString("Status"),
+                Status = reader.IsDBNull("Status") ? "Pending" : reader.GetString("Status"),
                 Notes = reader.IsDBNull("Notes") ? null : reader.GetString("Notes"),
                 IsActive = reader.GetBoolean("IsActive"),
                 CreatedOn = reader.IsDBNull("CreatedOn") ? null : reader.GetDateTime("CreatedOn")

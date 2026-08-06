@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Insert new item unit
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemUnit_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @BranchId INT = NULL,
@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.ItemUnits (
+    INSERT INTO Inv.ItemUnits (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

@@ -15,6 +15,8 @@ namespace InventoryManagement.Api.DTOs
         public string? State { get; set; }
         public string? PostalCode { get; set; }
         public string? Country { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
         public string? ContactPersonName1 { get; set; }
         public string? ContactPersonType1 { get; set; }
         public string? Email1 { get; set; }

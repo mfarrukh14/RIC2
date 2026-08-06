@@ -261,7 +261,11 @@ namespace InventoryManagement.Api.Services
                 State = reader.IsDBNull("StateOrProvinceName") ? null : reader.GetString("StateOrProvinceName"),
                 Country = reader.IsDBNull("CountryName") ? null : reader.GetString("CountryName"),
                 PostalCode = null, // Not in new schema
-                
+
+                // Vendor's own general contact info (as opposed to a named contact person's)
+                Email = reader.IsDBNull("Email") ? null : reader.GetString("Email"),
+                Phone = reader.IsDBNull("CNo") ? null : reader.GetString("CNo"),
+
                 // Contact Person 1
                 ContactPersonName1 = reader.IsDBNull("CPName1") ? null : reader.GetString("CPName1"),
                 ContactPersonType1 = null, // Not in new schema

@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Update existing brand
 -- =============================================
-CREATE PROCEDURE [dbo].[Brand_Update]
+CREATE OR ALTER PROCEDURE [dbo].[Brand_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
@@ -14,7 +14,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Brands
+    UPDATE Inv.DataBrands
     SET
         Name = @Name,
         Description = @Description,

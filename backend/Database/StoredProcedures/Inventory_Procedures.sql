@@ -53,12 +53,12 @@ BEGIN
         i.GSTChargesCalculatedAmount,
         i.ManualPurchaseOrderNumber,
         -- Calculate total quantity from details
-        (SELECT ISNULL(SUM(TotalItems), 0) FROM InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
-    FROM dbo.Inventories i
-    LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
-    LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
-    LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
+        (SELECT ISNULL(SUM(TotalItems), 0) FROM Inv.InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
+    FROM Inv.Inventories i
+    LEFT JOIN Inv.Vendors v ON i.VendorId = v.Id
+    LEFT JOIN Inv.PharmacyStores s ON i.StoreId = s.StoreId
+    LEFT JOIN Inv.Branches b ON i.BranchId = b.Id
+    LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.IsActive = 1
     ORDER BY i.CreatedOn DESC;
 END
@@ -121,12 +121,12 @@ BEGIN
         i.GSTChargesCalculatedAmount,
         i.ManualPurchaseOrderNumber,
         -- Calculate total quantity from details
-        (SELECT ISNULL(SUM(TotalItems), 0) FROM InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
-    FROM dbo.Inventories i
-    LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
-    LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
-    LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
+        (SELECT ISNULL(SUM(TotalItems), 0) FROM Inv.InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
+    FROM Inv.Inventories i
+    LEFT JOIN Inv.Vendors v ON i.VendorId = v.Id
+    LEFT JOIN Inv.PharmacyStores s ON i.StoreId = s.StoreId
+    LEFT JOIN Inv.Branches b ON i.BranchId = b.Id
+    LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.Id = @Id;
     
     -- Get details
@@ -160,11 +160,11 @@ BEGIN
         id.TotalSellingPrice,
         id.ProfitMarginPerItem,
         id.ProfitPerItem
-    FROM dbo.InventoryDetails id
-    LEFT JOIN dbo.Items it ON id.ItemId = it.Id
+    FROM Inv.InventoryDetails id
+    LEFT JOIN Inv.Items it ON id.ItemId = it.Id
     LEFT JOIN Pharmacy.Medicines med ON id.MedicineId = med.MedicineId
     LEFT JOIN Account.Fees f ON id.SubServiceId = f.Id
-    LEFT JOIN dbo.Manufacturers m ON id.ManufacturerId = m.Id
+    LEFT JOIN Inv.Manufacturers m ON id.ManufacturerId = m.Id
     WHERE id.InventoryId = @Id;
 END
 GO
@@ -189,7 +189,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.Inventories (
+    INSERT INTO Inv.Inventories (
         VendorId, StoreId, BranchId, StockTypeId,
         VendorInvoiceNumber, VendorInvoiceTimestamp,
         ManualPurchaseOrderNumber,
@@ -243,7 +243,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Inventories
+    UPDATE Inv.Inventories
     SET 
         VendorId = @VendorId,
         StoreId = @StoreId,
@@ -293,27 +293,27 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Vendors
-    SELECT Id, Name FROM dbo.Vendors WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Vendors WHERE IsActive = 1 ORDER BY Name;
     
     -- Stores
-    SELECT StoreId as Id, StoreName as Name FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreName;
+    SELECT StoreId as Id, StoreName as Name FROM Inv.PharmacyStores WHERE IsActive = 1 ORDER BY StoreName;
     
     -- Stock Types
-    SELECT Id, Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.StockTypes WHERE IsActive = 1 ORDER BY Name;
     
     -- Items
-    SELECT Id, Name FROM dbo.Items WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Items WHERE IsActive = 1 ORDER BY Name;
     
     -- Manufacturers
-    SELECT Id, Name FROM dbo.Manufacturers WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Manufacturers WHERE IsActive = 1 ORDER BY Name;
     
     -- Branches
-    SELECT Id, Name FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Branches WHERE IsActive = 1 ORDER BY Name;
     
     -- Categories
-    SELECT Id, Name FROM dbo.Categories WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Categories WHERE IsActive = 1 ORDER BY Name;
     
     -- Brands
-    SELECT Id, Name FROM dbo.Brands WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Brands WHERE IsActive = 1 ORDER BY Name;
 END
 GO

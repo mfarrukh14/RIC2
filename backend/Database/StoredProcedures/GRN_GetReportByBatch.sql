@@ -1,5 +1,5 @@
 -- Stored procedure to get GRN report by batch number
-CREATE PROCEDURE GRN_GetReportByBatch
+CREATE OR ALTER PROCEDURE GRN_GetReportByBatch
     @BatchNo NVARCHAR(255),
     @ItemName NVARCHAR(255)
 AS
@@ -22,19 +22,19 @@ BEGIN
         v.Email AS VendorEmail,
         v.CNo AS VendorContactNo
     FROM 
-        dbo.GoodsReceivingNotes grn
+        Inv.GoodsReceivingNotes grn
     INNER JOIN 
-        dbo.GRNItems gi ON grn.Id = gi.GRNId
+        Inv.GRNItems gi ON grn.Id = gi.GRNId
     INNER JOIN 
-        dbo.Items i ON gi.ItemId = i.Id
+        Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN
-        dbo.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
+        Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN 
-        dbo.StockTypes st ON grn.StockTypeId = st.Id
+        Inv.StockTypes st ON grn.StockTypeId = st.Id
     LEFT JOIN 
-        dbo.Stores s ON po.StoreId = s.StoreId
+        Inv.PharmacyStores s ON po.StoreId = s.StoreId
     LEFT JOIN 
-        dbo.Vendors v ON grn.VendorId = v.Id
+        Inv.Vendors v ON grn.VendorId = v.Id
     WHERE 
         gi.BatchNo = @BatchNo
         AND i.Name = @ItemName;
@@ -66,11 +66,11 @@ BEGIN
         CAST(COALESCE(gi.DiscountAmount, 0) AS DECIMAL(18, 2)) AS Discount,
         (gi.TotalBuyingPrice - gi.DiscountAmount) AS Total
     FROM 
-        dbo.GRNItems gi
+        Inv.GRNItems gi
     INNER JOIN 
-        dbo.Items i ON gi.ItemId = i.Id
+        Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN 
-        dbo.Manufacturers m ON gi.ManufacturerId = m.Id
+        Inv.Manufacturers m ON gi.ManufacturerId = m.Id
     WHERE 
         gi.BatchNo = @BatchNo
         AND i.Name = @ItemName;

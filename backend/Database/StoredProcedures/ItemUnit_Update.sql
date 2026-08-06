@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Update existing item unit
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemUnit_Update]
+CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
@@ -14,7 +14,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.ItemUnits
+    UPDATE Inv.ItemUnits
     SET
         Name = @Name,
         Description = @Description,

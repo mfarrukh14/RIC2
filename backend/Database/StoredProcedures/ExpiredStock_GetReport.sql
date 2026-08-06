@@ -22,10 +22,10 @@ BEGIN
         grni.MfgDate,
         grni.ExpiryDate AS ExpDate,
         grni.RemainingQuantity AS TotalItems
-    FROM dbo.GRNItems grni
-    INNER JOIN dbo.GoodsReceivingNotes grn ON grni.GRNId = grn.Id
-    INNER JOIN dbo.Items i ON grni.ItemId = i.Id
-    LEFT JOIN dbo.StockTypes st ON grn.StockTypeId = st.Id
+    FROM Inv.GRNItems grni
+    INNER JOIN Inv.GoodsReceivingNotes grn ON grni.GRNId = grn.Id
+    INNER JOIN Inv.Items i ON grni.ItemId = i.Id
+    LEFT JOIN Inv.StockTypes st ON grn.StockTypeId = st.Id
     WHERE grni.ExpiryDate < GETDATE()
         AND grni.RemainingQuantity > 0
         AND (@StartDate IS NULL OR grni.ExpiryDate >= @StartDate)

@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Insert new brand
 -- =============================================
-CREATE PROCEDURE [dbo].[Brand_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[Brand_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @BranchId INT = NULL,
@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.Brands (
+    INSERT INTO Inv.DataBrands (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

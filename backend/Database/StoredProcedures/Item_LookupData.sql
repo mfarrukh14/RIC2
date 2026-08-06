@@ -27,8 +27,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT sc.Id, sc.Name, sc.Description, sc.CategoryId, c.Name as CategoryName, sc.IsActive
-    FROM dbo.SubCategories sc
-    LEFT JOIN dbo.Categories c ON sc.CategoryId = c.Id
+    FROM Inv.SubCategories sc
+    LEFT JOIN Inv.Categories c ON sc.CategoryId = c.Id
     WHERE sc.IsActive = 1
     ORDER BY c.Name, sc.Name;
 END
@@ -46,7 +46,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT Id, RetailPrice, SalePrice, MarketPrice, IsActive
-    FROM dbo.Prices
+    FROM Inv.Prices
     WHERE IsActive = 1
     ORDER BY Id;
 END
@@ -64,7 +64,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT Id, Name, Rate, IsActive
-    FROM dbo.TaxRates
+    FROM Inv.TaxRates
     WHERE IsActive = 1
     ORDER BY Name;
 END
@@ -82,7 +82,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT Id, Name, Description, IsActive
-    FROM dbo.TaxDescriptions
+    FROM Inv.TaxDescriptions
     WHERE IsActive = 1
     ORDER BY Name;
 END
@@ -100,7 +100,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SELECT Id, Name, Description, IsActive
-    FROM dbo.TaxTypes
+    FROM Inv.TaxTypes
     WHERE IsActive = 1
     ORDER BY Name;
 END

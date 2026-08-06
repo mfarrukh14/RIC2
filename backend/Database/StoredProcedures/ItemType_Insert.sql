@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Insert new item type
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemType_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[ItemType_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @BranchId INT = NULL,
@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.ItemTypes (
+    INSERT INTO Inv.ItemTypes (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

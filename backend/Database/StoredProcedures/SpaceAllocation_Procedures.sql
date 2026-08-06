@@ -36,13 +36,13 @@ BEGIN
         rr.Name AS RowName,
         rc.Name AS ColumnName,
         rd.Name AS DrawerName
-    FROM dbo.SpaceAllocations sa
-    LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Items i ON sa.ItemId = i.Id
-    LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
-    LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
-    LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
+    FROM Inv.SpaceAllocations sa
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN Inv.Items i ON sa.ItemId = i.Id
+    LEFT JOIN Inv.Racks r ON sa.RackId = r.Id
+    LEFT JOIN Inv.RackRows rr ON sa.RackRowId = rr.Id
+    LEFT JOIN Inv.RackColumns rc ON sa.RackColumnId = rc.Id
+    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawrId = rd.Id
     ORDER BY sa.CreatedOn DESC;
 END
 GO
@@ -82,13 +82,13 @@ BEGIN
         rr.Name AS RowName,
         rc.Name AS ColumnName,
         rd.Name AS DrawerName
-    FROM dbo.SpaceAllocations sa
-    LEFT JOIN dbo.Stores s ON sa.StoreId = s.StoreId
-    LEFT JOIN dbo.Items i ON sa.ItemId = i.Id
-    LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
-    LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
-    LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
+    FROM Inv.SpaceAllocations sa
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN Inv.Items i ON sa.ItemId = i.Id
+    LEFT JOIN Inv.Racks r ON sa.RackId = r.Id
+    LEFT JOIN Inv.RackRows rr ON sa.RackRowId = rr.Id
+    LEFT JOIN Inv.RackColumns rc ON sa.RackColumnId = rc.Id
+    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawrId = rd.Id
     WHERE sa.Id = @Id;
 END
 GO
@@ -116,7 +116,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.SpaceAllocations (
+    INSERT INTO Inv.SpaceAllocations (
         StoreId,
         ItemId,
         FeeId,
@@ -171,7 +171,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.SpaceAllocations
+    UPDATE Inv.SpaceAllocations
     SET 
         StoreId = @StoreId,
         ItemId = @ItemId,
@@ -202,7 +202,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DELETE FROM dbo.SpaceAllocations WHERE Id = @Id;
+    DELETE FROM Inv.SpaceAllocations WHERE Id = @Id;
 END
 GO
 

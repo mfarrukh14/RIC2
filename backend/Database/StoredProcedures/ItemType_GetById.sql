@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Get item type by ID with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemType_GetById]
+CREATE OR ALTER PROCEDURE [dbo].[ItemType_GetById]
     @Id INT
 AS
 BEGIN
@@ -20,7 +20,7 @@ BEGIN
         it.ModifiedById,
         it.ModifiedOn,
         br.Name as BranchName
-    FROM dbo.ItemTypes it
-    LEFT JOIN dbo.Branches br ON it.BranchId = br.Id
+    FROM Inv.ItemTypes it
+    LEFT JOIN Inv.Branches br ON it.BranchId = br.Id
     WHERE it.Id = @Id AND it.IsActive = 1;
 END

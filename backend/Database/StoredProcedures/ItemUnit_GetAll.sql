@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Get all item units with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemUnit_GetAll]
+CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_GetAll]
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -19,7 +19,7 @@ BEGIN
         iu.ModifiedById,
         iu.ModifiedOn,
         br.Name as BranchName
-    FROM dbo.ItemUnits iu
-    LEFT JOIN dbo.Branches br ON iu.BranchId = br.Id
+    FROM Inv.ItemUnits iu
+    LEFT JOIN Inv.Branches br ON iu.BranchId = br.Id
     ORDER BY iu.Name;
 END

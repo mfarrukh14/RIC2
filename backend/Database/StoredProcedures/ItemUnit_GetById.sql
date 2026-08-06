@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Get item unit by ID with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemUnit_GetById]
+CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_GetById]
     @Id INT
 AS
 BEGIN
@@ -20,7 +20,7 @@ BEGIN
         iu.ModifiedById,
         iu.ModifiedOn,
         br.Name as BranchName
-    FROM dbo.ItemUnits iu
-    LEFT JOIN dbo.Branches br ON iu.BranchId = br.Id
+    FROM Inv.ItemUnits iu
+    LEFT JOIN Inv.Branches br ON iu.BranchId = br.Id
     WHERE iu.Id = @Id AND iu.IsActive = 1;
 END

@@ -22,9 +22,9 @@ BEGIN
         g.DateAndTime,
         g.IsActive,
         g.CreatedOn
-    FROM dbo.GoodsReceivingNotes g
-    LEFT JOIN dbo.Vendors v ON g.VendorId = v.Id
-    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.Id
+    FROM Inv.GoodsReceivingNotes g
+    LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
+    LEFT JOIN Inv.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.IsActive = 1
     ORDER BY g.CreatedOn DESC;
 END
@@ -61,9 +61,9 @@ BEGIN
         g.CreatedOn,
         g.ModifiedById,
         g.ModifiedOn
-    FROM dbo.GoodsReceivingNotes g
-    LEFT JOIN dbo.Vendors v ON g.VendorId = v.Id
-    LEFT JOIN dbo.StockTypes st ON g.StockTypeId = st.Id
+    FROM Inv.GoodsReceivingNotes g
+    LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
+    LEFT JOIN Inv.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.Id = @Id;
     
     -- Get items
@@ -102,11 +102,11 @@ BEGIN
         gi.TotalSellingPrice,
         gi.ProfitMarginPerItem,
         gi.ProfitPerItem
-    FROM dbo.GRNItems gi
-    LEFT JOIN dbo.Items i ON gi.ItemId = i.Id
+    FROM Inv.GRNItems gi
+    LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Pharmacy.Medicines med ON gi.MedicineId = med.MedicineId
     LEFT JOIN Account.Fees f ON gi.SubServiceId = f.Id
-    LEFT JOIN dbo.Manufacturers m ON gi.ManufacturerId = m.Id
+    LEFT JOIN Inv.Manufacturers m ON gi.ManufacturerId = m.Id
     WHERE gi.GRNId = @Id;
 END
 GO
@@ -131,7 +131,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.GoodsReceivingNotes (
+    INSERT INTO Inv.GoodsReceivingNotes (
         PONumber, VendorId, InvoiceNo, StockTypeId,
         DateAndTime, VendorInvoiceNo, VendorInvoiceDate,
         IsActive, CreatedById, CreatedOn
@@ -187,7 +187,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.GRNItems (
+    INSERT INTO Inv.GRNItems (
         GRNId, ItemId, ManufacturerId, MfgDate, ExpiryDate,
         RegistrationNumber, LotNo, BatchNo,
         NoOfBoxes, NoOfPackets, ItemPerPacket, TotalItem, PackQuantity,
@@ -238,7 +238,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.GoodsReceivingNotes
+    UPDATE Inv.GoodsReceivingNotes
     SET 
         InvoiceNo = @InvoiceNo,
         PONumber = @PONumber,
@@ -268,7 +268,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.GoodsReceivingNotes
+    UPDATE Inv.GoodsReceivingNotes
     SET 
         IsActive = 0,
         ModifiedById = @ModifiedById,
@@ -293,19 +293,19 @@ BEGIN
     
     -- Vendors
     SELECT Id, Name
-    FROM dbo.Vendors
+    FROM Inv.Vendors
     WHERE IsActive = 1 
     ORDER BY Name;
     
     -- Stock Types
     SELECT Id, Name 
-    FROM dbo.StockTypes 
+    FROM Inv.StockTypes 
     WHERE IsActive = 1 
     ORDER BY Name;
     
     -- Manufacturers
     SELECT Id, Name 
-    FROM dbo.Manufacturers 
+    FROM Inv.Manufacturers 
     WHERE IsActive = 1 
     ORDER BY Name;
 END

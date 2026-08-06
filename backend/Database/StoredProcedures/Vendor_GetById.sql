@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Get vendor by ID with related data
 -- =============================================
-CREATE PROCEDURE [dbo].[Vendor_GetById]
+CREATE OR ALTER PROCEDURE [dbo].[Vendor_GetById]
     @Id INT
 AS
 BEGIN
@@ -55,13 +55,13 @@ BEGIN
         v.CreditLimit,
         v.FaxNo,
         v.IsVerified
-    FROM dbo.Vendors v
-    LEFT JOIN dbo.Countries c ON v.CountryId = c.Id
-    LEFT JOIN dbo.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
-    LEFT JOIN dbo.Cities ct ON v.CityId = ct.Id
-    LEFT JOIN dbo.Branches b ON v.BranchId = b.Id
-    LEFT JOIN dbo.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
-    LEFT JOIN dbo.AccountCOAs ap ON v.AccountPayableId = ap.Id
-    LEFT JOIN dbo.AccountCOAs ar ON v.AccountReceivableId = ar.Id
+    FROM Inv.Vendors v
+    LEFT JOIN Inv.Countries c ON v.CountryId = c.Id
+    LEFT JOIN Inv.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
+    LEFT JOIN Inv.Cities ct ON v.CityId = ct.Id
+    LEFT JOIN Inv.Branches b ON v.BranchId = b.Id
+    LEFT JOIN Inv.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
+    LEFT JOIN Inv.AccountCOAs ap ON v.AccountPayableId = ap.Id
+    LEFT JOIN Inv.AccountCOAs ar ON v.AccountReceivableId = ar.Id
     WHERE v.Id = @Id;
 END

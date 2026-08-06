@@ -305,8 +305,8 @@ const VendorList = ({ onEdit, onAdd }) => {
                       {vendor.contactPersonName1 && (
                         <div className="text-sm text-gray-500">Contact: {vendor.contactPersonName1}</div>
                       )}
-                      {vendor.email1 && (
-                        <div className="text-sm text-gray-500">{vendor.email1}</div>
+                      {(vendor.email1 || vendor.email) && (
+                        <div className="text-sm text-gray-500">{vendor.email1 || vendor.email}</div>
                       )}
                     </div>
                   </td>
@@ -325,7 +325,7 @@ const VendorList = ({ onEdit, onAdd }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {vendor.phone1 || 'N/A'}
+                    {vendor.phone1 || vendor.phone || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
