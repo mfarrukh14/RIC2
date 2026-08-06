@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiPlus, FiEdit2, FiPrinter, FiSearch } from 'react-icons/fi';
 import transferInventoryApi from '../services/transferInventoryApi';
+import stockApi from '../services/stockApi';
 
 const TransferInventoryPage = () => {
   const [transfers, setTransfers] = useState([]);
@@ -25,6 +26,9 @@ const TransferInventoryPage = () => {
     quantity: '',
     notes: ''
   });
+  const [availableQuantity, setAvailableQuantity] = useState(null);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+  const [itemQuantities, setItemQuantities] = useState({});
 
   // Filters
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -37,6 +41,53 @@ const TransferInventoryPage = () => {
   useEffect(() => {
     filterTransfers();
   }, [transfers, searchTerm]);
+
+  // Look up how much of the selected item is actually on hand in the From
+  // Store, so the quantity can be checked against it before submitting.
+  useEffect(() => {
+    if (!formData.fromStoreId || !formData.itemId) {
+      setAvailableQuantity(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAvailable(true);
+    transferInventoryApi.getAvailableQuantity(formData.fromStoreId, formData.itemId)
+      .then((qty) => {
+        if (!cancelled) setAvailableQuantity(qty);
+      })
+      .catch((err) => {
+        console.error('Error fetching available quantity:', err);
+        if (!cancelled) setAvailableQuantity(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAvailable(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [formData.fromStoreId, formData.itemId]);
+
+  // Show every item's on-hand quantity in the From Store right in the picker itself
+  // (e.g. "Item1 - 3, Item2 - 0"), so a store with nothing to give doesn't have to be
+  // discovered one item at a time via the single-item lookup above.
+  useEffect(() => {
+    if (!formData.fromStoreId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(formData.fromStoreId)
+      .then((quantities) => {
+        if (!cancelled) setItemQuantities(quantities);
+      })
+      .catch((err) => {
+        console.error('Error fetching item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [formData.fromStoreId]);
 
   const fetchData = async () => {
     try {
@@ -122,6 +173,11 @@ const TransferInventoryPage = () => {
       return;
     }
 
+    if (availableQuantity != null && parseInt(formData.quantity) > availableQuantity) {
+      alert(`Only ${availableQuantity} unit(s) of this item are available in the selected From Store.`);
+      return;
+    }
+
     try {
       const selectedItem = lookupData.items.find(i => i.id === parseInt(formData.itemId));
       
@@ -147,7 +203,8 @@ const TransferInventoryPage = () => {
       await fetchData();
     } catch (err) {
       console.error('Error saving transfer:', err);
-      alert('Failed to save transfer. Please try again.');
+      const errorMessage = err.response?.data?.message || 'Failed to save transfer. Please try again.';
+      alert(errorMessage);
     }
   };
 
@@ -268,7 +325,7 @@ const TransferInventoryPage = () => {
                   <option value="">Search Item</option>
                   {lookupData.items.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}
+                      {item.name} - {itemQuantities[item.id] ?? 0}
                     </option>
                   ))}
                 </select>
@@ -289,9 +346,23 @@ const TransferInventoryPage = () => {
                 onChange={handleChange}
                 required
                 min="1"
+                max={availableQuantity != null ? availableQuantity : undefined}
                 placeholder="Quantity"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {formData.fromStoreId && formData.itemId && (
+                <p className={`text-xs mt-1 ${
+                  availableQuantity != null && parseInt(formData.quantity || '0') > availableQuantity
+                    ? 'text-red-500'
+                    : 'text-gray-500'
+                }`}>
+                  {loadingAvailable
+                    ? 'Checking available quantity...'
+                    : availableQuantity != null
+                      ? `Available in From Store: ${availableQuantity}`
+                      : 'No stock on hand for this item in the selected From Store'}
+                </p>
+              )}
             </div>
 
             <div className="mb-6">
@@ -433,6 +504,9 @@ const TransferInventoryPage = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {transfer.itemName}
+                          {transfer.quantity != null && (
+                            <span className="ml-1 text-gray-400">(Qty: {transfer.quantity})</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(transfer.transferDate)}

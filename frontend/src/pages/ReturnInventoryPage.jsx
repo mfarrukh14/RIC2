@@ -1,35 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { FiSearch } from 'react-icons/fi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import returnInventoryApi from '../services/returnInventoryApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
 
-const ReturnInventoryPage = () => {
+const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
   const { session } = useSession();
   const [returns, setReturns] = useState([]);
   const [filteredReturns, setFilteredReturns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const [lookupData, setLookupData] = useState({
     branches: [],
     stores: [],
     itemTypes: [],
-    stockTypes: [],
-    vendors: [],
-    items: []
+    vendors: []
   });
 
-  // Filters
+  // Items available for the currently selected Store + Item Type, with their
+  // live on-hand quantity in that store (so the picker can show "Item - 5 in
+  // stock" and the quantity input can be capped before the server round-trip).
+  const [storeItems, setStoreItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  // Filters / return form - Store, Item Type, Item and Quantity are all
+  // required to actually process a return; PO Number / Inventory No. are
+  // optional and, when supplied, also reduce the matching Purchase Order /
+  // GRN line for the item (in addition to the store's stock).
   const [filters, setFilters] = useState({
     branchId: '',
     storeId: '',
-    itemType: 'All',
+    itemTypeId: '',
     startDate: '',
     endDate: '',
     purchaseOrderNo: '',
     itemId: '',
-    inventoryNo: ''
+    inventoryNo: '',
+    quantity: '',
+    reason: ''
   });
 
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -46,9 +58,61 @@ const ReturnInventoryPage = () => {
     }
   }, [session?.branchId]);
 
+  // Coming here via Add Inventory's "Return Inventory" row action - pre-select that
+  // inventory's store (and item type/item, when the row had exactly one line item).
+  useEffect(() => {
+    if (!prefill) return;
+
+    setFilters((prev) => ({
+      ...prev,
+      storeId: prefill.storeId ? String(prefill.storeId) : prev.storeId,
+      itemTypeId: prefill.itemTypeId ? String(prefill.itemTypeId) : prev.itemTypeId,
+      itemId: prefill.itemId ? String(prefill.itemId) : prev.itemId,
+      inventoryNo: prefill.inventoryNo || prev.inventoryNo
+    }));
+
+    onPrefillConsumed?.();
+  }, [prefill]);
+
   useEffect(() => {
     filterReturns();
   }, [returns, searchTerm]);
+
+  // Cascading Item picker: only items that actually exist (with stock > 0) in
+  // the selected Store, further narrowed by the selected Item Type.
+  useEffect(() => {
+    if (!filters.storeId) {
+      setStoreItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingItems(true);
+    stockApi.searchStocks({
+      storeId: filters.storeId,
+      itemTypeId: filters.itemTypeId || null,
+      stockAvailability: 'InStock'
+    })
+      .then((stocks) => {
+        if (cancelled) return;
+        setStoreItems(stocks || []);
+        // Drop a previously selected item that no longer matches the new Store/Item Type.
+        setFilters((prev) => (
+          prev.itemId && !(stocks || []).some((s) => String(s.itemId) === String(prev.itemId))
+            ? { ...prev, itemId: '' }
+            : prev
+        ));
+      })
+      .catch((err) => {
+        console.error('Error fetching store items:', err);
+        if (!cancelled) setStoreItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingItems(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId, filters.itemTypeId]);
 
   const fetchData = async () => {
     try {
@@ -57,7 +121,7 @@ const ReturnInventoryPage = () => {
         returnInventoryApi.getAll(),
         returnInventoryApi.getLookupData()
       ]);
-      
+
       setReturns(returnsData);
       setFilteredReturns(returnsData);
       setLookupData(lookup);
@@ -93,33 +157,8 @@ const ReturnInventoryPage = () => {
     }));
   };
 
-  const handleGenerateReport = async () => {
-    try {
-      setLoading(true);
-      
-      // Build filter object
-      const filterParams = {
-        branchId: filters.branchId || null,
-        storeId: filters.storeId || null,
-        itemType: filters.itemType !== 'All' ? filters.itemType : null,
-        startDate: filters.startDate || null,
-        endDate: filters.endDate || null,
-        purchaseOrderNo: filters.purchaseOrderNo || null,
-        itemId: filters.itemId || null,
-        inventoryNo: filters.inventoryNo || null
-      };
-
-      const data = await returnInventoryApi.getAll(filterParams);
-      setReturns(data);
-      setFilteredReturns(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error generating report:', err);
-      setError('Failed to generate report. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const selectedStoreItem = storeItems.find((s) => String(s.itemId) === String(filters.itemId));
+  const availableQuantity = selectedStoreItem ? selectedStoreItem.totalItems ?? 0 : null;
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -138,7 +177,7 @@ const ReturnInventoryPage = () => {
     const today = new Date();
     const start = new Date(today.setHours(0, 0, 0, 0));
     const end = new Date(today.setHours(23, 59, 59, 999));
-    
+
     return {
       start: start.toISOString().slice(0, 16),
       end: end.toISOString().slice(0, 16)
@@ -153,6 +192,114 @@ const ReturnInventoryPage = () => {
       endDate: dateRange.end
     }));
   }, []);
+
+  const downloadReturnPdf = (returnRecord) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Return Inventory Wrt Items', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Return No: ${returnRecord.inventoryNo || '-'}`, 14, 26);
+    doc.text(`Date: ${formatDate(returnRecord.returnDate)}`, pageWidth - 14, 26, { align: 'right' });
+    doc.text(`Branch: ${returnRecord.branchName || '-'}`, 14, 32);
+    doc.text(`Store: ${returnRecord.storeName || '-'}`, pageWidth - 14, 32, { align: 'right' });
+
+    autoTable(doc, {
+      startY: 40,
+      head: [['Item', 'Item Type', 'Return Qty', 'PO Number', 'Inventory No.', 'Reason']],
+      body: [[
+        returnRecord.itemName || '-',
+        returnRecord.itemTypeName || '-',
+        returnRecord.returnQuantity,
+        returnRecord.purchaseOrderNo || '-',
+        returnRecord.inventoryNo || '-',
+        returnRecord.reason || '-'
+      ]],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] }
+    });
+
+    const now = new Date();
+    const timestamp = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    doc.save(`ReturnInventory_${returnRecord.inventoryNo || timestamp}.pdf`);
+  };
+
+  const handleGenerateReport = async () => {
+    setError(null);
+
+    if (!filters.storeId || !filters.itemTypeId || !filters.itemId || !filters.quantity) {
+      setError('Store, Item Type, Item and Quantity are required to process a return.');
+      return;
+    }
+
+    const quantity = parseInt(filters.quantity, 10);
+    if (!quantity || quantity < 1) {
+      setError('Return quantity must be at least 1.');
+      return;
+    }
+
+    if (availableQuantity != null && quantity > availableQuantity) {
+      setError(`Only ${availableQuantity} unit(s) of this item are available in the selected store.`);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setLoading(true);
+
+      const createPayload = {
+        storeId: parseInt(filters.storeId, 10),
+        itemTypeId: parseInt(filters.itemTypeId, 10),
+        itemId: parseInt(filters.itemId, 10),
+        returnQuantity: quantity,
+        purchaseOrderNo: filters.purchaseOrderNo || null,
+        inventoryNo: filters.inventoryNo || null,
+        reason: filters.reason || null
+      };
+
+      const created = await returnInventoryApi.create(createPayload);
+
+      // Show the new return immediately, then refresh from the server using the
+      // current filters so the list stays consistent with what's displayed.
+      setReturns((prev) => [created, ...prev]);
+
+      downloadReturnPdf(created);
+
+      const filterParams = {
+        branchId: filters.branchId || null,
+        storeId: filters.storeId || null,
+        itemTypeId: filters.itemTypeId || null,
+        startDate: filters.startDate || null,
+        endDate: filters.endDate || null,
+        purchaseOrderNo: filters.purchaseOrderNo || null,
+        itemId: filters.itemId || null,
+        inventoryNo: filters.inventoryNo || null
+      };
+      const refreshed = await returnInventoryApi.getAll(filterParams);
+      setReturns(refreshed);
+
+      // Reset the per-return inputs (keep Store/Item Type selected for convenience).
+      setFilters((prev) => ({
+        ...prev,
+        itemId: '',
+        quantity: '',
+        purchaseOrderNo: '',
+        inventoryNo: '',
+        reason: ''
+      }));
+    } catch (err) {
+      console.error('Error processing return:', err);
+      setError(err.response?.data?.message || 'Failed to process return. Please try again.');
+    } finally {
+      setSubmitting(false);
+      setLoading(false);
+    }
+  };
 
   if (loading && returns.length === 0) {
     return (
@@ -184,18 +331,19 @@ const ReturnInventoryPage = () => {
           {/* Branch - locked to the logged-in user's own branch */}
           <BranchField />
 
-          {/* Store */}
+          {/* Store - active stores only */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Store
+              Store<span className="text-red-500">*</span>
             </label>
             <select
               name="storeId"
               value={filters.storeId}
               onChange={handleFilterChange}
+              required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">ED OPD Store</option>
+              <option value="">Select Store</option>
               {lookupData.stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -204,57 +352,72 @@ const ReturnInventoryPage = () => {
             </select>
           </div>
 
-          {/* Item Type Radio Buttons */}
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Item Type
+          {/* Item Type - active item types only */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Item Type<span className="text-red-500">*</span>
             </label>
-            <div className="flex items-center gap-6">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="All"
-                  checked={filters.itemType === 'All'}
-                  onChange={handleFilterChange}
-                  className="mr-2"
-                />
-                All
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Medicine"
-                  checked={filters.itemType === 'Medicine'}
-                  onChange={handleFilterChange}
-                  className="mr-2"
-                />
-                Medicine(s)
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Disposable"
-                  checked={filters.itemType === 'Disposable'}
-                  onChange={handleFilterChange}
-                  className="mr-2"
-                />
-                Disposable(s)
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="itemType"
-                  value="Item"
-                  checked={filters.itemType === 'Item'}
-                  onChange={handleFilterChange}
-                  className="mr-2"
-                />
-                Item(s)
-              </label>
-            </div>
+            <select
+              name="itemTypeId"
+              value={filters.itemTypeId}
+              onChange={handleFilterChange}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Item Type</option>
+              {lookupData.itemTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item - only items in the selected Store + Item Type, with active stock */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Item<span className="text-red-500">*</span>
+            </label>
+            <select
+              name="itemId"
+              value={filters.itemId}
+              onChange={handleFilterChange}
+              required
+              disabled={!filters.storeId}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            >
+              <option value="">
+                {!filters.storeId ? 'Select a Store first' : loadingItems ? 'Loading items...' : 'Select Item'}
+              </option>
+              {storeItems.map((stock) => (
+                <option key={stock.itemId} value={stock.itemId}>
+                  {stock.itemName} ({stock.totalItems ?? 0} in stock)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Quantity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Return Quantity<span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              name="quantity"
+              value={filters.quantity}
+              onChange={handleFilterChange}
+              min="1"
+              max={availableQuantity != null ? availableQuantity : undefined}
+              required
+              placeholder="Quantity"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {filters.itemId && (
+              <p className="text-xs mt-1 text-gray-500">
+                Available in store: {availableQuantity ?? 0}
+              </p>
+            )}
           </div>
 
           {/* Date Range Filter */}
@@ -281,26 +444,6 @@ const ReturnInventoryPage = () => {
             </div>
           </div>
 
-          {/* Item */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Item
-            </label>
-            <select
-              name="itemId"
-              value={filters.itemId}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value=""></option>
-              {lookupData.items.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Purchase Order No */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -311,7 +454,7 @@ const ReturnInventoryPage = () => {
               name="purchaseOrderNo"
               value={filters.purchaseOrderNo}
               onChange={handleFilterChange}
-              placeholder="Purchase Order No."
+              placeholder="Optional - PO to return against"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -326,20 +469,43 @@ const ReturnInventoryPage = () => {
               name="inventoryNo"
               value={filters.inventoryNo}
               onChange={handleFilterChange}
-              placeholder="Inventory No."
+              placeholder="Optional - GRN invoice to return against"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Reason */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason
+            </label>
+            <input
+              type="text"
+              name="reason"
+              value={filters.reason}
+              onChange={handleFilterChange}
+              placeholder="Optional"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
 
+        {(filters.purchaseOrderNo || filters.inventoryNo) && (
+          <p className="text-xs text-amber-600 mb-4">
+            This return will also reduce the remaining quantity on the specified {filters.purchaseOrderNo && 'Purchase Order'}
+            {filters.purchaseOrderNo && filters.inventoryNo && ' and '}
+            {filters.inventoryNo && 'GRN Invoice'} for this item.
+          </p>
+        )}
+
         {/* Generate Report Button */}
         <div className="flex justify-end">
           <button
             onClick={handleGenerateReport}
-            disabled={loading}
+            disabled={submitting}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
           >
-            {loading ? 'Loading...' : 'Generate Report'}
+            {submitting ? 'Processing...' : 'Generate Report'}
           </button>
         </div>
       </div>
@@ -394,7 +560,7 @@ const ReturnInventoryPage = () => {
                   Return Quantity
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock Type
+                  Item Type
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Vendor
@@ -436,7 +602,7 @@ const ReturnInventoryPage = () => {
                       {ret.returnQuantity}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {ret.stockTypeName || '-'}
+                      {ret.itemTypeName || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {ret.vendorName || '-'}
@@ -449,10 +615,11 @@ const ReturnInventoryPage = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
+                        onClick={() => downloadReturnPdf(ret)}
                         className="text-blue-600 hover:text-blue-900"
-                        title="View Details"
+                        title="Download PDF"
                       >
-                        View
+                        PDF
                       </button>
                     </td>
                   </tr>

@@ -128,7 +128,9 @@ ORDER BY pr.ModifiedOn DESC;";
 SELECT
     pri.Id,
     pri.ItemId,
-    i.Name AS ItemName,
+    pri.MedicineId,
+    pri.SubServiceId,
+    COALESCE(i.Name, med.MedicineFullName, f.Name) AS ItemName,
     pri.Quantity,
     pri.UnitEstimatedCost,
     pri.TotalEstimatedCost,
@@ -139,6 +141,8 @@ SELECT
     pri.Remarks
 FROM Inv.PurchaseRequisitionItems pri
 LEFT JOIN Inv.Items i ON i.Id = pri.ItemId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = pri.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = pri.SubServiceId
 LEFT JOIN Inv.BudgetHeads bh ON bh.Id = pri.BudgetHeadId
 WHERE pri.PurchaseRequisitionId = @Id AND (pri.IsDeleted = 0 OR pri.IsDeleted IS NULL)
 ORDER BY pri.Id;";
@@ -173,6 +177,8 @@ ORDER BY pri.Id;";
                     {
                         Id = itemsReader.GetInt32(itemsReader.GetOrdinal("Id")),
                         ItemId = itemsReader.IsDBNull(itemsReader.GetOrdinal("ItemId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("ItemId")),
+                        MedicineId = itemsReader.IsDBNull(itemsReader.GetOrdinal("MedicineId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("MedicineId")),
+                        SubServiceId = itemsReader.IsDBNull(itemsReader.GetOrdinal("SubServiceId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("SubServiceId")),
                         ItemName = itemsReader.IsDBNull(itemsReader.GetOrdinal("ItemName")) ? null : itemsReader.GetString(itemsReader.GetOrdinal("ItemName")),
                         Quantity = itemsReader.GetInt32(itemsReader.GetOrdinal("Quantity")),
                         UnitEstimatedCost = itemsReader.GetDecimal(itemsReader.GetOrdinal("UnitEstimatedCost")),
@@ -220,9 +226,9 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
             const string insertItemSql = @"
 INSERT INTO Inv.PurchaseRequisitionItems
-(PurchaseRequisitionId, ItemId, Quantity, UnitEstimatedCost, TotalEstimatedCost, BudgetHeadId, AvailableBudget, BudgetRestriction, Remarks, IsActive, CreatedById, CreatedOn)
+(PurchaseRequisitionId, ItemId, MedicineId, SubServiceId, Quantity, UnitEstimatedCost, TotalEstimatedCost, BudgetHeadId, AvailableBudget, BudgetRestriction, Remarks, IsActive, CreatedById, CreatedOn)
 VALUES
-(@PurchaseRequisitionId, @ItemId, @Quantity, @UnitEstimatedCost, @TotalEstimatedCost, @BudgetHeadId, @AvailableBudget, @BudgetRestriction, @Remarks, 1, @CreatedById, GETDATE());";
+(@PurchaseRequisitionId, @ItemId, @MedicineId, @SubServiceId, @Quantity, @UnitEstimatedCost, @TotalEstimatedCost, @BudgetHeadId, @AvailableBudget, @BudgetRestriction, @Remarks, 1, @CreatedById, GETDATE());";
 
             const string updateTotalSql = @"
 UPDATE Inv.PurchaseRequisitions
@@ -280,6 +286,8 @@ WHERE Id = @Id;";
                     using var itemCommand = new SqlCommand(insertItemSql, connection, transaction);
                     itemCommand.Parameters.AddWithValue("@PurchaseRequisitionId", purchaseRequisitionId);
                     itemCommand.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@Quantity", item.Quantity);
                     itemCommand.Parameters.AddWithValue("@UnitEstimatedCost", item.UnitEstimatedCost);
                     itemCommand.Parameters.AddWithValue("@TotalEstimatedCost", item.UnitEstimatedCost * item.Quantity);

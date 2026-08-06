@@ -46,6 +46,46 @@ namespace InventoryManagement.Api.Services
             return items;
         }
 
+        public async Task<IEnumerable<UnifiedItemLookupResult>> GetAllWithMedicinesAsync(string? search)
+        {
+            var results = new List<UnifiedItemLookupResult>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Item_GetAllWithMedicines", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+                command.Parameters.AddWithValue("@Search", (object?)search ?? DBNull.Value);
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new UnifiedItemLookupResult
+                    {
+                        ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                        MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                        SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
+                        SourceType = reader.GetString("SourceType"),
+                        Name = reader.GetString("Name"),
+                        BarCode = reader.IsDBNull("BarCode") ? null : reader.GetString("BarCode"),
+                        Price = reader.IsDBNull("Price") ? null : reader.GetDecimal("Price"),
+                        IsActive = reader.GetBoolean("IsActive")
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving unified item/medicine/disposable lookup");
+                throw;
+            }
+
+            return results;
+        }
+
         public async Task<Item?> GetByIdAsync(int id)
         {
             try

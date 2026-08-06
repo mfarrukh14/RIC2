@@ -9,12 +9,17 @@ import {
   Squares2X2Icon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import demandRequestApi from '../services/demandRequestApi';
 import { branchApi } from '../services/branchApi';
 import { getAllStores } from '../services/storeApi';
 import stockTypesApi from '../services/stockTypesApi';
+import itemApi from '../services/itemApi';
+import transferInventoryApi from '../services/transferInventoryApi';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
+import { productOptionValue, parseProductOptionValue, findProductRow } from '../utils/productKey';
 
 function formatDateTime(value) {
   if (!value) {
@@ -39,6 +44,8 @@ function statusClasses(status) {
       return 'text-emerald-700';
     case 'issued':
       return 'text-blue-700';
+    case 'rejected':
+      return 'text-rose-700';
     default:
       return 'text-slate-700';
   }
@@ -65,13 +72,26 @@ const PendingDemandsPage = () => {
   const [lookups, setLookups] = useState({
     branches: [],
     stores: [],
-    stockTypes: []
+    stockTypes: [],
+    items: []
   });
   const [filters, setFilters] = useState({
     branchId: '',
     requestedStoreId: '',
     stockTypeId: ''
   });
+
+  // Update Demand modal (edit / approve / reject a pending demand)
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [updateSubmitting, setUpdateSubmitting] = useState(false);
+  const [updateRequest, setUpdateRequest] = useState(null);
+  const [updateIndentNo, setUpdateIndentNo] = useState('');
+  const [updateDemandNotes, setUpdateDemandNotes] = useState('');
+  const [updateItems, setUpdateItems] = useState([]);
+  const [updateSearchTerm, setUpdateSearchTerm] = useState('');
+  const [newItemId, setNewItemId] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('');
 
   useEffect(() => {
     loadLookups();
@@ -87,13 +107,14 @@ const PendingDemandsPage = () => {
 
   const loadLookups = async () => {
     try {
-      const [branches, stores, stockTypes] = await Promise.all([
+      const [branches, stores, stockTypes, items] = await Promise.all([
         branchApi.getAll(),
         getAllStores(),
-        stockTypesApi.getAllStockTypes()
+        stockTypesApi.getAllStockTypes(),
+        itemApi.getAllWithMedicines()
       ]);
 
-      setLookups({ branches, stores, stockTypes });
+      setLookups({ branches, stores, stockTypes, items });
     } catch (lookupError) {
       console.error('Error loading pending demand lookups:', lookupError);
       setError('Failed to load filter options.');
@@ -177,6 +198,131 @@ const PendingDemandsPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  // "Print" - the full "Demand Request" report: RIC letterhead, a DR-Number/Stock
+  // Type/Requested Date/Requested By/Request Status/From Store/To Store/Approved
+  // Date/Issued Date header grid, an items table with Requested/Approved/Issued/
+  // Remaining quantities, a Demand Notes section, a Sign/Stamp/Name/Designation/
+  // Department/Date signature block, and a "computer generated document" footer.
+  const handlePrintDemandRequest = async (request) => {
+    let details;
+    try {
+      details = await demandRequestApi.getById(request.demandRequestId);
+    } catch (printError) {
+      console.error('Error loading demand details for print:', printError);
+      setError('Failed to load demand details for printing.');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Ph: 051928111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Demand Request', pageWidth / 2, 36, { align: 'center' });
+
+    const dateOnly = (value) => (value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-');
+
+    const headerRows = [
+      ['DR-Number', details.drNo || '-', 'Stock Type', details.stockTypeName || 'All'],
+      ['Requested Date', dateOnly(details.createdOn), 'Requested By', details.requestedByName || '-'],
+      ['Request Status', details.status || '-', 'From Store', details.requestingStoreName || '-'],
+      ['To Store', details.requestedStoreName || '-', 'Approved Date', dateOnly(details.approvedDate)],
+      ['Issued Date', dateOnly(details.issuedDate), '', '']
+    ];
+
+    autoTable(doc, {
+      startY: 42,
+      body: headerRows,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    const itemsBody = details.items.map((item, index) => [
+      index + 1,
+      item.itemName || 'Unassigned Item',
+      item.requestedQuantity ?? 0,
+      item.approvedQuantity ?? '-',
+      item.issuedQuantity ?? '-',
+      item.remainingQuantity ?? '-'
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Items', 'Requested Qty', 'Approved Qty', 'Issued Qty', 'Remaining Qty']],
+      body: itemsBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' }
+      }
+    });
+
+    let y = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Demand Notes:', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(details.remarks || '-', 40, y);
+
+    y += 12;
+    autoTable(doc, {
+      startY: y,
+      head: [['Sign/Stamp', 'Name', 'Designation', 'Department', 'Date']],
+      body: [['', '', '', '', '']],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 6, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' }
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('This is a computer generated document, therefore signatures are not required.', pageWidth / 2, y, { align: 'center' });
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dateStr}   ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+
+    doc.save(`DemandRequest_${details.drNo}.pdf`);
+  };
+
   const openDetailsModal = async (requestId) => {
     setShowDetailsModal(true);
     setDetailsLoading(true);
@@ -197,6 +343,204 @@ const PendingDemandsPage = () => {
     setShowDetailsModal(false);
     setSelectedRequest(null);
   };
+
+  const openUpdateModal = async (requestId) => {
+    setShowUpdateModal(true);
+    setUpdateLoading(true);
+    setUpdateSearchTerm('');
+    setNewItemId('');
+    setNewItemQuantity('');
+
+    try {
+      const details = await demandRequestApi.getById(requestId);
+      setUpdateRequest(details);
+      setUpdateIndentNo(details.indentNo || '');
+      setUpdateDemandNotes(details.remarks || '');
+      setUpdateItems(details.items.map((item) => ({
+        id: item.id,
+        itemId: item.itemId,
+        medicineId: item.medicineId,
+        subServiceId: item.subServiceId,
+        itemName: item.itemName || 'Unassigned Item',
+        availableInRequestingStore: item.availableQuantityInRequestingStore,
+        requestedQuantity: item.requestedQuantity,
+        availableInRequestedStore: item.availableQuantityInRequestedStore,
+        approvedQuantity: item.approvedQuantity ?? item.requestedQuantity,
+        remarks: item.remarks || ''
+      })));
+    } catch (updateError) {
+      console.error('Error loading demand for update:', updateError);
+      setUpdateRequest(null);
+      setError('Failed to load demand details.');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  const closeUpdateModal = () => {
+    setShowUpdateModal(false);
+    setUpdateSubmitting(false);
+    setUpdateRequest(null);
+    setUpdateItems([]);
+    setUpdateIndentNo('');
+    setUpdateDemandNotes('');
+    setUpdateSearchTerm('');
+    setNewItemId('');
+    setNewItemQuantity('');
+  };
+
+  const handleApprovedQuantityChange = (index, value) => {
+    setUpdateItems((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, approvedQuantity: value } : item
+    )));
+  };
+
+  const handleItemRemarksChange = (index, value) => {
+    setUpdateItems((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, remarks: value } : item
+    )));
+  };
+
+  const handleAddItem = async () => {
+    if (!newItemId || !newItemQuantity || Number(newItemQuantity) <= 0) {
+      alert('Select an item and enter a requested quantity.');
+      return;
+    }
+
+    const newProduct = parseProductOptionValue(newItemId);
+
+    if (updateItems.some((item) =>
+      (newProduct.itemId != null && item.itemId === newProduct.itemId) ||
+      (newProduct.medicineId != null && item.medicineId === newProduct.medicineId) ||
+      (newProduct.subServiceId != null && item.subServiceId === newProduct.subServiceId)
+    )) {
+      alert('This item is already part of the demand.');
+      return;
+    }
+
+    const item = findProductRow(lookups.items, newProduct);
+    const quantity = Number(newItemQuantity);
+
+    let availableInRequestingStore = 0;
+    let availableInRequestedStore = 0;
+
+    // transferInventoryApi.getAvailableQuantity only supports a real ItemId - Medicine/
+    // Disposable rows show 0 available here until that endpoint is extended.
+    if (newProduct.itemId) {
+      try {
+        [availableInRequestingStore, availableInRequestedStore] = await Promise.all([
+          updateRequest?.requestingStoreId
+            ? transferInventoryApi.getAvailableQuantity(updateRequest.requestingStoreId, newProduct.itemId)
+            : Promise.resolve(0),
+          transferInventoryApi.getAvailableQuantity(updateRequest.requestedStoreId, newProduct.itemId)
+        ]);
+      } catch (availabilityError) {
+        console.error('Error loading available quantity for new item:', availabilityError);
+      }
+    }
+
+    setUpdateItems((current) => [
+      ...current,
+      {
+        id: null,
+        itemId: newProduct.itemId,
+        medicineId: newProduct.medicineId,
+        subServiceId: newProduct.subServiceId,
+        itemName: item?.name || 'Unassigned Item',
+        availableInRequestingStore,
+        requestedQuantity: quantity,
+        availableInRequestedStore,
+        approvedQuantity: quantity,
+        remarks: ''
+      }
+    ]);
+
+    setNewItemId('');
+    setNewItemQuantity('');
+  };
+
+  const handleCancelAddItem = () => {
+    setNewItemId('');
+    setNewItemQuantity('');
+  };
+
+  const buildUpdatePayload = () => ({
+    indentNo: updateIndentNo || null,
+    demandNotes: updateDemandNotes || null,
+    items: updateItems.map((item) => ({
+      id: item.id || null,
+      itemId: item.itemId || null,
+      medicineId: item.medicineId || null,
+      subServiceId: item.subServiceId || null,
+      requestedQuantity: item.requestedQuantity,
+      approvedQuantity: Number(item.approvedQuantity) || 0,
+      remarks: item.remarks || null
+    }))
+  });
+
+  const handleSaveUpdate = async () => {
+    if (!updateRequest) {
+      return;
+    }
+
+    setUpdateSubmitting(true);
+
+    try {
+      await demandRequestApi.update(updateRequest.demandRequestId, buildUpdatePayload());
+      closeUpdateModal();
+      await loadRequests();
+    } catch (saveError) {
+      console.error('Error saving demand request:', saveError);
+      alert(saveError.response?.data?.message || 'Failed to save demand request.');
+      setUpdateSubmitting(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!updateRequest) {
+      return;
+    }
+
+    setUpdateSubmitting(true);
+
+    try {
+      await demandRequestApi.approve(updateRequest.demandRequestId, buildUpdatePayload());
+      closeUpdateModal();
+      await loadRequests();
+    } catch (approveError) {
+      console.error('Error approving demand request:', approveError);
+      alert(approveError.response?.data?.message || 'Failed to approve demand request.');
+      setUpdateSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!updateRequest) {
+      return;
+    }
+
+    setUpdateSubmitting(true);
+
+    try {
+      await demandRequestApi.reject(updateRequest.demandRequestId, { remarks: updateDemandNotes || null });
+      closeUpdateModal();
+      await loadRequests();
+    } catch (rejectError) {
+      console.error('Error rejecting demand request:', rejectError);
+      alert(rejectError.response?.data?.message || 'Failed to reject demand request.');
+      setUpdateSubmitting(false);
+    }
+  };
+
+  const filteredUpdateItems = useMemo(() => {
+    const normalizedSearch = updateSearchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return updateItems;
+    }
+
+    return updateItems.filter((item) => (item.itemName || '').toLowerCase().includes(normalizedSearch));
+  }, [updateItems, updateSearchTerm]);
 
   const openLifeCycleModal = async (request) => {
     setShowLifeCycleModal(true);
@@ -379,7 +723,7 @@ const PendingDemandsPage = () => {
                             <div className="text-base text-slate-700">{request.indentNo || '-'}</div>
                           </td>
                           <td className="border-b border-slate-200 px-6 py-8 align-middle">{request.stockTypeName || 'All'}</td>
-                          <td className="border-b border-slate-200 px-6 py-8 align-middle">{request.requestingBranchName}</td>
+                          <td className="border-b border-slate-200 px-6 py-8 align-middle">{request.requestingStoreName}</td>
                           <td className="border-b border-slate-200 px-6 py-8 align-middle">
                             <div className="max-w-[620px] truncate" title={request.itemSummary || ''}>
                               {request.itemSummary || `${request.itemsCount} item${request.itemsCount === 1 ? '' : 's'}`}
@@ -391,10 +735,20 @@ const PendingDemandsPage = () => {
                           </td>
                           <td className="border-b border-slate-200 px-6 py-8 align-middle">
                             <div className="flex flex-col items-center gap-3 text-indigo-400">
-                              <button type="button" className="transition hover:text-indigo-600" title="Edit">
+                              <button
+                                type="button"
+                                onClick={() => openUpdateModal(request.demandRequestId)}
+                                className="transition hover:text-indigo-600"
+                                title="Edit"
+                              >
                                 <PencilSquareIcon className="h-5 w-5" />
                               </button>
-                              <button type="button" className="text-emerald-600 transition hover:text-emerald-700" title="Print">
+                              <button
+                                type="button"
+                                onClick={() => handlePrintDemandRequest(request)}
+                                className="text-emerald-600 transition hover:text-emerald-700"
+                                title="Print"
+                              >
                                 <PrinterIcon className="h-5 w-5" />
                               </button>
                               <button
@@ -525,6 +879,222 @@ const PendingDemandsPage = () => {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpdateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-7xl overflow-hidden rounded-md bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 className="text-xl font-medium text-slate-700">Update Demand</h3>
+              <button type="button" onClick={closeUpdateModal} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(90vh-72px)] overflow-y-auto px-6 py-5">
+              {updateLoading ? (
+                <div className="text-sm text-slate-500">Loading demand...</div>
+              ) : !updateRequest ? (
+                <div className="text-sm text-slate-500">Demand details are unavailable.</div>
+              ) : (
+                <div className="space-y-5">
+                  <div>
+                    <span className="text-base font-semibold text-slate-900">Demand Request No. </span>
+                    <span className="rounded bg-rose-600 px-2 py-1 text-base font-semibold text-white">{updateRequest.drNo}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Stock Type<span className="text-rose-500">*</span></label>
+                      <select
+                        value={updateRequest.stockTypeId || ''}
+                        disabled
+                        className="w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none"
+                      >
+                        <option value="">{updateRequest.stockTypeName || 'All'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Item<span className="text-rose-500">*</span></label>
+                      <select
+                        value={newItemId}
+                        onChange={(event) => setNewItemId(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+                      >
+                        <option value="">Search Item</option>
+                        {lookups.items.map((lookupItem) => (
+                          <option key={productOptionValue(lookupItem)} value={productOptionValue(lookupItem)}>
+                            {lookupItem.sourceType === 'Item' ? lookupItem.name : `${lookupItem.name} (${lookupItem.sourceType})`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Requested Quantity<span className="text-rose-500">*</span></label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newItemQuantity}
+                        onChange={(event) => setNewItemQuantity(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelAddItem}
+                      className="rounded-md border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-700">Requesting Store</div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        ({updateRequest.requestingBranchName}){updateRequest.requestingStoreName || '-'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-700">Requested Store</div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        ({updateRequest.requestingBranchName}){updateRequest.requestedStoreName}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Demand Notes</label>
+                      <textarea
+                        value={updateDemandNotes}
+                        onChange={(event) => setUpdateDemandNotes(event.target.value)}
+                        rows={2}
+                        className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Indent Number</label>
+                      <input
+                        type="text"
+                        placeholder="Indent Number"
+                        value={updateIndentNo}
+                        onChange={(event) => setUpdateIndentNo(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <span>Search:</span>
+                      <input
+                        type="text"
+                        value={updateSearchTerm}
+                        onChange={(event) => setUpdateSearchTerm(event.target.value)}
+                        className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 md:w-56"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-200">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 text-left text-slate-700">
+                          <th className="border-b border-slate-200 px-4 py-3 font-semibold">Sr.</th>
+                          <th className="border-b border-slate-200 px-4 py-3 font-semibold">Items, Brand ( Model )</th>
+                          <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Available Quantity in Requesting Store</th>
+                          <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Requested Quantity</th>
+                          <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Available Quantity in Requested Store</th>
+                          <th className="border-b border-slate-200 px-4 py-3 text-center font-semibold">Approved Quantity</th>
+                          <th className="border-b border-slate-200 px-4 py-3 font-semibold">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUpdateItems.length === 0 ? (
+                          <tr>
+                            <td colSpan="7" className="px-4 py-10 text-center text-slate-500">No items found.</td>
+                          </tr>
+                        ) : (
+                          filteredUpdateItems.map((item, index) => (
+                            <tr key={item.id ?? `new-${productOptionValue(item)}`} className="odd:bg-slate-50/60">
+                              <td className="border-b border-slate-200 px-4 py-3">{index + 1}</td>
+                              <td className="border-b border-slate-200 px-4 py-3 text-sky-700">{item.itemName}</td>
+                              <td className="border-b border-slate-200 px-4 py-3 text-center">{item.availableInRequestingStore}</td>
+                              <td className="border-b border-slate-200 px-4 py-3 text-center">{item.requestedQuantity}</td>
+                              <td className="border-b border-slate-200 px-4 py-3 text-center">{item.availableInRequestedStore}</td>
+                              <td className="border-b border-slate-200 px-4 py-3">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.approvedQuantity}
+                                  onChange={(event) => handleApprovedQuantityChange(index, event.target.value)}
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                                />
+                              </td>
+                              <td className="border-b border-slate-200 px-4 py-3">
+                                <input
+                                  type="text"
+                                  placeholder="Remarks"
+                                  value={item.remarks}
+                                  onChange={(event) => handleItemRemarksChange(index, event.target.value)}
+                                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                                />
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="text-sm text-slate-600">Showing 1 to {filteredUpdateItems.length} of {filteredUpdateItems.length} entries</div>
+
+                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-5">
+                    <button
+                      type="button"
+                      onClick={handleReject}
+                      disabled={updateSubmitting}
+                      className="rounded-md bg-rose-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveUpdate}
+                      disabled={updateSubmitting}
+                      className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApprove}
+                      disabled={updateSubmitting}
+                      className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Approve
+                    </button>
                   </div>
                 </div>
               )}

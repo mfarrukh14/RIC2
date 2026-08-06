@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5100/api';
+const API_BASE_URL = 'http://10.10.10.35:5100/api';
 
 const itemApi = {
   // CRUD operations
@@ -11,6 +11,18 @@ const itemApi = {
 
   getById: async (id) => {
     const response = await axios.get(`${API_BASE_URL}/items/${id}`);
+    return response.data;
+  },
+
+  // Unified Items + Medicines + Disposables lookup for transaction-entry
+  // pickers (Stock Consumption, Stock Adjustment, GRN, Purchase Order,
+  // Purchase Requisition, Demand Request). Each row has exactly one of
+  // itemId/medicineId/subServiceId set - pass whichever is present back
+  // when saving a line.
+  getAllWithMedicines: async (search) => {
+    const response = await axios.get(`${API_BASE_URL}/items/with-medicines`, {
+      params: search ? { search } : undefined,
+    });
     return response.data;
   },
 

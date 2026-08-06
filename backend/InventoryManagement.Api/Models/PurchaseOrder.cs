@@ -41,7 +41,9 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public int PurchaseOrderId { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public string ItemName { get; set; } = string.Empty;
         public string? ItemModel { get; set; }
         public string? ItemTypeName { get; set; }
@@ -72,8 +74,9 @@ namespace InventoryManagement.Api.Models
 
     public class PurchaseOrderCreateItem
     {
-        [Required]
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
 
         public string? ItemType { get; set; }
         public decimal? PacketQuantity { get; set; }

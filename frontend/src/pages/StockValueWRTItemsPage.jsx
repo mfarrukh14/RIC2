@@ -1,16 +1,20 @@
 import React,{ useState, useEffect } from 'react';
 import { stockValueItemsApi } from '../services/stockValueItemsApi';
 import { getAllStores } from '../services/storeApi';
+import { itemTypeApi } from '../services/itemTypeApi';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import { useSession } from '../context/SessionContext';
 
 const StockValueWRTItemsPage = () => {
+  const { session } = useSession();
   const [dateRangeEnabled, setDateRangeEnabled] = useState(false);
   const [startDate, setStartDate] = useState('2025-10-29');
   const [endDate, setEndDate] = useState('2025-10-29');
   const [selectedStore, setSelectedStore] = useState('');
-  const [selectedItemType, setSelectedItemType] = useState('all');
+  const [selectedItemType, setSelectedItemType] = useState('');
   const [stores, setStores] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [stockValueItems, setStockValueItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -19,15 +23,25 @@ const StockValueWRTItemsPage = () => {
 
   useEffect(() => {
     fetchStores();
+    fetchItemTypes();
     fetchData();
   }, []);
 
   const fetchStores = async () => {
     try {
       const data = await getAllStores();
-      setStores(data);
+      setStores(data.filter(store => store.isActive));
     } catch (error) {
       console.error('Error fetching stores:', error);
+    }
+  };
+
+  const fetchItemTypes = async () => {
+    try {
+      const data = await itemTypeApi.getAll();
+      setItemTypes(data.filter(itemType => itemType.isActive));
+    } catch (error) {
+      console.error('Error fetching item types:', error);
     }
   };
 
@@ -36,7 +50,7 @@ const StockValueWRTItemsPage = () => {
       setLoading(true);
       const params = {
         store: selectedStore || undefined,
-        itemType: selectedItemType === 'all' ? undefined : selectedItemType
+        itemType: selectedItemType || undefined
       };
 
       if (dateRangeEnabled && startDate && endDate) {
@@ -96,7 +110,7 @@ const StockValueWRTItemsPage = () => {
       ['Vendor Email:', report.vendorEmail || '', 'Vendor Contact No:', report.vendorContactNo || '']
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 48,
       body: headerData,
       theme: 'plain',
@@ -138,7 +152,7 @@ const StockValueWRTItemsPage = () => {
       item.total?.toFixed(2) || '0.00'
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 5,
       head: [[
         'Sr',
@@ -203,6 +217,105 @@ const StockValueWRTItemsPage = () => {
     fetchData();
   };
 
+  // "Item Wise Stock Report" export - RIC letterhead, User line, Filters line, then
+  // the same Store/Name/Batch/Qty/Rate columns as the on-screen table, matching the
+  // old system's export against the currently applied filters.
+  const handleExport = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (err) {
+      console.error('Logo load error:', err);
+    }
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road Rawalpindi, Punjab, Pakistan', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Phone: 0519281111-9', pageWidth / 2, 27, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 33,
+      body: [['Item Wise Stock Report']],
+      theme: 'plain',
+      styles: { fontSize: 11, fontStyle: 'bold', halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const userLabel = session?.user?.UserName || session?.branchName || 'User';
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      body: [[`User: ${userLabel}`]],
+      theme: 'plain',
+      styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const storeLabel = selectedStore || 'All';
+    const typeLabel = selectedItemType || 'All';
+    const dateFilterLabel = dateRangeEnabled ? 'Yes' : 'No';
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      body: [[`Filters:  Store: ${storeLabel}   Type: ${typeLabel}   Is Date Range Filter Applied: ${dateFilterLabel}`]],
+      theme: 'plain',
+      styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const body = filteredItems.map((item) => [
+      item.storeName || 'N/A',
+      item.name,
+      item.batchNo || '-',
+      Number(item.totalItems).toFixed(4),
+      parseFloat(item.unitPurchaseRate).toFixed(2),
+      parseFloat(item.totalPurchaseRate).toFixed(2),
+      parseFloat(item.unitSaleRate).toFixed(2),
+      parseFloat(item.totalSaleRate).toFixed(2)
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      head: [['Store Name', 'Name', 'Batch No.', 'Total Items', 'Unit Purchase Rate', 'Total Purchase Rate', 'Unit Sale Rate', 'Total Sale Rate']],
+      body,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'right' }
+      },
+      didDrawPage: () => {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${dateStr} ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+      }
+    });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+    }
+
+    doc.save(`ItemWiseStockReport_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.pdf`);
+  };
+
   const filteredItems = stockValueItems.filter(item =>
     item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.batchNo?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -230,11 +343,21 @@ const StockValueWRTItemsPage = () => {
 
   return (
     <div className="p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-          <span className="text-white text-lg">📊</span>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
+            <span className="text-white text-lg">📊</span>
+          </div>
+          <h1 className="text-2xl font-semibold">Stock Value Wrt Items</h1>
         </div>
-        <h1 className="text-2xl font-semibold">Stock Value Wrt Items</h1>
+        <button
+          onClick={handleExport}
+          disabled={filteredItems.length === 0}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span>⬇</span>
+          Export
+        </button>
       </div>
 
       {/* Filters */}
@@ -288,48 +411,18 @@ const StockValueWRTItemsPage = () => {
 
           <div>
             <label className="block text-sm font-medium mb-1">Item Type</label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="all"
-                  checked={selectedItemType === 'all'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">All</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="medicine"
-                  checked={selectedItemType === 'medicine'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Medicine</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="disposable"
-                  checked={selectedItemType === 'disposable'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Disposable</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="item"
-                  checked={selectedItemType === 'item'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Item</span>
-              </label>
-            </div>
+            <select
+              value={selectedItemType}
+              onChange={(e) => setSelectedItemType(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+            >
+              <option value="">All Types</option>
+              {itemTypes.map(itemType => (
+                <option key={itemType.id} value={itemType.name}>
+                  {itemType.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-end">

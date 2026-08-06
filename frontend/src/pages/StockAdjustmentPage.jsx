@@ -29,6 +29,10 @@ const StockAdjustmentPage = () => {
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedAdjustment, setSelectedAdjustment] = useState(null);
+  // Carries the last-used store forward across modal opens (the modal itself is
+  // unmounted/remounted each time via `{showModal && ...}`, so its own internal
+  // state can't survive that - this lives in the parent instead).
+  const [lastStoreId, setLastStoreId] = useState('');
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -128,7 +132,10 @@ const StockAdjustmentPage = () => {
     setSelectedAdjustment(null);
   };
 
-  const handleModalSubmit = async () => {
+  const handleModalSubmit = async (storeId) => {
+    if (storeId) {
+      setLastStoreId(storeId);
+    }
     setShowModal(false);
     setSelectedAdjustment(null);
     await loadStockAdjustments();
@@ -433,6 +440,7 @@ const StockAdjustmentPage = () => {
           adjustment={selectedAdjustment}
           stores={stores}
           branches={branches}
+          defaultStoreId={lastStoreId}
         />
       )}
     </div>

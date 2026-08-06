@@ -11,22 +11,7 @@ import purchaseOrderApi from '../services/purchaseOrderApi';
 import vendorApi from '../services/vendorApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
-
-function toDateInputValue(date) {
-  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return adjusted.toISOString().slice(0, 10);
-}
-
-function defaultDateRange() {
-  const now = new Date();
-  const from = new Date(now);
-  from.setDate(from.getDate() - 30);
-
-  return {
-    dateFrom: toDateInputValue(from),
-    dateTo: toDateInputValue(now)
-  };
-}
+import { productOptionValue, parseProductOptionValue, findProductRow } from '../utils/productKey';
 
 function formatDateTime(value) {
   if (!value) {
@@ -118,18 +103,7 @@ function matchesItemType(item, selectedType) {
     return true;
   }
 
-  const normalizedType = (item.itemTypeName || '').toLowerCase();
-  const normalizedSelection = selectedType.toLowerCase();
-
-  if (!normalizedType) {
-    return true;
-  }
-
-  if (normalizedSelection === 'item') {
-    return normalizedType.includes('item') || (!normalizedType.includes('medicine') && !normalizedType.includes('disposable'));
-  }
-
-  return normalizedType.includes(normalizedSelection);
+  return item.sourceType === selectedType;
 }
 
 const PurchaseOrderPage = () => {
@@ -138,8 +112,13 @@ const PurchaseOrderPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  // No date range by default - a real purchase order can be weeks or months old, and
+  // silently filtering the list down to "the last 30 days" on first load made the page
+  // look empty/broken even when orders existed. The date pickers stay empty until the
+  // user actively narrows the range and clicks Search.
   const [filters, setFilters] = useState({
-    ...defaultDateRange(),
+    dateFrom: '',
+    dateTo: '',
     vendorId: '',
     status: ''
   });
@@ -172,7 +151,7 @@ const PurchaseOrderPage = () => {
       const [vendors, stores, items] = await Promise.all([
         vendorApi.getAll(),
         getAllStores(),
-        itemApi.getAll()
+        itemApi.getAllWithMedicines()
       ]);
 
       setLookups({ vendors, stores, items });
@@ -288,7 +267,7 @@ const PurchaseOrderPage = () => {
       return;
     }
 
-    const selectedItem = lookups.items.find((item) => String(item.id) === String(lineDraft.itemId));
+    const selectedItem = findProductRow(lookups.items, parseProductOptionValue(lineDraft.itemId));
     if (!selectedItem) {
       alert('Selected item could not be found.');
       return;
@@ -309,7 +288,9 @@ const PurchaseOrderPage = () => {
       items: [
         ...current.items,
         {
-          itemId: selectedItem.id,
+          itemId: selectedItem.itemId,
+          medicineId: selectedItem.medicineId,
+          subServiceId: selectedItem.subServiceId,
           itemName: selectedItem.name,
           itemModel: selectedItem.model,
           itemType: formData.itemType,
@@ -358,6 +339,8 @@ const PurchaseOrderPage = () => {
         termsAndConditions: formData.termsAndConditions || null,
         items: formData.items.map((item) => ({
           itemId: item.itemId,
+          medicineId: item.medicineId,
+          subServiceId: item.subServiceId,
           itemType: item.itemType,
           packetQuantity: item.packetQuantity,
           unitQuantity: item.unitQuantity,
@@ -622,7 +605,7 @@ const PurchaseOrderPage = () => {
               <select name="itemId" value={lineDraft.itemId} onChange={handleLineDraftChange} className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400">
                 <option value="">Search Item</option>
                 {selectableItems.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}{item.model ? ` (${item.model})` : ''}</option>
+                  <option key={productOptionValue(item)} value={productOptionValue(item)}>{item.name}{item.model ? ` (${item.model})` : ''}</option>
                 ))}
               </select>
             </div>

@@ -385,7 +385,9 @@ namespace InventoryManagement.Api.Services
             {
                 command.Parameters.AddWithValue("@InventoryId", request.InventoryId);
             }
-            command.Parameters.AddWithValue("@ItemId", request.ItemId);
+            command.Parameters.AddWithValue("@ItemId", (object?)request.ItemId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@MedicineId", (object?)request.MedicineId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SubServiceId", (object?)request.SubServiceId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ManufacturerId", (object?)request.ManufacturerId ?? DBNull.Value);
             command.Parameters.AddWithValue("@MfgDate", (object?)request.MfgDate ?? DBNull.Value);
             command.Parameters.AddWithValue("@ExpiryDate", (object?)request.ExpiryDate ?? DBNull.Value);
@@ -465,7 +467,9 @@ namespace InventoryManagement.Api.Services
             {
                 Id = reader.GetInt32("Id"),
                 InventoryId = reader.GetInt32("InventoryId"),
-                ItemId = reader.GetInt32("ItemId"),
+                ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
                 ItemName = reader.IsDBNull("ItemName") ? null : reader.GetString("ItemName"),
                 ManufacturerId = reader.IsDBNull("ManufacturerId") ? null : reader.GetInt32("ManufacturerId"),
                 ManufacturerName = reader.IsDBNull("ManufacturerName") ? null : reader.GetString("ManufacturerName"),

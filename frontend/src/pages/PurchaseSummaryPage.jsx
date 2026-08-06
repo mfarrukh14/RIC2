@@ -212,7 +212,7 @@ const PurchaseSummaryPage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">ED OPD Store</option>
+              <option value="">All Stores</option>
               {lookupData.stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -373,8 +373,8 @@ const PurchaseSummaryPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="Both">Both</option>
-              <option value="Purchase">Purchase</option>
-              <option value="Return">Return</option>
+              <option value="PurchaseOrder">On Purchase Order</option>
+              <option value="Inventory">On Inventory</option>
             </select>
           </div>
         </div>

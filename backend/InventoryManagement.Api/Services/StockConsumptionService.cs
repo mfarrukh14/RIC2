@@ -143,7 +143,9 @@ namespace InventoryManagement.Api.Services
                         detailCommand.CommandType = CommandType.StoredProcedure;
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", stockConsumptionId);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                        detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                         detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                         detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -212,7 +214,9 @@ namespace InventoryManagement.Api.Services
                         detailCommand.CommandType = CommandType.StoredProcedure;
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", request.Id);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                        detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                         detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                         detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -310,8 +314,12 @@ namespace InventoryManagement.Api.Services
                 StockConsumptionId = reader.IsDBNull(reader.GetOrdinal("StockConsumptionId")) ? null : reader.GetInt32(reader.GetOrdinal("StockConsumptionId")),
                 StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
-                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                ItemId = reader.IsDBNull(reader.GetOrdinal("ItemId")) ? null : reader.GetInt32(reader.GetOrdinal("ItemId")),
                 ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? null : reader.GetString(reader.GetOrdinal("ItemName")),
+                MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId")) ? null : reader.GetInt32(reader.GetOrdinal("MedicineId")),
+                MedicineName = reader.IsDBNull(reader.GetOrdinal("MedicineName")) ? null : reader.GetString(reader.GetOrdinal("MedicineName")),
+                SubServiceId = reader.IsDBNull(reader.GetOrdinal("SubServiceId")) ? null : reader.GetInt32(reader.GetOrdinal("SubServiceId")),
+                SubServiceName = reader.IsDBNull(reader.GetOrdinal("SubServiceName")) ? null : reader.GetString(reader.GetOrdinal("SubServiceName")),
                 Type = reader.GetInt32(reader.GetOrdinal("Type")),
                 StockTypeId = reader.GetInt32(reader.GetOrdinal("StockTypeId")),
                 StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName")) ? null : reader.GetString(reader.GetOrdinal("StockTypeName")),

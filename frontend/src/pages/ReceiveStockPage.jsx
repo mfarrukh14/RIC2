@@ -50,6 +50,10 @@ const ReceiveStockPage = () => {
   const [lifeCycleEntriesPerPage, setLifeCycleEntriesPerPage] = useState(10);
   const [lifeCyclePage, setLifeCyclePage] = useState(1);
   const [receiveIndentNo, setReceiveIndentNo] = useState('');
+  const [receiveDriverName, setReceiveDriverName] = useState('');
+  const [receiveVehicleNumber, setReceiveVehicleNumber] = useState('');
+  const [receiveContactNumber, setReceiveContactNumber] = useState('');
+  const [receiveDetail, setReceiveDetail] = useState('');
   const [lookups, setLookups] = useState({
     branches: [],
     stores: [],
@@ -104,7 +108,7 @@ const ReceiveStockPage = () => {
   };
 
   const filteredRequests = useMemo(() => {
-    const issuedOnly = requests.filter((request) => (request.status || '').toLowerCase() === 'issued');
+    const issuedOnly = requests.filter((request) => ['issued', 'partial issued'].includes((request.status || '').toLowerCase()));
 
     return issuedOnly.filter((request) => {
       const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
@@ -168,11 +172,19 @@ const ReceiveStockPage = () => {
     setShowUpdateModal(true);
     setDetailsLoading(true);
     setReceiveIndentNo('');
+    setReceiveDriverName('');
+    setReceiveVehicleNumber('');
+    setReceiveContactNumber('');
+    setReceiveDetail('');
 
     try {
       const details = await demandRequestApi.getById(requestId);
       setSelectedRequest(details);
       setReceiveIndentNo(details.indentNo || '');
+      setReceiveDriverName(details.driverName || '');
+      setReceiveVehicleNumber(details.vehicleNumber || '');
+      setReceiveContactNumber(details.contactNumber || '');
+      setReceiveDetail(details.detail || '');
     } catch (detailsError) {
       console.error('Error loading receive stock details:', detailsError);
       setSelectedRequest(null);
@@ -186,6 +198,10 @@ const ReceiveStockPage = () => {
     setShowUpdateModal(false);
     setSelectedRequest(null);
     setReceiveIndentNo('');
+    setReceiveDriverName('');
+    setReceiveVehicleNumber('');
+    setReceiveContactNumber('');
+    setReceiveDetail('');
   };
 
   const openLifeCycleModal = async (request) => {
@@ -246,7 +262,11 @@ const ReceiveStockPage = () => {
 
     try {
       await demandRequestApi.receive(selectedRequest.demandRequestId, {
-        indentNo: receiveIndentNo || null
+        indentNo: receiveIndentNo || null,
+        driverName: receiveDriverName || null,
+        vehicleNumber: receiveVehicleNumber || null,
+        contactNumber: receiveContactNumber || null,
+        detail: receiveDetail || null
       });
       closeUpdateModal();
       await loadRequests();
@@ -462,14 +482,26 @@ const ReceiveStockPage = () => {
                         <div className="font-semibold text-slate-900">Demand Notes:</div>
                         <div className="text-slate-800">{selectedRequest.remarks || ''}</div>
                       </div>
-                      <div className="grid grid-cols-[260px_1fr] gap-4">
-                        <div className="font-semibold text-slate-900">Delivery Person:</div>
-                        <div className="text-slate-800"></div>
-                      </div>
-                      <div className="grid grid-cols-[260px_1fr] gap-4">
-                        <div className="font-semibold text-slate-900">Contact No:</div>
-                        <div className="text-slate-800"></div>
-                      </div>
+                      <label className="grid grid-cols-[260px_1fr] items-center gap-4">
+                        <span className="font-semibold text-slate-900">Delivery Person:</span>
+                        <input
+                          type="text"
+                          value={receiveDriverName}
+                          onChange={(event) => setReceiveDriverName(event.target.value)}
+                          placeholder="Enter Delivery Person Name"
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                        />
+                      </label>
+                      <label className="grid grid-cols-[260px_1fr] items-center gap-4">
+                        <span className="font-semibold text-slate-900">Contact No:</span>
+                        <input
+                          type="text"
+                          value={receiveContactNumber}
+                          onChange={(event) => setReceiveContactNumber(event.target.value)}
+                          placeholder="Enter Contact Number"
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                        />
+                      </label>
                     </div>
 
                     <div className="space-y-8">
@@ -477,14 +509,26 @@ const ReceiveStockPage = () => {
                         <div className="font-semibold text-slate-900">Requested Store:</div>
                         <div className="text-slate-800">{selectedRequest.requestedStoreName}</div>
                       </div>
-                      <div className="grid grid-cols-[260px_1fr] gap-4">
-                        <div className="font-semibold text-slate-900">Vehicle No:</div>
-                        <div className="text-slate-800"></div>
-                      </div>
-                      <div className="grid grid-cols-[260px_1fr] gap-4">
-                        <div className="font-semibold text-slate-900">Detail:</div>
-                        <div className="text-slate-800"></div>
-                      </div>
+                      <label className="grid grid-cols-[260px_1fr] items-center gap-4">
+                        <span className="font-semibold text-slate-900">Vehicle No:</span>
+                        <input
+                          type="text"
+                          value={receiveVehicleNumber}
+                          onChange={(event) => setReceiveVehicleNumber(event.target.value)}
+                          placeholder="Enter Vehicle Number"
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                        />
+                      </label>
+                      <label className="grid grid-cols-[260px_1fr] items-start gap-4">
+                        <span className="pt-2 font-semibold text-slate-900">Detail:</span>
+                        <textarea
+                          value={receiveDetail}
+                          onChange={(event) => setReceiveDetail(event.target.value)}
+                          placeholder="Enter Detail"
+                          rows={2}
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400"
+                        />
+                      </label>
                     </div>
                   </div>
 

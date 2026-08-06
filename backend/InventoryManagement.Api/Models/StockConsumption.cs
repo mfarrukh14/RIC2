@@ -32,7 +32,7 @@ namespace InventoryManagement.Api.Models
         public string? MedicineName { get; set; }
         public int? SubServiceId { get; set; }
         public string? SubServiceName { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
         public string? ItemName { get; set; }
         public int Type { get; set; }
         public int StockTypeId { get; set; }
@@ -64,7 +64,11 @@ namespace InventoryManagement.Api.Models
 
     public class StockConsumptionDetailCreateRequest
     {
-        public int ItemId { get; set; }
+        // Exactly one of ItemId/MedicineId/SubServiceId should be set - see
+        // Item_GetAllWithMedicines / UnifiedItemLookupResult.
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int Type { get; set; }
         public int StockTypeId { get; set; }
         public decimal Quantity { get; set; }
@@ -85,7 +89,9 @@ namespace InventoryManagement.Api.Models
     public class StockConsumptionDetailUpdateRequest
     {
         public int? Id { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int Type { get; set; }
         public int StockTypeId { get; set; }
         public decimal Quantity { get; set; }

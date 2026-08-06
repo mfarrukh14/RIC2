@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5100/api';
+const API_BASE_URL = 'http://10.10.10.35:5100/api';
 
 const grnApi = {
   getAll: async () => {
@@ -30,6 +30,11 @@ const grnApi = {
 
   getLookupData: async () => {
     const response = await axios.get(`${API_BASE_URL}/grn/lookup`);
+    return response.data;
+  },
+
+  getPODetails: async (purchaseOrderId) => {
+    const response = await axios.get(`${API_BASE_URL}/grn/po/${purchaseOrderId}`);
     return response.data;
   }
 };

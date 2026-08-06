@@ -54,7 +54,9 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public int InventoryId { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public string? ItemName { get; set; }
         public int? ManufacturerId { get; set; }
         public string? ManufacturerName { get; set; }
@@ -119,7 +121,9 @@ namespace InventoryManagement.Api.Models
     public class InventoryDetailCreateRequest
     {
         public int InventoryId { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int? ManufacturerId { get; set; }
         public DateTime? MfgDate { get; set; }
         public DateTime? ExpiryDate { get; set; }

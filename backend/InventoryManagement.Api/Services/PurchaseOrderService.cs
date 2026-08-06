@@ -41,12 +41,14 @@ SELECT
     po.TotalAmount,
     po.Subject,
     COUNT(poi.Id) AS ItemsCount,
-    STRING_AGG(COALESCE(i.Name, 'Unassigned Item'), ', ') AS ItemSummary
+    STRING_AGG(COALESCE(i.Name, med.MedicineFullName, f.Name, 'Unassigned Item'), ', ') AS ItemSummary
 FROM dbo.PurchaseOrders po
 INNER JOIN dbo.PharmacyStores s ON s.StoreId = po.StoreId
 INNER JOIN dbo.Vendors v ON v.Id = po.VendorId
 LEFT JOIN dbo.PurchaseOrderItems poi ON poi.PurchaseOrderId = po.PurchaseOrderId AND poi.IsActive = 1
 LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = poi.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = poi.SubServiceId
 WHERE po.IsActive = 1
   AND (@DateFrom IS NULL OR po.CreatedOn >= @DateFrom)
   AND (@DateTo IS NULL OR po.CreatedOn <= @DateTo)
@@ -128,9 +130,11 @@ SELECT
           AND poi.IsActive = 1
     ) AS ItemsCount,
     (
-        SELECT STRING_AGG(COALESCE(i.Name, 'Unassigned Item'), ', ')
+        SELECT STRING_AGG(COALESCE(i.Name, med.MedicineFullName, f.Name, 'Unassigned Item'), ', ')
         FROM dbo.PurchaseOrderItems poi
         LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
+        LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = poi.MedicineId
+        LEFT JOIN Account.Fees f ON f.Id = poi.SubServiceId
         WHERE poi.PurchaseOrderId = po.PurchaseOrderId
           AND poi.IsActive = 1
     ) AS ItemSummary
@@ -145,7 +149,9 @@ SELECT
     poi.Id,
     poi.PurchaseOrderId,
     poi.ItemId,
-    i.Name AS ItemName,
+    poi.MedicineId,
+    poi.SubServiceId,
+    COALESCE(i.Name, med.MedicineFullName, f.Name) AS ItemName,
     i.Model AS ItemModel,
     it.Name AS ItemTypeName,
     poi.PacketQuantity,
@@ -156,6 +162,8 @@ SELECT
 FROM dbo.PurchaseOrderItems poi
 LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
 LEFT JOIN dbo.ItemTypes it ON it.Id = i.ItemTypeId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = poi.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = poi.SubServiceId
 WHERE poi.PurchaseOrderId = @PurchaseOrderId
   AND poi.IsActive = 1
 ORDER BY poi.Id;";
@@ -273,6 +281,8 @@ INSERT INTO dbo.PurchaseOrderItems
 (
     PurchaseOrderId,
     ItemId,
+    MedicineId,
+    SubServiceId,
     ItemType,
     PacketQuantity,
     UnitQuantity,
@@ -287,6 +297,8 @@ VALUES
 (
     @PurchaseOrderId,
     @ItemId,
+    @MedicineId,
+    @SubServiceId,
     @ItemType,
     @PacketQuantity,
     @UnitQuantity,
@@ -325,7 +337,9 @@ VALUES
                 {
                     using var itemCommand = new SqlCommand(NormalizeSql(insertItemSql), connection, (SqlTransaction)transaction);
                     itemCommand.Parameters.AddWithValue("@PurchaseOrderId", purchaseOrderId);
-                    itemCommand.Parameters.AddWithValue("@ItemId", item.ItemId);
+                    itemCommand.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@ItemType", (object?)item.ItemType ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@PacketQuantity", (object?)item.PacketQuantity ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@UnitQuantity", item.UnitQuantity);
@@ -375,7 +389,9 @@ VALUES
             {
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 PurchaseOrderId = reader.GetInt32(reader.GetOrdinal("PurchaseOrderId")),
-                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                ItemId = reader.IsDBNull(reader.GetOrdinal("ItemId")) ? null : reader.GetInt32(reader.GetOrdinal("ItemId")),
+                MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId")) ? null : reader.GetInt32(reader.GetOrdinal("MedicineId")),
+                SubServiceId = reader.IsDBNull(reader.GetOrdinal("SubServiceId")) ? null : reader.GetInt32(reader.GetOrdinal("SubServiceId")),
                 ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? "Unassigned Item" : reader.GetString(reader.GetOrdinal("ItemName")),
                 ItemModel = reader.IsDBNull(reader.GetOrdinal("ItemModel")) ? null : reader.GetString(reader.GetOrdinal("ItemModel")),
                 ItemTypeName = reader.IsDBNull(reader.GetOrdinal("ItemTypeName")) ? null : reader.GetString(reader.GetOrdinal("ItemTypeName")),

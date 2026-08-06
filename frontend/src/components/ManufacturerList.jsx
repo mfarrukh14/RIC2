@@ -46,7 +46,7 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
   const filteredManufacturers = manufacturers.filter(manufacturer =>
     manufacturer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (manufacturer.address && manufacturer.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (manufacturer.contactNo && manufacturer.contactNo.includes(searchTerm))
+    (manufacturer.cNo && manufacturer.cNo.includes(searchTerm))
   );
 
   // Export functionality
@@ -56,7 +56,7 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
       ...filteredManufacturers.map(manufacturer => [
         `"${manufacturer.name}"`,
         `"${manufacturer.address || 'N/A'}"`,
-        `"${manufacturer.contactNo || 'N/A'}"`,
+        `"${manufacturer.cNo || 'N/A'}"`,
         manufacturer.isActive ? 'Active' : 'Inactive',
         new Date(manufacturer.createdAt).toLocaleDateString()
       ].join(','))
@@ -285,8 +285,8 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">{manufacturer.name}</div>
-                      {manufacturer.contactPersonName1 && (
-                        <div className="text-sm text-gray-500">Contact: {manufacturer.contactPersonName1}</div>
+                      {manufacturer.cpName1 && (
+                        <div className="text-sm text-gray-500">Contact: {manufacturer.cpName1}</div>
                       )}
                       {manufacturer.email && (
                         <div className="text-sm text-gray-500">{manufacturer.email}</div>
@@ -307,7 +307,7 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {manufacturer.contactNo || 'N/A'}
+                    {manufacturer.cNo || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span

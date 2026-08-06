@@ -151,7 +151,9 @@ namespace InventoryManagement.Api.Services
                         {
                             Id = reader.GetInt32("Id"),
                             PurchaseOrderId = reader.GetInt32("PurchaseOrderId"),
-                            ItemId = reader.GetInt32("ItemId"),
+                            ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                            MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                            SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
                             ItemName = reader.GetString("ItemName"),
                             OrderedQuantity = reader.GetInt32("OrderedQuantity"),
                             ReceivedQuantity = reader.GetInt32("ReceivedQuantity"),
@@ -351,7 +353,9 @@ namespace InventoryManagement.Api.Services
             {
                 Id = reader.GetInt32("Id"),
                 GRNId = reader.GetInt32("GRNId"),
-                ItemId = reader.GetInt32("ItemId"),
+                ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
                 ItemName = reader.IsDBNull("ItemName") ? null : reader.GetString("ItemName"),
                 ManufacturerId = reader.IsDBNull("ManufacturerId") ? null : reader.GetInt32("ManufacturerId"),
                 ManufacturerName = reader.IsDBNull("ManufacturerName") ? null : reader.GetString("ManufacturerName"),
@@ -387,7 +391,9 @@ namespace InventoryManagement.Api.Services
         private static void AddGRNItemParameters(SqlCommand command, int grnId, GRNItemRequest item)
         {
             command.Parameters.AddWithValue("@GRNId", grnId);
-            command.Parameters.AddWithValue("@ItemId", item.ItemId);
+            command.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ManufacturerId", (object?)item.ManufacturerId ?? DBNull.Value);
             command.Parameters.AddWithValue("@MfgDate", (object?)item.MfgDate ?? DBNull.Value);
             command.Parameters.AddWithValue("@ExpiryDate", (object?)item.ExpiryDate ?? DBNull.Value);

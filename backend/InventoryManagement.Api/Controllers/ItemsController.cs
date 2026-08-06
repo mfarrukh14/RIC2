@@ -33,6 +33,21 @@ namespace InventoryManagement.Api.Controllers
             }
         }
 
+        [HttpGet("with-medicines")]
+        public async Task<ActionResult<IEnumerable<UnifiedItemLookupResult>>> GetAllWithMedicines([FromQuery] string? search)
+        {
+            try
+            {
+                var results = await _itemService.GetAllWithMedicinesAsync(search);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving unified item/medicine/disposable lookup");
+                return StatusCode(500, new { message = "An error occurred while retrieving items and medicines" });
+            }
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<Item>> GetById(int id)
         {

@@ -26,6 +26,11 @@ const StockAuditPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Past stock audits (history list) - matches the old system's Stock Audit
+  // screen, which was purely a browsable log of previously-submitted audits.
+  const [pastAudits, setPastAudits] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Search filters
   const [filters, setFilters] = useState({
@@ -71,8 +76,21 @@ const StockAuditPage = () => {
     if (session?.branchId) {
       setFilters((prev) => ({ ...prev, branchId: session.branchId }));
       setAuditForm((prev) => ({ ...prev, branchId: session.branchId }));
+      loadPastAudits(session.branchId);
     }
   }, [session?.branchId]);
+
+  const loadPastAudits = async (branchId) => {
+    setLoadingHistory(true);
+    try {
+      const data = await stockAuditApi.getAll({ branchId });
+      setPastAudits(data);
+    } catch (err) {
+      console.error('Error loading past stock audits:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const loadLookupData = async () => {
     try {
@@ -181,7 +199,8 @@ const StockAuditPage = () => {
 
       await stockAuditApi.createAudit(auditData);
       setSuccessMessage('Stock audit created successfully');
-      
+      loadPastAudits(auditData.branchId);
+
       // Reset form
       setAuditForm({
         storeId: null,
@@ -650,6 +669,63 @@ const StockAuditPage = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Past Stock Audits (history) */}
+      <div className="bg-white shadow rounded-lg p-6 mt-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Past Stock Audits</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Store
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Remarks
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created On
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loadingHistory ? (
+                <tr>
+                  <td colSpan="4" className="px-3 py-4 text-center text-sm text-gray-500">
+                    Loading...
+                  </td>
+                </tr>
+              ) : pastAudits.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="px-3 py-4 text-center text-sm text-gray-500">
+                    No stock audits found
+                  </td>
+                </tr>
+              ) : (
+                pastAudits.map((audit) => (
+                  <tr key={audit.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(audit.auditDate).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {audit.storeName || '-'}
+                    </td>
+                    <td className="px-3 py-3 text-sm text-gray-500">
+                      {audit.remarks || '-'}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(audit.createdOn).toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

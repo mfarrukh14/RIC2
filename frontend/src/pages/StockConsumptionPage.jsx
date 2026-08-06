@@ -10,14 +10,13 @@ import {
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import { stockTypesApi } from '../services/stockTypesApi';
-import { itemTypeApi } from '../services/itemTypeApi';
+import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
 
 const StockConsumptionPage = () => {
   const [consumptions, setConsumptions] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
-  const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -25,12 +24,13 @@ const StockConsumptionPage = () => {
 
   const [formData, setFormData] = useState({
     storeId: '',
-    type: '',
     branchId: 1,
     remarks: '',
     details: [
       {
         itemId: '',
+        medicineId: '',
+        subServiceId: '',
         stockTypeId: '',
         quantity: '',
         storeId: ''
@@ -45,18 +45,16 @@ const StockConsumptionPage = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [consumptionsData, storesData, itemsData, stockTypesData, itemTypesData] = await Promise.all([
+      const [consumptionsData, storesData, itemsData, stockTypesData] = await Promise.all([
         getAllStockConsumptions(),
         getAllStores(),
-        itemApi.getAll(),
-        stockTypesApi.getAllStockTypes(),
-        itemTypeApi.getAll()
+        itemApi.getAllWithMedicines(),
+        stockTypesApi.getAllStockTypes()
       ]);
       setConsumptions(consumptionsData);
       setStores(storesData);
       setItems(itemsData);
       setStockTypes(stockTypesData);
-      setItemTypes((itemTypesData || []).filter((it) => it.isActive));
     } catch (err) {
       setError('Failed to load data: ' + err.message);
     } finally {
@@ -67,12 +65,13 @@ const StockConsumptionPage = () => {
   const resetForm = () => {
     setFormData({
       storeId: '',
-      type: '',
       branchId: 1,
       remarks: '',
       details: [
         {
           itemId: '',
+          medicineId: '',
+          subServiceId: '',
           stockTypeId: '',
           quantity: '',
           storeId: ''
@@ -87,26 +86,22 @@ const StockConsumptionPage = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value,
-      // Previously picked items may not belong to the newly selected type, so clear
-      // them rather than silently submitting an item that no longer matches.
-      ...(name === 'type'
-        ? { details: prev.details.map(d => ({ ...d, itemId: '' })) }
-        : {})
+      [name]: value
     }));
   };
 
-  // Only active items, and only those belonging to the selected item type (if any).
-  const filteredItems = items.filter(item =>
-    item.isActive && (!formData.type || item.itemTypeId === parseInt(formData.type))
-  );
+  const filteredItems = items.filter(item => item.isActive);
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...formData.details];
-    newDetails[index] = {
-      ...newDetails[index],
-      [field]: field === 'itemId' || field === 'stockTypeId' ? parseInt(value) : value
-    };
+    if (field === 'itemId') {
+      newDetails[index] = { ...newDetails[index], ...parseProductOptionValue(value) };
+    } else {
+      newDetails[index] = {
+        ...newDetails[index],
+        [field]: field === 'stockTypeId' ? parseInt(value) : value
+      };
+    }
     setFormData(prev => ({
       ...prev,
       details: newDetails
@@ -120,6 +115,8 @@ const StockConsumptionPage = () => {
         ...prev.details,
         {
           itemId: '',
+          medicineId: '',
+          subServiceId: '',
           stockTypeId: '',
           quantity: '',
           storeId: formData.storeId
@@ -147,13 +144,19 @@ const StockConsumptionPage = () => {
       const payload = {
         storeId: parseInt(formData.storeId),
         branchId: parseInt(formData.branchId),
-        type: parseInt(formData.type),
+        // TODO: this used to be derived from the picked item's itemTypeId, but
+        // itemApi.getAllWithMedicines() doesn't return that field (it wasn't
+        // meaningful for Medicine/Disposable rows anyway) - confirm with backend
+        // whether Type still needs real per-item classification here.
+        type: 0,
         remarks: formData.remarks,
         details: formData.details.map(detail => ({
-          itemId: parseInt(detail.itemId),
+          itemId: detail.itemId || null,
+          medicineId: detail.medicineId || null,
+          subServiceId: detail.subServiceId || null,
           stockTypeId: parseInt(detail.stockTypeId),
           quantity: parseFloat(detail.quantity),
-          type: parseInt(formData.type)
+          type: 0
         }))
       };
 
@@ -177,11 +180,12 @@ const StockConsumptionPage = () => {
       const data = await getStockConsumptionById(id);
       setFormData({
         storeId: data.storeId,
-        type: data.type,
         branchId: data.branchId,
         remarks: data.remarks || '',
         details: data.details.map(d => ({
           itemId: d.itemId,
+          medicineId: d.medicineId,
+          subServiceId: d.subServiceId,
           stockTypeId: d.stockTypeId,
           quantity: d.quantity,
           storeId: d.storeId
@@ -262,26 +266,6 @@ const StockConsumptionPage = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Type</option>
-                  {itemTypes.map(itemType => (
-                    <option key={itemType.id} value={itemType.id}>
-                      {itemType.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Remarks
@@ -324,15 +308,15 @@ const StockConsumptionPage = () => {
                       <tr key={index}>
                         <td className="px-4 py-3">
                           <select
-                            value={detail.itemId}
+                            value={productOptionValue(detail)}
                             onChange={(e) => handleDetailChange(index, 'itemId', e.target.value)}
                             required
                             className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="">Select Item</option>
                             {filteredItems.map(item => (
-                              <option key={item.id} value={item.id}>
-                                {item.name}
+                              <option key={productOptionValue(item)} value={productOptionValue(item)}>
+                                {item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`}
                               </option>
                             ))}
                           </select>

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5100/api';
+const API_BASE_URL = 'http://10.10.10.35:5100/api';
 
 const transferInventoryApi = {
   getAll: async () => {
@@ -31,6 +31,13 @@ const transferInventoryApi = {
   getLookupData: async () => {
     const response = await axios.get(`${API_BASE_URL}/transferinventory/lookup`);
     return response.data;
+  },
+
+  getAvailableQuantity: async (storeId, itemId) => {
+    const response = await axios.get(`${API_BASE_URL}/transferinventory/available-quantity`, {
+      params: { storeId, itemId }
+    });
+    return response.data.quantity;
   }
 };
 

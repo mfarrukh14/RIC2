@@ -176,6 +176,8 @@ namespace InventoryManagement.Api.Models
         // Null/0 means this is a new item line being added to the demand.
         public int? Id { get; set; }
         public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int RequestedQuantity { get; set; }
         public int ApprovedQuantity { get; set; }
         public string? Remarks { get; set; }

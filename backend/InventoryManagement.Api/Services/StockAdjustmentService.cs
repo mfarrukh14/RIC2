@@ -147,7 +147,9 @@ namespace InventoryManagement.Api.Services
                             var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
                             detailCommand.Parameters.Add(detailIdParam);
                             detailCommand.Parameters.AddWithValue("@StockAdjustmentId", stockAdjustmentId);
-                            detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                            detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                             detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                             detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                             detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -163,7 +165,7 @@ namespace InventoryManagement.Api.Services
                         // all that happened, so an adjustment was just a log entry that never
                         // touched Inv.Stocks regardless of Type. Type 2 ("Issue") adds stock
                         // into this store; Type 1 ("Less/Decrease") removes it.
-                        await ApplyStockEffectAsync(connection, transaction, detail.ItemId, request.StoreId, request.BranchId, detail.Type, detail.Quantity);
+                        await ApplyStockEffectAsync(connection, transaction, new ProductKey(detail.ItemId, detail.MedicineId, detail.SubServiceId), request.StoreId, request.BranchId, detail.Type, detail.Quantity);
                     }
 
                     await transaction.CommitAsync();
@@ -209,7 +211,7 @@ namespace InventoryManagement.Api.Services
                         var previousDetails = await GetActiveDetailsAsync(connection, transaction, request.Id);
                         foreach (var previous in previousDetails)
                         {
-                            await ReverseStockEffectAsync(connection, transaction, previous.ItemId, previousStoreId.Value, previous.Type, previous.Quantity);
+                            await ReverseStockEffectAsync(connection, transaction, previous.Product, previousStoreId.Value, previous.Type, previous.Quantity);
                         }
                     }
 
@@ -244,7 +246,9 @@ namespace InventoryManagement.Api.Services
                             var detailIdParam = new SqlParameter("@Id", SqlDbType.Int) { Direction = ParameterDirection.Output };
                             detailCommand.Parameters.Add(detailIdParam);
                             detailCommand.Parameters.AddWithValue("@StockAdjustmentId", request.Id);
-                            detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                            detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                            detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                             detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                             detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                             detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -256,7 +260,7 @@ namespace InventoryManagement.Api.Services
                             await detailCommand.ExecuteNonQueryAsync();
                         }
 
-                        await ApplyStockEffectAsync(connection, transaction, detail.ItemId, request.StoreId, request.BranchId, detail.Type, detail.Quantity);
+                        await ApplyStockEffectAsync(connection, transaction, new ProductKey(detail.ItemId, detail.MedicineId, detail.SubServiceId), request.StoreId, request.BranchId, detail.Type, detail.Quantity);
                     }
 
                     await transaction.CommitAsync();
@@ -303,7 +307,7 @@ namespace InventoryManagement.Api.Services
                     var details = await GetActiveDetailsAsync(connection, transaction, id);
                     foreach (var detail in details)
                     {
-                        await ReverseStockEffectAsync(connection, transaction, detail.ItemId, storeId.Value, detail.Type, detail.Quantity);
+                        await ReverseStockEffectAsync(connection, transaction, detail.Product, storeId.Value, detail.Type, detail.Quantity);
                     }
 
                     using (var command = new SqlCommand("StockAdjustment_Delete", connection, transaction)
@@ -343,7 +347,7 @@ namespace InventoryManagement.Api.Services
         // else) removes it. Reversing simply applies the opposite direction for the same
         // quantity - used when an adjustment is edited or deleted so its old effect doesn't
         // linger or get double-counted.
-        private async Task ApplyStockEffectAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int type, decimal quantity)
+        private async Task ApplyStockEffectAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, int storeId, int branchId, int type, decimal quantity)
         {
             var qty = (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
             if (qty <= 0)
@@ -353,16 +357,16 @@ namespace InventoryManagement.Api.Services
 
             if (type == 2)
             {
-                await AddStockAsync(connection, transaction, itemId, storeId, branchId, qty);
+                await AddStockAsync(connection, transaction, product, storeId, branchId, qty);
             }
             else
             {
-                var itemName = await GetItemNameAsync(connection, transaction, itemId);
-                await RemoveStockAsync(connection, transaction, itemId, itemName, storeId, qty);
+                var itemName = await GetItemNameAsync(connection, transaction, product);
+                await RemoveStockAsync(connection, transaction, product, itemName, storeId, qty);
             }
         }
 
-        private async Task ReverseStockEffectAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int type, decimal quantity)
+        private async Task ReverseStockEffectAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, int storeId, int type, decimal quantity)
         {
             var qty = (int)Math.Round(quantity, MidpointRounding.AwayFromZero);
             if (qty <= 0)
@@ -372,24 +376,28 @@ namespace InventoryManagement.Api.Services
 
             if (type == 2)
             {
-                var itemName = await GetItemNameAsync(connection, transaction, itemId);
-                await RemoveStockAsync(connection, transaction, itemId, itemName, storeId, qty);
+                var itemName = await GetItemNameAsync(connection, transaction, product);
+                await RemoveStockAsync(connection, transaction, product, itemName, storeId, qty);
             }
             else
             {
                 // BranchId isn't needed when reversing a decrease back to an increase - the
                 // store already had a stock row (that's what made the original decrease
                 // possible), so this always takes the update branch of AddStockAsync's upsert.
-                await AddStockAsync(connection, transaction, itemId, storeId, 0, qty);
+                await AddStockAsync(connection, transaction, product, storeId, 0, qty);
             }
         }
 
-        private async Task<string> GetItemNameAsync(SqlConnection connection, SqlTransaction transaction, int itemId)
+        private async Task<string> GetItemNameAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product)
         {
-            using var command = new SqlCommand("SELECT Name FROM Inv.Items WHERE Id = @ItemId;", connection, transaction);
-            command.Parameters.AddWithValue("@ItemId", itemId);
+            using var command = new SqlCommand(
+                "SELECT COALESCE((SELECT Name FROM Inv.Items WHERE Id = @ItemId), (SELECT MedicineFullName FROM Pharmacy.Medicines WHERE MedicineId = @MedicineId), (SELECT Name FROM Account.Fees WHERE Id = @SubServiceId));",
+                connection, transaction);
+            command.Parameters.AddWithValue("@ItemId", (object?)product.ItemId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@MedicineId", (object?)product.MedicineId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SubServiceId", (object?)product.SubServiceId ?? DBNull.Value);
             var result = await command.ExecuteScalarAsync();
-            return result as string ?? $"Item #{itemId}";
+            return result as string ?? product.ToString();
         }
 
         private async Task<int?> GetAdjustmentStoreIdAsync(SqlConnection connection, SqlTransaction transaction, int stockAdjustmentId)
@@ -400,31 +408,35 @@ namespace InventoryManagement.Api.Services
             return result == null || result == DBNull.Value ? null : Convert.ToInt32(result);
         }
 
-        private async Task<List<(int ItemId, int Type, decimal Quantity)>> GetActiveDetailsAsync(SqlConnection connection, SqlTransaction transaction, int stockAdjustmentId)
+        private async Task<List<(ProductKey Product, int Type, decimal Quantity)>> GetActiveDetailsAsync(SqlConnection connection, SqlTransaction transaction, int stockAdjustmentId)
         {
-            var details = new List<(int, int, decimal)>();
+            var details = new List<(ProductKey, int, decimal)>();
             using var command = new SqlCommand(
-                "SELECT ItemId, Type, Quantity FROM Inv.StockAdjustmentDetails WHERE StockAdjustmentId = @Id AND IsDeleted = 0;",
+                "SELECT ItemId, MedicineId, SubServiceId, Type, Quantity FROM Inv.StockAdjustmentDetails WHERE StockAdjustmentId = @Id AND IsDeleted = 0;",
                 connection, transaction);
             command.Parameters.AddWithValue("@Id", stockAdjustmentId);
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                details.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetDecimal(2)));
+                var product = new ProductKey(
+                    reader.IsDBNull(0) ? null : reader.GetInt32(0),
+                    reader.IsDBNull(1) ? null : reader.GetInt32(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt32(2));
+                details.Add((product, reader.GetInt32(3), reader.GetDecimal(4)));
             }
             return details;
         }
 
         // Deducts stock, guarding against removing more than is actually on hand (same check
         // used for demand-request issuance).
-        private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, string itemName, int storeId, int quantity)
+        private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, string itemName, int storeId, int quantity)
         {
             int available;
             using (var selectCommand = new SqlCommand(
-                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));",
                 connection, transaction))
             {
-                selectCommand.Parameters.AddWithValue("@ItemId", itemId);
+                product.AddParameters(selectCommand);
                 selectCommand.Parameters.AddWithValue("@StoreId", storeId);
                 var result = await selectCommand.ExecuteScalarAsync();
                 available = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
@@ -436,26 +448,26 @@ namespace InventoryManagement.Api.Services
             }
 
             using var updateCommand = new SqlCommand(
-                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));",
                 connection, transaction);
-            updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+            product.AddParameters(updateCommand);
             updateCommand.Parameters.AddWithValue("@StoreId", storeId);
             updateCommand.Parameters.AddWithValue("@Quantity", quantity);
             await updateCommand.ExecuteNonQueryAsync();
         }
 
         // Credits stock, upserting since the store may never have held this item before.
-        private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int quantity)
+        private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, int storeId, int branchId, int quantity)
         {
             using var command = new SqlCommand(@"
-IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1)
+IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId)))
     UPDATE Inv.Stocks
     SET TotalItems = ISNULL(TotalItems, 0) + @Quantity, ModifiedOn = GETDATE()
-    WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;
+    WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));
 ELSE
-    INSERT INTO Inv.Stocks (ItemId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
-    VALUES (@ItemId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());", connection, transaction);
-            command.Parameters.AddWithValue("@ItemId", itemId);
+    INSERT INTO Inv.Stocks (ItemId, MedicineId, SubServiceId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
+    VALUES (@ItemId, @MedicineId, @SubServiceId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());", connection, transaction);
+            product.AddParameters(command);
             command.Parameters.AddWithValue("@StoreId", storeId);
             command.Parameters.AddWithValue("@BranchId", branchId);
             command.Parameters.AddWithValue("@Quantity", quantity);
@@ -490,8 +502,12 @@ ELSE
             {
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 StockAdjustmentId = reader.GetInt32(reader.GetOrdinal("StockAdjustmentId")),
-                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                ItemId = reader.IsDBNull(reader.GetOrdinal("ItemId")) ? null : reader.GetInt32(reader.GetOrdinal("ItemId")),
                 ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? null : reader.GetString(reader.GetOrdinal("ItemName")),
+                MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId")) ? null : reader.GetInt32(reader.GetOrdinal("MedicineId")),
+                MedicineName = reader.IsDBNull(reader.GetOrdinal("MedicineName")) ? null : reader.GetString(reader.GetOrdinal("MedicineName")),
+                SubServiceId = reader.IsDBNull(reader.GetOrdinal("SubServiceId")) ? null : reader.GetInt32(reader.GetOrdinal("SubServiceId")),
+                SubServiceName = reader.IsDBNull(reader.GetOrdinal("SubServiceName")) ? null : reader.GetString(reader.GetOrdinal("SubServiceName")),
                 Type = reader.GetInt32(reader.GetOrdinal("Type")),
                 TypeName = reader.IsDBNull(reader.GetOrdinal("TypeName")) ? null : reader.GetString(reader.GetOrdinal("TypeName")),
                 StockTypeId = reader.GetInt32(reader.GetOrdinal("StockTypeId")),

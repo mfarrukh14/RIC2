@@ -55,10 +55,20 @@ import PurchaseOrderTypePage from './pages/PurchaseOrderTypePage';
 import PurchaseOrderStatusPage from './pages/PurchaseOrderStatusPage';
 import PendingDemandsPage from './pages/PendingDemandsPage';
 import ApprovedDemandsPage from './pages/ApprovedDemandsPage';
+import PurchaseRequisitionsPage from './pages/PurchaseRequisitionsPage';
 import ReceiveStockPage from './pages/ReceiveStockPage';
 import ReceivedStockStatusPage from './pages/ReceivedStockStatusPage';
 import DemandRequestStatusPage from './pages/DemandRequestStatusPage';
 import StockTransitionsPage from './pages/StockTransitionsPage';
+import RetailPharmacyPage from './pages/RetailPharmacyPage';
+import PharmacyDashboardPage from './pages/PharmacyDashboardPage';
+import PharmacyOnlineOrderPage from './pages/PharmacyOnlineOrderPage';
+import PharmacyDepartmentStorePage from './pages/PharmacyDepartmentStorePage';
+import PharmacyQueuePage from './pages/PharmacyQueuePage';
+import RefundMedicinePage from './pages/RefundMedicinePage';
+import PharmacyDailySalePage from './pages/PharmacyDailySalePage';
+import ItemWiseSalePage from './pages/ItemWiseSalePage';
+import ImmunizationPage from './pages/ImmunizationPage';
 import PlaceholderSection from './components/PlaceholderSection';
 import LoginPage from './pages/LoginPage';
 import { useSession } from './context/SessionContext';
@@ -83,6 +93,25 @@ function App() {
   const [editingBrand, setEditingBrand] = useState(null);
   const [showPackingForm, setShowPackingForm] = useState(false);
   const [editingPacking, setEditingPacking] = useState(null);
+  const [prPrefillData, setPrPrefillData] = useState(null);
+  const [returnInventoryPrefill, setReturnInventoryPrefill] = useState(null);
+
+  // Approved Demands' "Generate Purchase Requisition" row action hands off here:
+  // App.jsx uses a switch(activeSection) state machine with no per-page nav-prop
+  // threading, so a small piece of lifted state is the simplest way to carry the
+  // triggering demand's items across to the Purchase Requisition form.
+  const navigateToPurchaseRequisition = (prefillData) => {
+    setPrPrefillData(prefillData);
+    setActiveSection('purchase-requisition');
+  };
+
+  // Add Inventory's "Return Inventory" row action hands off here, same pattern as
+  // navigateToPurchaseRequisition above - carries the triggering inventory's store
+  // (and item, when there's exactly one line) across to the Return Inventory page.
+  const navigateToReturnInventory = (prefillData) => {
+    setReturnInventoryPrefill(prefillData);
+    setActiveSection('return-inventory');
+  };
 
   const handleSectionChange = (section) => {
     setActiveSection(section);
@@ -264,7 +293,7 @@ function App() {
         );
 
       case 'add-inventory':
-        return <InventoryListPage />;
+        return <InventoryListPage onReturnInventory={navigateToReturnInventory} />;
 
       case 'add-items':
         return <ItemsPage />;
@@ -314,7 +343,7 @@ function App() {
         return <TransferInventoryPage />;
 
       case 'return-inventory':
-        return <ReturnInventoryPage />;
+        return <ReturnInventoryPage prefill={returnInventoryPrefill} onPrefillConsumed={() => setReturnInventoryPrefill(null)} />;
 
       case 'purchase-summary':
         return <PurchaseSummaryPage />;
@@ -428,7 +457,10 @@ function App() {
         return <PendingDemandsPage />;
 
       case 'approved-demands':
-        return <ApprovedDemandsPage />;
+        return <ApprovedDemandsPage onGeneratePurchaseRequisition={navigateToPurchaseRequisition} />;
+
+      case 'purchase-requisition':
+        return <PurchaseRequisitionsPage prefill={prPrefillData} onPrefillConsumed={() => setPrPrefillData(null)} />;
 
       case 'receive-stock':
         return <ReceiveStockPage />;
@@ -441,6 +473,33 @@ function App() {
 
       case 'stock-transitions':
         return <StockTransitionsPage />;
+
+      case 'pharmacy-retail':
+        return <RetailPharmacyPage />;
+
+      case 'pharmacy-dashboard':
+        return <PharmacyDashboardPage />;
+
+      case 'pharmacy-online-order':
+        return <PharmacyOnlineOrderPage />;
+
+      case 'pharmacy-department-store':
+        return <PharmacyDepartmentStorePage />;
+
+      case 'pharmacy-queue':
+        return <PharmacyQueuePage />;
+
+      case 'refund-medicine':
+        return <RefundMedicinePage />;
+
+      case 'pharmacy-daily-sale':
+        return <PharmacyDailySalePage />;
+
+      case 'item-wise-sale':
+        return <ItemWiseSalePage />;
+
+      case 'immunization':
+        return <ImmunizationPage />;
 
       default:
         return (

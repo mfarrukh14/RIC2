@@ -325,6 +325,8 @@ namespace InventoryManagement.Api.Services
                 "StockTypeAssociations.sql"
             };
 
+            var executedTableScripts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var scriptFile in tableScriptFiles)
             {
                 var scriptPath = Path.Combine(tablesPath, scriptFile);
@@ -334,6 +336,7 @@ namespace InventoryManagement.Api.Services
                     try
                     {
                         await ExecuteSqlScriptAsync(connection, scriptPath);
+                        executedTableScripts.Add(scriptFile);
                         _logger.LogInformation($"Successfully executed: {scriptFile}");
                     }
                     catch (Exception ex)
@@ -344,6 +347,33 @@ namespace InventoryManagement.Api.Services
                 else
                 {
                     _logger.LogWarning($"Table script not found: {scriptPath}");
+                }
+            }
+
+            // Pick up any Create*.sql table scripts not in the explicit ordered list above
+            // (e.g. newly added tables) so they aren't silently skipped. Alter*.sql scripts
+            // are handled separately in Phase 4.
+            var remainingTableScripts = Directory.GetFiles(tablesPath, "*.sql", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
+                .Where(fileName => !executedTableScripts.Contains(fileName!))
+                .Where(fileName => !fileName!.StartsWith("Alter", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(fileName => fileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _logger.LogInformation("Phase 2b: Executing remaining table scripts...");
+            foreach (var scriptFile in remainingTableScripts)
+            {
+                var scriptPath = Path.Combine(tablesPath, scriptFile!);
+                _logger.LogInformation($"Executing table script: {scriptFile}");
+                try
+                {
+                    await ExecuteSqlScriptAsync(connection, scriptPath);
+                    _logger.LogInformation($"Successfully executed: {scriptFile}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error executing table script {scriptFile}");
                 }
             }
         }
@@ -551,6 +581,14 @@ END;";
                         {
                             _logger.LogDebug($"Duplicate key (seed data already exists): {ex.Message}");
                         }
+                        else if (ex.Number == 4406 || ex.Number == 4409) // Insert/update target resolved to a read-only view (HMS compatibility surface)
+                        {
+                            _logger.LogDebug($"Skipped write against read-only HMS compatibility view: {ex.Message}");
+                        }
+                        else if (ex.Number == 515) // NOT NULL violation - shared HMS table requires a column this demo/seed insert doesn't supply
+                        {
+                            _logger.LogWarning($"Seed insert skipped (NOT NULL column not supplied - HMS compatibility) in {Path.GetFileName(scriptPath)}: {ex.Message}");
+                        }
                         else
                         {
                             _logger.LogError(ex, $"SQL Error executing batch from {Path.GetFileName(scriptPath)}");
@@ -678,11 +716,28 @@ END;";
             normalized = RedirectInvCompatibilitySurface(normalized, "SurgicalItemGroups", "SurgicalGroups");
 
             // Remove FK constraints that reference tables not in Inv schema
-            // (these will be handled at the application level)
+            // (these will be handled at the application level).
+            // Standalone "ALTER TABLE x ADD CONSTRAINT ... FOREIGN KEY ... REFERENCES ...;" statements
+            // must be removed in their entirety - stripping only the CONSTRAINT clause leaves a
+            // dangling "ALTER TABLE x ADD;" which is a syntax error.
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @"ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\[?FK_\w+\]?\s+FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)\s*;?",
+                "",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             normalized = System.Text.RegularExpressions.Regex.Replace(
                 normalized,
                 @",?\s*CONSTRAINT\s+\[?FK_\w+\]?\s+FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+\S+\s*\([^)]+\)",
                 "",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // SQL Server rejects a BEGIN...END block with nothing in it. Stripping the sole
+            // statement out of an "IF ... BEGIN <the removed FK statement> END" guard above can
+            // leave one behind, so patch any now-empty block with a no-op statement.
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized,
+                @"BEGIN\s*END",
+                "BEGIN SELECT 1; END",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             // HMS table name typos: RackDrawers → RackDrawrs, RackDrawerId → RackDrawrId in SpaceAllocations

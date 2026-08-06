@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiPrinter, FiCornerUpLeft } from 'react-icons/fi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import inventoryApi from '../services/inventoryApi';
 import InventoryFormPage from '../components/InventoryFormPage';
 
-const InventoryListPage = () => {
+const InventoryListPage = ({ onReturnInventory }) => {
   const [inventories, setInventories] = useState([]);
   const [filteredInventories, setFilteredInventories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +105,105 @@ const InventoryListPage = () => {
       console.error('Error deleting inventory:', err);
       alert('Failed to delete inventory. Please try again.');
     }
+  };
+
+  // Prints this Add Inventory record - RIC letterhead, header fields, and an item
+  // table pulled from the record's full detail lines.
+  const handlePrint = async (inventory) => {
+    let full;
+    try {
+      full = await inventoryApi.getById(inventory.id);
+    } catch (err) {
+      console.error('Error loading inventory for print:', err);
+      alert('Failed to load this inventory record for printing.');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Ph: 051928111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Add Inventory', pageWidth / 2, 36, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 42,
+      body: [
+        ['Vendor Invoice No', full.vendorInvoiceNumber || '-', 'Vendor', full.vendorName || '-'],
+        ['Store', full.storeName || '-', 'Stock Type', full.stockTypeName || '-'],
+        ['Date & Time', formatDate(full.createdOn), '', '']
+      ],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    const itemsBody = (full.details || []).map((detail, index) => [
+      index + 1,
+      detail.itemName || 'Unassigned Item',
+      detail.totalItems ?? 0,
+      detail.unitBuyingPrice ?? 0,
+      detail.unitSellingPrice ?? 0,
+      detail.expiryDate ? formatDate(detail.expiryDate) : '-'
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Item', 'Total Items', 'Unit Buying Price', 'Unit Selling Price', 'Expiry Date']],
+      body: itemsBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' }
+      }
+    });
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dateStr}   ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+
+    doc.save(`AddInventory_${full.vendorInvoiceNumber || full.id}.pdf`);
+  };
+
+  const handleReturnInventory = (inventory) => {
+    if (!onReturnInventory) return;
+    onReturnInventory({ storeId: inventory.storeId });
   };
 
   const handleCancelForm = () => {
@@ -300,6 +401,20 @@ const InventoryListPage = () => {
                         title="Edit"
                       >
                         <FiEdit2 className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handlePrint(inventory)}
+                        className="text-emerald-600 hover:text-emerald-900 mr-4"
+                        title="Print"
+                      >
+                        <FiPrinter className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleReturnInventory(inventory)}
+                        className="text-amber-600 hover:text-amber-900 mr-4"
+                        title="Return Inventory"
+                      >
+                        <FiCornerUpLeft className="h-5 w-5" />
                       </button>
                       <button
                         onClick={() => handleDelete(inventory.id)}
