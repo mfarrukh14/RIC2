@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStoreService
     {
-        Task<IEnumerable<Store>> GetAllAsync();
+        Task<IEnumerable<PharmacyStoreViewModel>> GetAllAsync();
         Task<Store?> GetByIdAsync(int id);
         Task<Store> CreateAsync(StoreCreateRequest request);
         Task UpdateAsync(int id, StoreUpdateRequest request);

@@ -1,12 +1,17 @@
-using System.Data;
-using Microsoft.Data.SqlClient;
+using Dapper;
+using InventoryManagement.Api.Classes;
 using InventoryManagement.Api.Models;
+using Microsoft.CodeAnalysis.Operations;
+using Microsoft.Data.SqlClient;
+using System.Data;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace InventoryManagement.Api.Services
 {
     public class StoreService : IStoreService
     {
         private readonly string _connectionString;
+        private readonly DapperContext dc;
         private readonly ILogger<StoreService> _logger;
 
         public StoreService(IConfiguration configuration, ILogger<StoreService> logger)
@@ -14,33 +19,50 @@ namespace InventoryManagement.Api.Services
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            dc = new DapperContext(_connectionString);
         }
 
-        public async Task<IEnumerable<Store>> GetAllAsync()
+        public async Task<IEnumerable<PharmacyStoreViewModel>> GetAllAsync()
         {
             try
             {
-                var stores = new List<Store>();
+                using var connection = dc.CreateConnection();
+                //var param = new DynamicParameters();
+                //param.Add("@PatientId", vm.patientId);
+                //param.Add("@VisitNo", vm.visitNo);
+                //param.Add("@AppointmentNo", vm.appointmentNo);
+                //param.Add("@UserId", userId);
+                //param.Add("@BranchId", branchId);
+                //param.Add("@ProcedureAppointmentId", vm.procedureAppointmentId);
 
-                using (var connection = new SqlConnection(_connectionString))
-                {
-                    await connection.OpenAsync();
-
-                    using (var command = new SqlCommand("Store_GetAll", connection))
-                    {
-                        command.CommandType = CommandType.StoredProcedure;
-
-                        using (var reader = await command.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
-                            {
-                                stores.Add(MapReaderToStore(reader));
-                            }
-                        }
-                    }
-                }
+                var stores = connection.Query<PharmacyStoreViewModel>(
+                    "dbo.SP_Pharmacy_AllStores",
+                    commandType: CommandType.StoredProcedure
+                ).ToList();
 
                 return stores;
+
+                //var stores = new List<PharmacyStoreViewModel>();
+
+                //using (var connection = new SqlConnection(_connectionString))
+                //{
+                //    await connection.OpenAsync();
+
+                //    using (var command = new SqlCommand("dbo.SP_Pharmacy_AllStores", connection))
+                //    {
+                //        command.CommandType = CommandType.StoredProcedure;
+
+                //        using (var reader = await command.ExecuteReaderAsync())
+                //        {
+                //            while (await reader.ReadAsync())
+                //            {
+                //                stores.Add(MapReaderToStore(reader));
+                //            }
+                //        }
+                //    }
+                //}
+
+                //return stores;
             }
             catch (Exception ex)
             {
