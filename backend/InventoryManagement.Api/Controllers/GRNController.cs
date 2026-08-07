@@ -19,11 +19,11 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<GRN>>> GetAll()
+        public async Task<ActionResult<PagedResult<GRN>>> GetAll([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 5, [FromQuery] string? search = null)
         {
             try
             {
-                var grns = await _grnService.GetAllAsync();
+                var grns = await _grnService.GetAllAsync(pageNumber, pageSize, search);
                 return Ok(grns);
             }
             catch (Exception ex)

@@ -35,94 +35,63 @@ BEGIN
     END
 
     -- @StoreId/@BranchId here are Inv.PharmacyStores ids (what the Store filter dropdown
-    -- and Inv.Stocks/Inv.TransferInventory actually use), NOT Inv.Inventories.StoreId
-    -- (that's a separate, unrelated id space - Inv.Stores: Main Warehouse/OT Store/ER
-    -- Store). The previous version filtered Received off Inv.Inventories.StoreId, so any
-    -- real PharmacyStore selection (e.g. "Central Store") could never match and always
-    -- came back as 0 even when the item was actually on hand there.
+    -- and Pharmacy.PharmacyMedicinesStocks/Inv.TransferInventory actually use), NOT
+    -- Inv.Inventories.StoreId (that's a separate, unrelated id space - Inv.Stores: Main
+    -- Warehouse/OT Store/ER Store). The previous version filtered Received off
+    -- Inv.Inventories.StoreId, so any real PharmacyStore selection (e.g. "Central Store")
+    -- could never match and always came back as 0 even when the item was actually on hand
+    -- there.
     --
-    -- Balance now comes from Inv.Stocks, the app's canonical live-balance table (same
-    -- table StockAudit_Search/Stock Consumption/Stock search already treat as the source
-    -- of truth). Received/Issued for the date window are pulled from the real, dated
-    -- movement ledgers that exist against that same PharmacyStore id space:
-    -- Inv.TransferInventory(Items) for stock moved in/out between stores,
-    -- Inv.StockConsumptionDetails for stock dispensed out of a store, and
-    -- Inv.StockAdjustmentDetails for manual adjustments - matching the old system, where
-    -- every stock-affecting operation (including adjustments) funnels through one
-    -- StockTransactions ledger that this report's old-system equivalent reads from, so an
-    -- adjustment shows up in Received/Issued exactly like a transfer or consumption would.
-    -- Opening is derived from Balance minus net movement in the window, rather than
-    -- hardcoded to 0.
+    -- Balance comes from Pharmacy.PharmacyMedicinesStocks, the live-balance table the real
+    -- HMS pharmacy operations update (see Stock_Procedures.sql header for why it's not
+    -- Inv.Stocks). That table has no BranchId column, so @BranchId is applied via a join to
+    -- Inv.PharmacyStores instead.
+    --
+    -- Received/Issued/Opening now read from Inv.StockTransactions, the real ledger every
+    -- stock movement writes to via Pharmacy.TR_PharmacyMedicinesStocks_LogTransactions (see
+    -- that trigger's header). Previously Received/Issued were reconstructed by UNIONing
+    -- only 3 of the 9 real stock-mutation paths (Transfer, Stock Adjustment, Stock
+    -- Consumption) - pharmacy retail dispensing and demand-request movements were
+    -- completely invisible, so an item could show equal-looking Received with far less
+    -- Issued than actually left the store, producing negative Opening. Opening is anchored
+    -- off the CURRENT balance (always "now") minus every ledgered movement from @StartDate
+    -- to now, not off a snapshot at @StartDate - none exists prior to the trigger's
+    -- creation, so windows starting before that degrade gracefully (Opening ~= current
+    -- balance) rather than going wrong.
     ;WITH StockBalance AS (
-        SELECT ItemId, SUM(TotalItems) AS TotalItems
-        FROM Inv.Stocks
-        WHERE IsActive = 1
-          AND (@StoreId IS NULL OR StoreId = @StoreId)
-          AND (@BranchId IS NULL OR BranchId = @BranchId)
-        GROUP BY ItemId
+        SELECT s.ItemId, SUM(s.TotalItemsInStock) AS TotalItems
+        FROM Pharmacy.PharmacyMedicinesStocks s
+        LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = s.StoreId
+        WHERE (@StoreId IS NULL OR s.StoreId = @StoreId)
+          AND (@BranchId IS NULL OR ps.BranchId = @BranchId)
+        GROUP BY s.ItemId
     ),
     Received AS (
-        SELECT ItemId, SUM(Qty) AS Qty
-        FROM (
-            SELECT ti.ItemId, ti.Quantity AS Qty
-            FROM Inv.TransferInventoryItems ti
-            INNER JOIN Inv.TransferInventory t ON ti.TransferInventoryId = t.Id
-            WHERE ti.IsActive = 1
-              AND t.IsActive = 1
-              AND (@StoreId IS NULL OR t.ToStoreId = @StoreId)
-              AND (@BranchId IS NULL OR t.BranchId = @BranchId)
-              AND (@StartDate IS NULL OR t.TransferDate >= @StartDate) AND (@EndDate IS NULL OR t.TransferDate <= @EndDate)
-
-            UNION ALL
-
-            -- Type 2 ("Issue / Increase" in the Stock Adjustment UI) credits stock into the
-            -- store - see StockAdjustmentService.ApplyStockEffectAsync's same Type == 2 check.
-            SELECT sad.ItemId, sad.Quantity AS Qty
-            FROM Inv.StockAdjustmentDetails sad
-            INNER JOIN Inv.StockAdjustments sa ON sa.Id = sad.StockAdjustmentId
-            WHERE sad.IsDeleted = 0 AND sa.IsDeleted = 0
-              AND sad.Type = 2
-              AND (@StoreId IS NULL OR sa.StoreId = @StoreId)
-              AND (@BranchId IS NULL OR sa.BranchId = @BranchId)
-              AND (@StartDate IS NULL OR sad.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR sad.CreatedOn <= @EndDate)
-        ) x
-        GROUP BY ItemId
+        SELECT st.ItemId, SUM(st.ReceivedQty) AS Qty
+        FROM Inv.StockTransactions st
+        WHERE st.ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@BranchId IS NULL OR st.BranchId = @BranchId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR st.CreatedOn < DATEADD(DAY, 1, @EndDate))
+        GROUP BY st.ItemId
     ),
     Issued AS (
-        SELECT ItemId, SUM(Qty) AS Qty
-        FROM (
-            SELECT ti.ItemId, ti.Quantity AS Qty
-            FROM Inv.TransferInventoryItems ti
-            INNER JOIN Inv.TransferInventory t ON ti.TransferInventoryId = t.Id
-            WHERE ti.IsActive = 1
-              AND t.IsActive = 1
-              AND (@StoreId IS NULL OR t.FromStoreId = @StoreId)
-              AND (@BranchId IS NULL OR t.BranchId = @BranchId)
-              AND (@StartDate IS NULL OR t.TransferDate >= @StartDate) AND (@EndDate IS NULL OR t.TransferDate <= @EndDate)
-
-            UNION ALL
-
-            SELECT scd.ItemId, scd.Quantity AS Qty
-            FROM Inv.StockConsumptionDetails scd
-            WHERE scd.IsActive = 1 AND ISNULL(scd.IsDeleted, 0) = 0
-              AND (@StoreId IS NULL OR scd.StoreId = @StoreId)
-              AND (@BranchId IS NULL OR scd.BranchId = @BranchId)
-              AND (@StartDate IS NULL OR scd.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR scd.CreatedOn <= @EndDate)
-
-            UNION ALL
-
-            -- Type 1 ("Less / Decrease") and anything else removes stock from the store -
-            -- see StockAdjustmentService.ApplyStockEffectAsync's else branch.
-            SELECT sad.ItemId, sad.Quantity AS Qty
-            FROM Inv.StockAdjustmentDetails sad
-            INNER JOIN Inv.StockAdjustments sa ON sa.Id = sad.StockAdjustmentId
-            WHERE sad.IsDeleted = 0 AND sa.IsDeleted = 0
-              AND sad.Type <> 2
-              AND (@StoreId IS NULL OR sa.StoreId = @StoreId)
-              AND (@BranchId IS NULL OR sa.BranchId = @BranchId)
-              AND (@StartDate IS NULL OR sad.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR sad.CreatedOn <= @EndDate)
-        ) x
-        GROUP BY ItemId
+        SELECT st.ItemId, SUM(st.IssuedQty) AS Qty
+        FROM Inv.StockTransactions st
+        WHERE st.ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@BranchId IS NULL OR st.BranchId = @BranchId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR st.CreatedOn < DATEADD(DAY, 1, @EndDate))
+        GROUP BY st.ItemId
+    ),
+    NetSinceStart AS (
+        SELECT st.ItemId, SUM(st.ReceivedQty) - SUM(st.IssuedQty) AS NetQty
+        FROM Inv.StockTransactions st
+        WHERE st.ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@BranchId IS NULL OR st.BranchId = @BranchId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate)
+        GROUP BY st.ItemId
     ),
     -- Old system's stock transaction report (SP_Pharmacy_StockTransactionReport) builds
     -- its query FROM the StockTransactions ledger and INNER JOINs out to the item - an
@@ -144,12 +113,14 @@ BEGIN
             COALESCE(st.Name, 'Regular') AS StockType,
             CAST(ISNULL(s.TotalItems, 0) AS FLOAT) AS Balance,
             CAST(ISNULL(r.Qty, 0) AS FLOAT) AS Received,
-            CAST(ISNULL(iss.Qty, 0) AS FLOAT) AS Issued
+            CAST(ISNULL(iss.Qty, 0) AS FLOAT) AS Issued,
+            CAST(ISNULL(s.TotalItems, 0) - ISNULL(ns.NetQty, 0) AS FLOAT) AS Opening
         FROM Inv.Items i
         INNER JOIN MovedItems m ON m.ItemId = i.Id
         LEFT JOIN StockBalance s ON s.ItemId = i.Id
         LEFT JOIN Received r ON r.ItemId = i.Id
         LEFT JOIN Issued iss ON iss.ItemId = i.Id
+        LEFT JOIN NetSinceStart ns ON ns.ItemId = i.Id
         OUTER APPLY
         (
             SELECT TOP 1 latest.StockTypeId
@@ -170,7 +141,7 @@ BEGIN
         ItemId,
         ItemName,
         StockType,
-        CAST((Balance - Received + Issued) AS FLOAT) AS Opening,
+        Opening,
         Received,
         Issued,
         Balance

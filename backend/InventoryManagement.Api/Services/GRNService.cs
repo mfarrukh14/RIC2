@@ -16,8 +16,13 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<List<GRN>> GetAllAsync()
+        public async Task<PagedResult<GRN>> GetAllAsync(int pageNumber, int pageSize, string? search)
         {
+            var result = new PagedResult<GRN>
+            {
+                PageNumber = pageNumber < 1 ? 1 : pageNumber,
+                PageSize = pageSize < 1 ? 5 : Math.Min(pageSize, 100)
+            };
             var grns = new List<GRN>();
 
             try
@@ -28,19 +33,30 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
 
+                command.Parameters.AddWithValue("@PageNumber", result.PageNumber);
+                command.Parameters.AddWithValue("@PageSize", result.PageSize);
+                command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (result.TotalCount == 0)
+                    {
+                        result.TotalCount = reader.GetInt32("TotalCount");
+                    }
+
                     grns.Add(new GRN
                     {
                         Id = reader.GetInt32("Id"),
-                        PurchaseOrderId = reader.GetInt32("PurchaseOrderId"),
+                        PurchaseOrderId = reader.IsDBNull("PurchaseOrderId") ? null : reader.GetInt32("PurchaseOrderId"),
                         PONumber = reader.IsDBNull("PONumber") ? null : reader.GetString("PONumber"),
                         InvoiceNo = reader.IsDBNull("InvoiceNo") ? null : reader.GetString("InvoiceNo"),
                         StockTypeId = reader.IsDBNull("StockTypeId") ? null : reader.GetInt32("StockTypeId"),
                         StockTypeName = reader.IsDBNull("StockTypeName") ? null : reader.GetString("StockTypeName"),
+                        VendorId = reader.IsDBNull("VendorId") ? null : reader.GetInt32("VendorId"),
+                        VendorName = reader.IsDBNull("VendorName") ? null : reader.GetString("VendorName"),
                         DateAndTime = reader.IsDBNull("DateAndTime") ? null : reader.GetDateTime("DateAndTime"),
                         IsActive = reader.GetBoolean("IsActive"),
                         CreatedOn = reader.IsDBNull("CreatedOn") ? null : reader.GetDateTime("CreatedOn")
@@ -53,7 +69,8 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return grns;
+            result.Items = grns;
+            return result;
         }
 
         public async Task<GRN?> GetByIdAsync(int id)
@@ -77,7 +94,7 @@ namespace InventoryManagement.Api.Services
                     grn = new GRN
                     {
                         Id = reader.GetInt32("Id"),
-                        PurchaseOrderId = reader.GetInt32("PurchaseOrderId"),
+                        PurchaseOrderId = reader.IsDBNull("PurchaseOrderId") ? null : reader.GetInt32("PurchaseOrderId"),
                         PONumber = reader.IsDBNull("PONumber") ? null : reader.GetString("PONumber"),
                         VendorId = reader.IsDBNull("VendorId") ? null : reader.GetInt32("VendorId"),
                         VendorName = reader.IsDBNull("VendorName") ? null : reader.GetString("VendorName"),

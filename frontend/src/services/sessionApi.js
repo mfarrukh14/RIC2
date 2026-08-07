@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/Session';
+const API_URL = 'http://10.10.10.35:5100/api/Session';
 
 export const sessionApi = {
     // isLogin=1 under the hood - caches the user's data on the server

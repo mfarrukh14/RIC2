@@ -36,9 +36,10 @@ const ReceiveStockPage = () => {
   const [loading, setLoading] = useState(true);
   const [submittingReceive, setSubmittingReceive] = useState(false);
   const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -67,7 +68,6 @@ const ReceiveStockPage = () => {
 
   useEffect(() => {
     loadLookups();
-    loadRequests();
   }, []);
 
   // Branch filter is always scoped to the logged-in user's own branch.
@@ -92,13 +92,46 @@ const ReceiveStockPage = () => {
     }
   };
 
-  const loadRequests = async () => {
+  const ISSUED_STATUSES = 'Issued,Partial Issued';
+
+  // Receiving stock (or anything else that removes a row from this Issued/Partial-Issued
+  // list) can leave the current page number pointing past the end of the now-shorter
+  // result set - the backend then legitimately returns zero rows for that out-of-range
+  // page, and the table looks "cleared" until something resets the page (a hard refresh
+  // resets currentPage back to its initial value of 1, which is why that "fixes" it).
+  // Self-correct instead: if a page comes back empty but the total says there's data
+  // somewhere, refetch the last valid page.
+  const loadRequests = async (pageToLoad = currentPage) => {
     setLoading(true);
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll();
-      setRequests(data);
+      let response = await demandRequestApi.getAll({
+        statuses: ISSUED_STATUSES,
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: pageToLoad,
+        pageSize: entriesPerPage
+      });
+
+      if (response.items.length === 0 && response.totalCount > 0 && pageToLoad > 1) {
+        const lastValidPage = Math.max(1, Math.ceil(response.totalCount / entriesPerPage));
+        response = await demandRequestApi.getAll({
+          statuses: ISSUED_STATUSES,
+          branchId: filters.branchId || undefined,
+          requestingStoreId: filters.requestingStoreId || undefined,
+          stockTypeId: filters.stockTypeId || undefined,
+          search: searchTerm.trim() || undefined,
+          pageNumber: lastValidPage,
+          pageSize: entriesPerPage
+        });
+        setCurrentPage(lastValidPage);
+      }
+
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading receive stock data:', requestError);
       setError('Failed to load receive stock records.');
@@ -107,32 +140,17 @@ const ReceiveStockPage = () => {
     }
   };
 
-  const filteredRequests = useMemo(() => {
-    const issuedOnly = requests.filter((request) => ['issued', 'partial issued'].includes((request.status || '').toLowerCase()));
-
-    return issuedOnly.filter((request) => {
-      const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
-      const matchesStore = !filters.requestingStoreId || String(request.requestingStoreId) === String(filters.requestingStoreId);
-      const matchesStockType = !filters.stockTypeId || String(request.stockTypeId) === String(filters.stockTypeId);
-      const matchesSearch = !searchTerm.trim() || [
-        request.drNo,
-        request.indentNo,
-        request.requestedStoreName,
-        request.itemSummary,
-        request.status
-      ].some((value) => (value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()));
-
-      return matchesBranch && matchesStore && matchesStockType && matchesSearch;
-    });
-  }, [filters.branchId, filters.requestingStoreId, filters.stockTypeId, requests, searchTerm]);
+  useEffect(() => {
+    loadRequests();
+  }, [entriesPerPage, currentPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [entriesPerPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pageItems = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -142,8 +160,26 @@ const ReceiveStockPage = () => {
     }));
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        statuses: ISSUED_STATUSES,
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting receive stock records:', exportError);
+      setError('Failed to export receive stock records.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       `${request.drNo} / ${request.indentNo || ''}`,
       request.stockTypeName || '',
       request.requestedStoreName || '',
@@ -278,8 +314,8 @@ const ReceiveStockPage = () => {
     }
   };
 
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -355,7 +391,7 @@ const ReceiveStockPage = () => {
                 onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-sm"
               >
-                {[10, 25, 50].map((size) => (
+                {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>{size}</option>
                 ))}
               </select>
@@ -445,7 +481,7 @@ const ReceiveStockPage = () => {
               </div>
 
               <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries</div>
+                <div>Showing {showingFrom} to {showingTo} of {totalCount} entries</div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={currentPage === 1} className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50">‹</button>
                   <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>

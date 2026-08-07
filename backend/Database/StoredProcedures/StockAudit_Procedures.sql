@@ -42,24 +42,28 @@ BEGIN
         WHERE TRY_CAST(value AS INT) IS NOT NULL;
     END
 
-    -- Base the list on actual stock on hand (Inv.Stocks) so @BranchId/@StoreId filters
-    -- mean something and TotalItems reflects real quantities instead of hardcoded zeros.
-    -- Stock type comes from the most recent active inventory receipt for this item+store,
-    -- same technique Stock_Search's fallback query uses - Inv.Items has no StockTypeId of
-    -- its own, so joining Items directly to Inv.StockTypes (the previous bug) is meaningless.
+    -- Base the list on actual stock on hand (Pharmacy.PharmacyMedicinesStocks - the live
+    -- ledger, not Inv.Stocks, see Stock_Procedures.sql header for why) so @BranchId/
+    -- @StoreId filters mean something and TotalItems reflects real quantities instead of
+    -- hardcoded zeros. Stock type comes from the most recent active inventory receipt for
+    -- this item+store, same technique Stock_Search's fallback query uses - Inv.Items has
+    -- no StockTypeId of its own, so joining Items directly to Inv.StockTypes (the previous
+    -- bug) is meaningless. Scoped to real Items only (INNER JOIN), same as before - this
+    -- audit report was never Medicine/Fee-scoped.
     SELECT
         i.Id AS ItemId,
         i.Name AS ItemName,
         COALESCE(st.Name, 'Regular') AS StockType,
-        CAST(ISNULL(s.TotalItems, 0) AS FLOAT) AS TotalItems,
+        CAST(ISNULL(s.TotalItemsInStock, 0) AS FLOAT) AS TotalItems,
         CAST(0 AS FLOAT) AS QtyOnShelf,
         CAST(0 AS FLOAT) AS Difference,
         CAST(COALESCE(s.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS FLOAT) AS MPL,
         CAST(ISNULL(i.RetailPrice, 0) AS DECIMAL(18,2)) AS SalePrice,
         CAST(ISNULL(i.QuantityPerPacket, 0) AS FLOAT) AS QuantityPerPacket,
         s.ModifiedOn
-    FROM Inv.Stocks s
+    FROM Pharmacy.PharmacyMedicinesStocks s
     INNER JOIN Inv.Items i ON s.ItemId = i.Id
+    LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = s.StoreId
     OUTER APPLY
     (
         SELECT TOP 1 inv.StockTypeId
@@ -71,8 +75,7 @@ BEGIN
         ORDER BY COALESCE(inv.ModifiedOn, inv.CreatedOn) DESC, inv.Id DESC
     ) latestInventory
     LEFT JOIN Inv.StockTypes st ON latestInventory.StockTypeId = st.Id
-    WHERE s.IsActive = 1
-        AND (@BranchId IS NULL OR s.BranchId = @BranchId)
+    WHERE (@BranchId IS NULL OR ps.BranchId = @BranchId)
         AND (@StoreId IS NULL OR s.StoreId = @StoreId)
         AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
         AND (@StockTypeId IS NULL OR latestInventory.StockTypeId = @StockTypeId)

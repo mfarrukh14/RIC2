@@ -39,7 +39,7 @@ BEGIN
         -- funneled through SP_Stock_UpdateStockBalance (which both updated the real
         -- balance and wrote a StockTransactions ledger row - see
         -- InventoryDetail_StockEffect_Live.sql for the matching fix on our side, since
-        -- neither this table nor GRN previously touched Inv.Stocks at all here).
+        -- neither this table nor GRN previously touched the live stock ledger at all here).
         SELECT
             inv.CreatedOn,
             'Inventory' AS TransactionType,

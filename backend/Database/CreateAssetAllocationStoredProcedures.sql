@@ -121,8 +121,8 @@ BEGIN
         sd.Name as SubDepartmentName,
         aa.RoomId,
         r.Name as RoomName,
-        r.Building,
-        r.Floor,
+        bld.Name as Building,
+        flr.Name as Floor,
         aa.ItemId,
         aa.BranchId,
         b.Name as BranchName,
@@ -148,6 +148,9 @@ BEGIN
     LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
     LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
     LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
+    LEFT JOIN dbo.Rooms dr ON aa.RoomId = dr.RID
+    LEFT JOIN dbo.Building bld ON dr.BID = bld.BID
+    LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
     LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
     LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
     WHERE aa.IsActive = 1
@@ -235,8 +238,8 @@ BEGIN
         sd.Name as SubDepartmentName,
         aa.RoomId,
         r.Name as RoomName,
-        r.Building,
-        r.Floor,
+        bld.Name as Building,
+        flr.Name as Floor,
         aa.ItemId,
         aa.BranchId,
         b.Name as BranchName,
@@ -262,6 +265,9 @@ BEGIN
     LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
     LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
     LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
+    LEFT JOIN dbo.Rooms dr ON aa.RoomId = dr.RID
+    LEFT JOIN dbo.Building bld ON dr.BID = bld.BID
+    LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
     LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
     LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
     WHERE aa.Id = @Id AND aa.IsActive = 1;
@@ -517,18 +523,21 @@ CREATE PROCEDURE [dbo].[Room_GetAll]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
-        Id,
-        Name,
-        Description,
-        Floor,
-        Building,
-        Capacity,
-        IsActive
-    FROM Inv.Rooms
-    WHERE IsActive = 1
-    ORDER BY Building, Floor, Name;
+
+    SELECT
+        r.Id,
+        r.Name,
+        r.Description,
+        flr.Name AS Floor,
+        bld.Name AS Building,
+        r.Capacity,
+        r.IsActive
+    FROM Inv.Rooms r
+    LEFT JOIN dbo.Rooms dr ON r.Id = dr.RID
+    LEFT JOIN dbo.Building bld ON dr.BID = bld.BID
+    LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
+    WHERE r.IsActive = 1
+    ORDER BY bld.Name, flr.Name, r.Name;
 END
 GO
 
@@ -599,7 +608,7 @@ BEGIN
         br.Name as BranchName,
         ii.IsActive
     FROM Inv.InventoryItems ii
-    LEFT JOIN Inv.Brands b ON ii.BrandId = b.Id
+    LEFT JOIN Data.Brands b ON ii.BrandId = b.Id
     LEFT JOIN Inv.ItemTypes it ON ii.ItemTypeId = it.Id
     LEFT JOIN Inv.ItemUnits iu ON ii.ItemUnitId = iu.Id
     LEFT JOIN Inv.Manufacturers m ON ii.ManufacturerId = m.Id

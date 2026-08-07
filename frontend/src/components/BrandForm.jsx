@@ -63,8 +63,8 @@ const BrandForm = ({ brand, onSave, onCancel, isEditing }) => {
     
     try {
       const url = isEditing 
-        ? `http://localhost:5100/api/brands/${brand.id}`
-        : 'http://localhost:5100/api/brands';
+        ? `http://10.10.10.35:5100/api/brands/${brand.id}`
+        : 'http://10.10.10.35:5100/api/brands';
       
       const method = isEditing ? 'PUT' : 'POST';
       

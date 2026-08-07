@@ -5,7 +5,15 @@
 -- =============================================
 -- Procedure: StoreAllocationToUser_GetAll
 -- =============================================
+-- Paginated (5-at-a-time pattern, matching GRN_GetAll/DemandRequest_GetAll) with an
+-- optional store/employee name search. StoreId is LEFT JOINed (not INNER) because some
+-- migrated-from-Pharmacy.UserPharmacyStores rows point at a store that has since been
+-- hard-deleted from Pharmacy.PharmacyStores - those allocations are still real history and
+-- must not silently vanish from the list (StoreName just comes back NULL for them).
 CREATE OR ALTER PROCEDURE StoreAllocationToUser_GetAll
+    @PageNumber INT = 1,
+    @PageSize INT = 5,
+    @Search NVARCHAR(255) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -22,15 +30,23 @@ BEGIN
             CAST(sa.UserId AS NVARCHAR(255))
         ) AS EmployeeName,
         sa.IsActive,
+        sa.IsDeleted,
         sa.CreatedById,
         sa.CreatedOn,
         sa.ModifiedById,
-        sa.ModifiedOn
+        sa.ModifiedOn,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.StoreAllocationToUser sa
-    INNER JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
     LEFT JOIN dbo.Users u ON sa.UserId = u.UserID
     LEFT JOIN dbo.Employee e ON u.EmpID = e.EmpID
-    ORDER BY sa.CreatedOn DESC;
+    WHERE
+        @Search IS NULL OR @Search = ''
+        OR s.StoreName LIKE '%' + @Search + '%'
+        OR ISNULL(e.FullName, ISNULL(e.FirstName, '') + ' ' + ISNULL(e.LastName, '')) LIKE '%' + @Search + '%'
+    ORDER BY sa.CreatedOn DESC
+    OFFSET (@PageNumber - 1) * @PageSize ROWS
+    FETCH NEXT @PageSize ROWS ONLY;
 END
 GO
 
@@ -53,12 +69,13 @@ BEGIN
             CAST(sa.UserId AS NVARCHAR(255))
         ) AS EmployeeName,
         sa.IsActive,
+        sa.IsDeleted,
         sa.CreatedById,
         sa.CreatedOn,
         sa.ModifiedById,
         sa.ModifiedOn
     FROM Inv.StoreAllocationToUser sa
-    INNER JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON sa.StoreId = s.StoreId
     LEFT JOIN dbo.Users u ON sa.UserId = u.UserID
     LEFT JOIN dbo.Employee e ON u.EmpID = e.EmpID
     WHERE sa.Id = @Id;

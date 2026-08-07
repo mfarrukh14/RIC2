@@ -45,7 +45,11 @@ namespace InventoryManagement.Api.Services
                         StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName"))
                             ? null
                             : reader.GetString(reader.GetOrdinal("StockTypeName")),
-                        PatientTypes = reader.GetInt32(reader.GetOrdinal("PatientTypes")),
+                        // Genuinely NULL for rows seeded via StoreId/StockTypeId only
+                        // (see model comment) - no substitute column exists.
+                        PatientTypes = reader.IsDBNull(reader.GetOrdinal("PatientTypes"))
+                            ? null
+                            : reader.GetInt32(reader.GetOrdinal("PatientTypes")),
                         CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn"))
                     });
                 }
@@ -87,7 +91,9 @@ namespace InventoryManagement.Api.Services
                         StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName"))
                             ? null
                             : reader.GetString(reader.GetOrdinal("StockTypeName")),
-                        PatientTypes = reader.GetInt32(reader.GetOrdinal("PatientTypes")),
+                        PatientTypes = reader.IsDBNull(reader.GetOrdinal("PatientTypes"))
+                            ? null
+                            : reader.GetInt32(reader.GetOrdinal("PatientTypes")),
                         CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn"))
                     };
                 }

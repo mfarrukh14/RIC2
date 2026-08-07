@@ -165,10 +165,13 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE s
-    SET s.TotalItems = s.TotalItems + d.Quantity
-    FROM Inv.Stocks s
+    SET s.TotalItemsInStock = s.TotalItemsInStock + d.Quantity
+    FROM Pharmacy.PharmacyMedicinesStocks s
     INNER JOIN Inv.StockConsumptionDetails d
-        ON d.StoreId = s.StoreId AND d.ItemId = s.ItemId
+        ON d.StoreId = s.StoreId
+        AND ((d.ItemId IS NOT NULL AND d.ItemId = s.ItemId)
+          OR (d.MedicineId IS NOT NULL AND d.MedicineId = s.BranchMedicineId)
+          OR (d.SubServiceId IS NOT NULL AND d.SubServiceId = s.BranchSubServiceId))
     WHERE d.StockConsumptionId = @Id AND d.IsDeleted = 0;
 
     UPDATE Inv.StockConsumptions
@@ -183,9 +186,11 @@ GO
 
 -- Insert Stock Consumption Detail
 -- A consumption can only draw from stock actually on hand at the specific store it
--- targets - previously this just logged a row with no link at all to Inv.Stocks, so
--- any quantity could be "consumed" at any store regardless of what was really available
--- there. Now it validates against that store's on-hand quantity and deducts it.
+-- targets - previously this just logged a row with no link at all to a live stock
+-- ledger, so any quantity could be "consumed" at any store regardless of what was
+-- really available there. Now it validates against that store's on-hand quantity and
+-- deducts it. Targets Pharmacy.PharmacyMedicinesStocks (the live ledger, not
+-- Inv.Stocks - see Stock_Procedures.sql header for why).
 CREATE OR ALTER PROCEDURE StockConsumptionDetail_Insert
     @StockConsumptionId INT,
     @StoreId INT,
@@ -205,15 +210,16 @@ BEGIN
     -- Exactly one of @ItemId/@MedicineId/@SubServiceId identifies the product
     -- being consumed - Items, Medicines, and Disposables are separate tables
     -- (see Item_GetAllWithMedicines) but share one stock balance keyed the
-    -- same way in Inv.Stocks.
+    -- same way in Pharmacy.PharmacyMedicinesStocks (as ItemId/BranchMedicineId/
+    -- BranchSubServiceId there).
     DECLARE @Available DECIMAL(18,2);
 
-    SELECT @Available = TotalItems
-    FROM Inv.Stocks
-    WHERE StoreId = @StoreId AND IsActive = 1
+    SELECT @Available = TotalItemsInStock
+    FROM Pharmacy.PharmacyMedicinesStocks
+    WHERE StoreId = @StoreId
         AND ((@ItemId IS NOT NULL AND ItemId = @ItemId)
-          OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId)
-          OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));
+          OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId)
+          OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));
 
     IF @Available IS NULL OR @Available < @Quantity
     BEGIN
@@ -224,12 +230,12 @@ BEGIN
         THROW 50001, @Msg, 1;
     END
 
-    UPDATE Inv.Stocks
-    SET TotalItems = TotalItems - @Quantity
+    UPDATE Pharmacy.PharmacyMedicinesStocks
+    SET TotalItemsInStock = TotalItemsInStock - @Quantity
     WHERE StoreId = @StoreId
         AND ((@ItemId IS NOT NULL AND ItemId = @ItemId)
-          OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId)
-          OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));
+          OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId)
+          OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));
 
     INSERT INTO Inv.StockConsumptionDetails (
         StockConsumptionId, StoreId, ItemId, MedicineId, SubServiceId, Type, StockTypeId, Quantity,
@@ -255,10 +261,13 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE s
-    SET s.TotalItems = s.TotalItems + d.Quantity
-    FROM Inv.Stocks s
+    SET s.TotalItemsInStock = s.TotalItemsInStock + d.Quantity
+    FROM Pharmacy.PharmacyMedicinesStocks s
     INNER JOIN Inv.StockConsumptionDetails d
-        ON d.StoreId = s.StoreId AND d.ItemId = s.ItemId
+        ON d.StoreId = s.StoreId
+        AND ((d.ItemId IS NOT NULL AND d.ItemId = s.ItemId)
+          OR (d.MedicineId IS NOT NULL AND d.MedicineId = s.BranchMedicineId)
+          OR (d.SubServiceId IS NOT NULL AND d.SubServiceId = s.BranchSubServiceId))
     WHERE d.StockConsumptionId = @StockConsumptionId AND d.IsDeleted = 0;
 
     UPDATE Inv.StockConsumptionDetails

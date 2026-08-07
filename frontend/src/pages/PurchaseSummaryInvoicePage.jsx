@@ -57,20 +57,18 @@ const PurchaseSummaryInvoicePage = () => {
   const initializePage = async () => {
     try {
       setLoading(true);
-      const today = new Date();
-      const start = new Date(today.setHours(0, 0, 0, 0));
-      const end = new Date(today.setHours(23, 59, 59, 999));
-      
-      setFilters(prev => ({
-        ...prev,
-        inventoryDateStart: start.toISOString().slice(0, 16),
-        inventoryDateEnd: end.toISOString().slice(0, 16)
-      }));
+
+      // Inventory Date Range is left blank by default (matches Invoice Date
+      // Range) - it filters on the linked Purchase Order's CreatedOn, and a
+      // GRN with no linked PO has no CreatedOn to compare at all, so
+      // defaulting this to "today" hid virtually all real data (any GRN not
+      // literally dated today, plus every migrated row with no PO link)
+      // behind an empty-looking report the moment Generate was clicked.
 
       // Fetch lookup data
       const lookup = await purchaseSummaryInvoiceApi.getLookupData();
       setLookupData(lookup);
-      
+
       setLoading(false);
     } catch (err) {
       console.error('Error initializing page:', err);

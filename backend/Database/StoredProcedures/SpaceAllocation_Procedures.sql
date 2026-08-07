@@ -23,7 +23,7 @@ BEGIN
         sa.RackId,
         sa.RackRowId,
         sa.RackColumnId,
-        sa.RackDrawrId AS RackDrawerId,
+        sa.RackDrawerId,
         sa.MedicineId,
         sa.IsActive,
         sa.CreatedById,
@@ -42,7 +42,7 @@ BEGIN
     LEFT JOIN Inv.Racks r ON sa.RackId = r.Id
     LEFT JOIN Inv.RackRows rr ON sa.RackRowId = rr.Id
     LEFT JOIN Inv.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawrId = rd.Id
+    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawerId = rd.Id
     ORDER BY sa.CreatedOn DESC;
 END
 GO
@@ -69,7 +69,7 @@ BEGIN
         sa.RackId,
         sa.RackRowId,
         sa.RackColumnId,
-        sa.RackDrawrId AS RackDrawerId,
+        sa.RackDrawerId,
         sa.MedicineId,
         sa.IsActive,
         sa.CreatedById,
@@ -88,7 +88,7 @@ BEGIN
     LEFT JOIN Inv.Racks r ON sa.RackId = r.Id
     LEFT JOIN Inv.RackRows rr ON sa.RackRowId = rr.Id
     LEFT JOIN Inv.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawrId = rd.Id
+    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawerId = rd.Id
     WHERE sa.Id = @Id;
 END
 GO
@@ -123,7 +123,7 @@ BEGIN
         RackId,
         RackRowId,
         RackColumnId,
-        RackDrawrId,
+        RackDrawerId,
         MedicineId,
         IsActive,
         CreatedById,
@@ -179,7 +179,7 @@ BEGIN
         RackId = @RackId,
         RackRowId = @RackRowId,
         RackColumnId = @RackColumnId,
-        RackDrawrId = @RackDrawerId,
+        RackDrawerId = @RackDrawerId,
         MedicineId = @MedicineId,
         IsActive = @IsActive,
         ModifiedById = @ModifiedById,

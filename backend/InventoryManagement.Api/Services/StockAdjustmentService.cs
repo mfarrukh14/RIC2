@@ -163,7 +163,7 @@ namespace InventoryManagement.Api.Services
 
                         // This is the actual stock effect - previously the insert above was
                         // all that happened, so an adjustment was just a log entry that never
-                        // touched Inv.Stocks regardless of Type. Type 2 ("Issue") adds stock
+                        // touched the stock ledger regardless of Type. Type 2 ("Issue") adds stock
                         // into this store; Type 1 ("Less/Decrease") removes it.
                         await ApplyStockEffectAsync(connection, transaction, new ProductKey(detail.ItemId, detail.MedicineId, detail.SubServiceId), request.StoreId, request.BranchId, detail.Type, detail.Quantity);
                     }
@@ -201,7 +201,7 @@ namespace InventoryManagement.Api.Services
                 try
                 {
                     // Undo whatever the previous save of this adjustment already did to
-                    // Inv.Stocks before applying the new lines - otherwise editing an
+                    // the stock ledger before applying the new lines - otherwise editing an
                     // adjustment would double up its effect instead of correcting it. Reverse
                     // against the OLD store, since the store itself may also be getting
                     // changed by this edit.
@@ -294,7 +294,7 @@ namespace InventoryManagement.Api.Services
 
                 try
                 {
-                    // Deleting an adjustment voids it - undo whatever it did to Inv.Stocks,
+                    // Deleting an adjustment voids it - undo whatever it did to the stock ledger,
                     // same as reversing on edit, so a deleted adjustment doesn't leave a
                     // permanent, invisible effect on the store's balance.
                     var storeId = await GetAdjustmentStoreIdAsync(connection, transaction, id);
@@ -428,12 +428,13 @@ namespace InventoryManagement.Api.Services
         }
 
         // Deducts stock, guarding against removing more than is actually on hand (same check
-        // used for demand-request issuance).
+        // used for demand-request issuance). Reads/writes Pharmacy.PharmacyMedicinesStocks -
+        // the live ledger, not Inv.Stocks (see Stock_Procedures.sql header for why).
         private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, string itemName, int storeId, int quantity)
         {
             int available;
             using (var selectCommand = new SqlCommand(
-                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));",
+                "SELECT ISNULL(TotalItemsInStock, 0) FROM Pharmacy.PharmacyMedicinesStocks WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));",
                 connection, transaction))
             {
                 product.AddParameters(selectCommand);
@@ -448,7 +449,7 @@ namespace InventoryManagement.Api.Services
             }
 
             using var updateCommand = new SqlCommand(
-                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));",
+                "UPDATE Pharmacy.PharmacyMedicinesStocks SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE() WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));",
                 connection, transaction);
             product.AddParameters(updateCommand);
             updateCommand.Parameters.AddWithValue("@StoreId", storeId);
@@ -457,16 +458,20 @@ namespace InventoryManagement.Api.Services
         }
 
         // Credits stock, upserting since the store may never have held this item before.
+        // No BranchId column on Pharmacy.PharmacyMedicinesStocks - @BranchId is accepted for
+        // call-site compatibility but not written anywhere.
         private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, int storeId, int branchId, int quantity)
         {
             using var command = new SqlCommand(@"
-IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId)))
-    UPDATE Inv.Stocks
-    SET TotalItems = ISNULL(TotalItems, 0) + @Quantity, ModifiedOn = GETDATE()
-    WHERE StoreId = @StoreId AND IsActive = 1 AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));
+IF EXISTS (SELECT 1 FROM Pharmacy.PharmacyMedicinesStocks WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId)))
+    UPDATE Pharmacy.PharmacyMedicinesStocks
+    SET TotalItemsInStock = ISNULL(TotalItemsInStock, 0) + @Quantity, ModifiedOn = GETDATE()
+    WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));
 ELSE
-    INSERT INTO Inv.Stocks (ItemId, MedicineId, SubServiceId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
-    VALUES (@ItemId, @MedicineId, @SubServiceId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());", connection, transaction);
+    INSERT INTO Pharmacy.PharmacyMedicinesStocks (ItemId, BranchMedicineId, BranchSubServiceId, TotalItemsInStock, MinimumPanicLevel, TotalItemsInTransition, TypeBit, StoreId, CreatedBy, CreatedOn)
+    VALUES (@ItemId, @MedicineId, @SubServiceId, @Quantity, 0, 0,
+        CASE WHEN @ItemId IS NOT NULL THEN 15 WHEN @MedicineId IS NOT NULL THEN 4 WHEN @SubServiceId IS NOT NULL THEN 5 ELSE NULL END,
+        @StoreId, 1, GETDATE());", connection, transaction);
             product.AddParameters(command);
             command.Parameters.AddWithValue("@StoreId", storeId);
             command.Parameters.AddWithValue("@BranchId", branchId);

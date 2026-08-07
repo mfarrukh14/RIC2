@@ -60,20 +60,16 @@ const PurchaseSummaryPage = () => {
   const initializePage = async () => {
     try {
       setLoading(true);
-      const today = new Date();
-      const start = new Date(today.setHours(0, 0, 0, 0));
-      const end = new Date(today.setHours(23, 59, 59, 999));
-      
-      setFilters(prev => ({
-        ...prev,
-        invoiceDateStart: start.toISOString().slice(0, 16),
-        invoiceDateEnd: end.toISOString().slice(0, 16)
-      }));
+
+      // Invoice Date Range is left blank by default - defaulting it to
+      // "today" meant Generate Report showed nothing unless a GRN happened
+      // to be dated the exact day the page was opened, hiding virtually all
+      // real/migrated purchase history behind an empty-looking report.
 
       // Fetch lookup data
       const lookup = await purchaseSummaryApi.getLookupData();
       setLookupData(lookup);
-      
+
       // Set loading to false after initialization
       setLoading(false);
     } catch (err) {

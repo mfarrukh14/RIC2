@@ -7,7 +7,7 @@ namespace InventoryManagement.API.Models
         public int Id { get; set; }
         public DateTime PurchaseDate { get; set; }
         public string? BatchNo { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
         public string ItemName { get; set; } = string.Empty;
         public int? StoreId { get; set; }
         public string? StoreName { get; set; }

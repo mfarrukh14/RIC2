@@ -1,16 +1,22 @@
 -- Stored procedure to get pharmacy stock detail records
 --
--- Rewritten to match the old system's real stock-ledger approach (same fix already
--- applied to StockStats_Search): Opening/Received/Issued/Balance now come from the
--- actual, dated movement sources (GRN, Add Inventory, Transfer, Stock Adjustment,
--- Stock Consumption) instead of a derived "Issued = Opening + Received - Balance"
--- formula. That formula produced wrong (often negative) numbers whenever a store's
--- balance changed for any reason other than a GRN receipt - which is the normal case,
--- since issuance in this app happens via consumption/transfer/adjustment, not by
--- editing a GRN line. The previous version also GROUPed GrnHistory by
--- UnitBuyingPrice/UnitSellingPrice/VendorName, which silently fanned an item with
--- multiple distinct GRN batches out into several duplicate rows, each showing the
--- item's FULL current balance - compounding the wrong-Issued bug further.
+-- Rewritten again to read from Inv.StockTransactions, the real ledger every stock
+-- movement now writes to via Pharmacy.TR_PharmacyMedicinesStocks_LogTransactions (see
+-- that trigger's header for the full story). The previous version reconstructed
+-- Received/Issued by UNIONing 4 of the 9 real stock-mutation paths (Transfer, Stock
+-- Adjustment, GRN, Add Inventory) - it could never see pharmacy retail dispensing or
+-- demand-request movements, which silently drained stock the report had no record of
+-- "leaving", producing negative Opening balances (e.g. an item with 1218 units added via
+-- one tracked path, 0 tracked Issued, but a real current balance of 0).
+--
+-- Opening is anchored off the CURRENT balance (Pharmacy.PharmacyMedicinesStocks, always
+-- "now") minus every ledgered movement from @StartDate to now - not off a snapshot at
+-- @StartDate, because none exists. Received/Issued for display are still windowed to
+-- [@StartDate, @EndDate] as before. The ledger only started being populated when the
+-- trigger was created, so windows starting well before that still degrade gracefully
+-- (Opening ~= current balance, since no historical movement rows exist to subtract) -
+-- there is no way to backfill a "before" state for movements nobody ever recorded, but
+-- accuracy will now be exact for any window entirely after the trigger existed.
 CREATE OR ALTER PROCEDURE StockDetailRecord_GetReport
     @Branch NVARCHAR(255) = NULL,
     @StartDate DATETIME = NULL,
@@ -28,80 +34,36 @@ BEGIN
     DECLARE @StoreId INT = (SELECT StoreId FROM Inv.PharmacyStores WHERE StoreName = @Store);
 
     ;WITH StockBalance AS (
-        SELECT ItemId, SUM(TotalItems) AS TotalItems
-        FROM Inv.Stocks
-        WHERE IsActive = 1 AND (@StoreId IS NULL OR StoreId = @StoreId)
+        SELECT ItemId, SUM(TotalItemsInStock) AS TotalItems
+        FROM Pharmacy.PharmacyMedicinesStocks
+        WHERE (@StoreId IS NULL OR StoreId = @StoreId) AND ItemId IS NOT NULL
         GROUP BY ItemId
     ),
     Received AS (
-        SELECT ItemId, SUM(Qty) AS Qty
-        FROM (
-            SELECT ti.ItemId, ti.Quantity AS Qty
-            FROM Inv.TransferInventoryItems ti
-            INNER JOIN Inv.TransferInventory t ON ti.TransferInventoryId = t.Id
-            WHERE ti.IsActive = 1 AND t.IsActive = 1
-              AND (@StoreId IS NULL OR t.ToStoreId = @StoreId)
-              AND (@StartDate IS NULL OR t.TransferDate >= @StartDate) AND (@EndDate IS NULL OR t.TransferDate <= @EndDate)
-
-            UNION ALL
-
-            -- Type 2 ("Issue / Increase" in the Stock Adjustment UI) credits stock in.
-            SELECT sad.ItemId, sad.Quantity AS Qty
-            FROM Inv.StockAdjustmentDetails sad
-            INNER JOIN Inv.StockAdjustments sa ON sa.Id = sad.StockAdjustmentId
-            WHERE sad.IsDeleted = 0 AND sa.IsDeleted = 0 AND sad.Type = 2
-              AND (@StoreId IS NULL OR sa.StoreId = @StoreId)
-              AND (@StartDate IS NULL OR sad.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR sad.CreatedOn <= @EndDate)
-
-            UNION ALL
-
-            SELECT gi.ItemId, gi.ReceivedQuantity AS Qty
-            FROM Inv.GRNItems gi
-            INNER JOIN Inv.GoodsReceivingNotes grn ON grn.Id = gi.GRNId
-            INNER JOIN Inv.PurchaseOrders po ON po.PurchaseOrderId = grn.PurchaseOrderId
-            WHERE grn.IsActive = 1
-              AND (@StoreId IS NULL OR po.StoreId = @StoreId)
-              AND (@StartDate IS NULL OR grn.DateAndTime >= @StartDate) AND (@EndDate IS NULL OR grn.DateAndTime <= @EndDate)
-
-            UNION ALL
-
-            SELECT d.ItemId, d.TotalItems AS Qty
-            FROM Inv.InventoryDetails d
-            INNER JOIN Inv.Inventories inv ON inv.Id = d.InventoryId
-            WHERE inv.IsActive = 1
-              AND (@StoreId IS NULL OR inv.StoreId = @StoreId)
-              AND (@StartDate IS NULL OR inv.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR inv.CreatedOn <= @EndDate)
-        ) x
+        SELECT ItemId, SUM(ReceivedQty) AS Qty
+        FROM Inv.StockTransactions st
+        WHERE ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR st.CreatedOn < DATEADD(DAY, 1, @EndDate))
         GROUP BY ItemId
     ),
     Issued AS (
-        SELECT ItemId, SUM(Qty) AS Qty
-        FROM (
-            SELECT ti.ItemId, ti.Quantity AS Qty
-            FROM Inv.TransferInventoryItems ti
-            INNER JOIN Inv.TransferInventory t ON ti.TransferInventoryId = t.Id
-            WHERE ti.IsActive = 1 AND t.IsActive = 1
-              AND (@StoreId IS NULL OR t.FromStoreId = @StoreId)
-              AND (@StartDate IS NULL OR t.TransferDate >= @StartDate) AND (@EndDate IS NULL OR t.TransferDate <= @EndDate)
-
-            UNION ALL
-
-            SELECT scd.ItemId, scd.Quantity AS Qty
-            FROM Inv.StockConsumptionDetails scd
-            WHERE scd.IsActive = 1 AND ISNULL(scd.IsDeleted, 0) = 0
-              AND (@StoreId IS NULL OR scd.StoreId = @StoreId)
-              AND (@StartDate IS NULL OR scd.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR scd.CreatedOn <= @EndDate)
-
-            UNION ALL
-
-            -- Type 1 ("Less / Decrease") and anything else removes stock.
-            SELECT sad.ItemId, sad.Quantity AS Qty
-            FROM Inv.StockAdjustmentDetails sad
-            INNER JOIN Inv.StockAdjustments sa ON sa.Id = sad.StockAdjustmentId
-            WHERE sad.IsDeleted = 0 AND sa.IsDeleted = 0 AND sad.Type <> 2
-              AND (@StoreId IS NULL OR sa.StoreId = @StoreId)
-              AND (@StartDate IS NULL OR sad.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR sad.CreatedOn <= @EndDate)
-        ) x
+        SELECT ItemId, SUM(IssuedQty) AS Qty
+        FROM Inv.StockTransactions st
+        WHERE ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate) AND (@EndDate IS NULL OR st.CreatedOn < DATEADD(DAY, 1, @EndDate))
+        GROUP BY ItemId
+    ),
+    -- Net movement from @StartDate to NOW (unbounded on the end date) - used only to back
+    -- Opening out from the current balance, since Balance is always "as of now", not "as
+    -- of @EndDate".
+    NetSinceStart AS (
+        SELECT ItemId, SUM(ReceivedQty) - SUM(IssuedQty) AS NetQty
+        FROM Inv.StockTransactions st
+        WHERE ItemId IS NOT NULL
+          AND (@StoreId IS NULL OR st.StoreId = @StoreId)
+          AND (@StartDate IS NULL OR st.CreatedOn >= @StartDate)
         GROUP BY ItemId
     ),
     -- Most recent GRN receipt per item, for display pricing only - ROW_NUMBER (not
@@ -128,6 +90,11 @@ BEGIN
         SELECT ItemId FROM Received
         UNION
         SELECT ItemId FROM Issued
+        UNION
+        -- Items with no ledger movement in the window but that DO have a current balance
+        -- still belong in the report (Opening = Balance in that case) - previously only
+        -- items with a tracked Received/Issued row showed up at all.
+        SELECT ItemId FROM StockBalance WHERE TotalItems <> 0
     )
     SELECT
         ROW_NUMBER() OVER (ORDER BY i.Name) AS Sr,
@@ -140,7 +107,7 @@ BEGIN
         -- reader.GetDecimal(...) can't read back without throwing).
         ISNULL(lg.UnitBuyingPrice, CAST(ISNULL(lid.UnitBuyingPrice, 0) AS DECIMAL(18,2))) AS BuyingPrice,
         ISNULL(lg.UnitSellingPrice, CAST(ISNULL(lid.UnitSellingPrice, 0) AS DECIMAL(18,2))) AS SellingPrice,
-        CAST(ISNULL(sb.TotalItems, 0) - ISNULL(r.Qty, 0) + ISNULL(iss.Qty, 0) AS INT) AS Opening,
+        CAST(ISNULL(sb.TotalItems, 0) - ISNULL(ns.NetQty, 0) AS INT) AS Opening,
         CAST(ISNULL(r.Qty, 0) AS INT) AS Received,
         CAST(ISNULL(iss.Qty, 0) AS INT) AS Issued,
         CAST(ISNULL(sb.TotalItems, 0) AS INT) AS Balance
@@ -149,6 +116,7 @@ BEGIN
     LEFT JOIN StockBalance sb ON sb.ItemId = i.Id
     LEFT JOIN Received r ON r.ItemId = i.Id
     LEFT JOIN Issued iss ON iss.ItemId = i.Id
+    LEFT JOIN NetSinceStart ns ON ns.ItemId = i.Id
     LEFT JOIN LatestGrn lg ON lg.ItemId = i.Id AND lg.rn = 1
     LEFT JOIN LatestInventoryDetail lid ON lid.ItemId = i.Id AND lid.rn = 1
     OUTER APPLY (

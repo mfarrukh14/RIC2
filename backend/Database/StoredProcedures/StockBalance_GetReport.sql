@@ -18,6 +18,11 @@ BEGIN
     DECLARE @ClosingSale DECIMAL(18,2) = 0;
 
     -- Calculate Opening Stock (items received before start date)
+    -- StoreId must fall back to grn.StoreId: 30,565 of 30,567 live GoodsReceivingNotes rows
+    -- have no PurchaseOrderId (they're migrated/direct receipts, not PO-driven), so joining
+    -- through Inv.PurchaseOrders alone leaves po.StoreId NULL for effectively every row and
+    -- s.StoreName always NULL - any @Store filter then matches nothing. Same
+    -- ISNULL(po.StoreId, grn.StoreId) pattern already used in PurchaseSummaryInvoice_Procedures.sql.
     SELECT
         @OpeningPurchase = ISNULL(SUM(gi.TotalBuyingPrice), 0),
         @OpeningSale = ISNULL(SUM(gi.TotalSellingPrice), 0)
@@ -28,7 +33,7 @@ BEGIN
     LEFT JOIN
         Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN
-        Inv.PharmacyStores s ON po.StoreId = s.StoreId
+        Inv.PharmacyStores s ON ISNULL(po.StoreId, grn.StoreId) = s.StoreId
     WHERE
         grn.DateAndTime < ISNULL(@StartDate, '1900-01-01')
         AND (@Store IS NULL OR s.StoreName = @Store);
@@ -44,7 +49,7 @@ BEGIN
     LEFT JOIN
         Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN
-        Inv.PharmacyStores s ON po.StoreId = s.StoreId
+        Inv.PharmacyStores s ON ISNULL(po.StoreId, grn.StoreId) = s.StoreId
     WHERE
         grn.DateAndTime >= ISNULL(@StartDate, '1900-01-01')
         AND grn.DateAndTime <= ISNULL(@EndDate, '9999-12-31')

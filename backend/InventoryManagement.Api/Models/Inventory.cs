@@ -179,7 +179,11 @@ namespace InventoryManagement.Api.Models
         public string? StoreName { get; set; }
         public int StockTypes { get; set; }
         public string? StockTypeName { get; set; }
-        public int PatientTypes { get; set; }
+        // Nullable: rows seeded directly via StoreId/StockTypeId (see
+        // SeedDemoData.sql) never set PatientTypes - there is no canonical
+        // "PatientTypeId" twin column to fall back to, unlike PharmacyStoreId/
+        // StockTypes which fall back to StoreId/StockTypeId.
+        public int? PatientTypes { get; set; }
         public DateTime CreatedOn { get; set; }
     }
 
@@ -259,13 +263,20 @@ namespace InventoryManagement.Api.Models
     public class Stock
     {
         public int Id { get; set; }
-        public int ItemId { get; set; }
+        // Nullable: Pharmacy.PharmacyMedicinesStocks rows for Medicine/Fee stock
+        // (TypeBit 4/5) have no ItemId - only real "Item" rows (TypeBit 15) do.
+        public int? ItemId { get; set; }
         public string ItemName { get; set; } = string.Empty;
         public string? StockType { get; set; }
-        public int? TotalItems { get; set; }
+        // Decimal: Pharmacy.PharmacyMedicinesStocks.TotalItemsInStock is a real
+        // decimal quantity (partial units are a real, intentional case there) -
+        // truncating to int would silently lose data.
+        public decimal? TotalItems { get; set; }
         public int? MinimumPanicLevel { get; set; }
         public int StoreId { get; set; }
-        public int BranchId { get; set; }
+        // Nullable: derived via a join to Pharmacy.PharmacyStores (no BranchId
+        // column exists directly on the stock table itself).
+        public int? BranchId { get; set; }
         public bool IsActive { get; set; }
         public DateTime? ModifiedOn { get; set; }
         public int? ItemTypeId { get; set; }

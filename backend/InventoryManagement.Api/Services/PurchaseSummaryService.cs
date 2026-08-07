@@ -287,7 +287,10 @@ namespace InventoryManagement.API.Services
                 Id = reader.GetInt32(reader.GetOrdinal("Id")),
                 PurchaseDate = reader.IsDBNull(reader.GetOrdinal("PurchaseDate")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("PurchaseDate")),
                 BatchNo = reader.IsDBNull(reader.GetOrdinal("BatchNo")) ? null : reader.GetString(reader.GetOrdinal("BatchNo")),
-                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                // ItemId is genuinely NULL for migrated Medicine/Fee-sourced purchase lines
+                // (see MigratePurchaseSummary_iHealthCure_HMSMAIN_TF.sql) - those have no
+                // Inv.Items row to point at, only a denormalized display name.
+                ItemId = reader.IsDBNull(reader.GetOrdinal("ItemId")) ? null : reader.GetInt32(reader.GetOrdinal("ItemId")),
                 // The referenced Item can be missing (hard-deleted after the GRN line was
                 // created, since Items support hard delete) - fall back to a placeholder
                 // instead of crashing the whole report on one bad row.

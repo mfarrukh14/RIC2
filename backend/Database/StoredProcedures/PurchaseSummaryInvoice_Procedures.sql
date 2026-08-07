@@ -41,21 +41,21 @@ BEGIN
         ISNULL(g.DateAndTime, g.CreatedOn) AS InvoiceDate,
         ISNULL(g.InvoiceNo, '') AS InvoiceNo,
         g.VendorId,
-        v.Name AS VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) AS VendorName,
         ISNULL(agg.Amount, 0) AS Amount,
         ISNULL(agg.AdvanceTax, 0) AS AdvanceTax,
         ISNULL(agg.Discount, 0) AS Discount,
         ISNULL(agg.TotalPrice, 0) AS TotalAmount,
         s.BranchId,
         b.Name AS BranchName,
-        po.StoreId,
+        ISNULL(po.StoreId, g.StoreId) AS StoreId,
         s.StoreName,
         po.CreatedOn AS InventoryDate,
         @ReportType AS ReportType,
         CAST(NULL AS NVARCHAR(50)) AS InvoiceType
     FROM Inv.GoodsReceivingNotes g
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     OUTER APPLY (
@@ -69,7 +69,7 @@ BEGIN
     ) agg
     WHERE g.IsActive = 1
         AND (@BranchId IS NULL OR s.BranchId = @BranchId)
-        AND (@StoreId IS NULL OR po.StoreId = @StoreId)
+        AND (@StoreId IS NULL OR ISNULL(po.StoreId, g.StoreId) = @StoreId)
         AND (@VendorId IS NULL OR g.VendorId = @VendorId)
         AND (@InvoiceNo IS NULL OR g.InvoiceNo LIKE '%' + @InvoiceNo + '%')
         AND (@InvoiceDateStart IS NULL OR g.DateAndTime >= @InvoiceDateStart)
@@ -91,7 +91,7 @@ BEGIN
         ISNULL(SUM(ISNULL(agg.TotalPrice, 0)), 0) AS GrandTotal
     FROM Inv.GoodsReceivingNotes g
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     OUTER APPLY (
         SELECT
             SUM(ISNULL(gi.ReceivedQuantity, 0) * ISNULL(gi.UnitBuyingPrice, 0)) AS Amount,
@@ -103,7 +103,7 @@ BEGIN
     ) agg
     WHERE g.IsActive = 1
         AND (@BranchId IS NULL OR s.BranchId = @BranchId)
-        AND (@StoreId IS NULL OR po.StoreId = @StoreId)
+        AND (@StoreId IS NULL OR ISNULL(po.StoreId, g.StoreId) = @StoreId)
         AND (@VendorId IS NULL OR g.VendorId = @VendorId)
         AND (@InvoiceNo IS NULL OR g.InvoiceNo LIKE '%' + @InvoiceNo + '%')
         AND (@InvoiceDateStart IS NULL OR g.DateAndTime >= @InvoiceDateStart)
@@ -132,21 +132,21 @@ BEGIN
         ISNULL(g.DateAndTime, g.CreatedOn) AS InvoiceDate,
         ISNULL(g.InvoiceNo, '') AS InvoiceNo,
         g.VendorId,
-        v.Name AS VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) AS VendorName,
         ISNULL(agg.Amount, 0) AS Amount,
         ISNULL(agg.AdvanceTax, 0) AS AdvanceTax,
         ISNULL(agg.Discount, 0) AS Discount,
         ISNULL(agg.TotalPrice, 0) AS TotalAmount,
         s.BranchId,
         b.Name AS BranchName,
-        po.StoreId,
+        ISNULL(po.StoreId, g.StoreId) AS StoreId,
         s.StoreName,
         po.CreatedOn AS InventoryDate,
         CAST(NULL AS NVARCHAR(50)) AS ReportType,
         CAST(NULL AS NVARCHAR(50)) AS InvoiceType
     FROM Inv.GoodsReceivingNotes g
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     OUTER APPLY (

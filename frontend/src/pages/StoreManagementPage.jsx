@@ -61,11 +61,14 @@ const StoreManagementPage = () => {
     fetchLocationLookup();
   }, []);
 
+  // getAllStores() (storeApi.js) already normalizes the raw Id/Name/ParentId/... API shape
+  // to storeId/storeName/parentStoreName/... that this page's filter, table, and edit form
+  // expect (mirroring StoreCreateRequest/StoreUpdateRequest) - no local mapping needed here.
   const fetchStores = async () => {
     setLoading(true);
     try {
       const data = await getAllStores();
-      setStores(data);
+      setStores(data || []);
     } catch (error) {
       console.error('Error fetching stores:', error);
       alert('Failed to fetch stores');

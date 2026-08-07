@@ -5,6 +5,10 @@ import inventoryApi from '../services/inventoryApi';
 
 const GRNPage = () => {
   const [grns, setGRNs] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
   const [lookupData, setLookupData] = useState({
     vendors: [],
     stockTypes: [],
@@ -24,24 +28,44 @@ const GRNPage = () => {
   const [selectedItems, setSelectedItems] = useState([]);
 
   useEffect(() => {
-    fetchData();
+    loadLookups();
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    loadGRNs();
+  }, [currentPage, entriesPerPage, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entriesPerPage, searchTerm]);
+
+  const loadLookups = async () => {
     try {
-      const [grnsData, lookup, invLookup] = await Promise.all([
-        grnApi.getAll(),
+      const [lookup, invLookup] = await Promise.all([
         grnApi.getLookupData(),
         inventoryApi.getLookupData()
       ]);
 
-      setGRNs(grnsData);
       setLookupData({
         ...lookup,
         items: invLookup.items
       });
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('Error fetching lookup data:', err);
+    }
+  };
+
+  const loadGRNs = async () => {
+    try {
+      const response = await grnApi.getAll({
+        pageNumber: currentPage,
+        pageSize: entriesPerPage,
+        search: searchTerm.trim() || undefined
+      });
+      setGRNs(response.items);
+      setTotalCount(response.totalCount);
+    } catch (err) {
+      console.error('Error fetching GRNs:', err);
     }
   };
 
@@ -168,7 +192,7 @@ const GRNPage = () => {
       setSelectedPO('');
       setSelectedPODetails(null);
       setItems([]);
-      fetchData();
+      loadGRNs();
     } catch (err) {
       console.error('Error saving GRN:', err);
       alert(err.response?.data?.message || 'Failed to save GRN');
@@ -181,7 +205,7 @@ const GRNPage = () => {
     }
     try {
       await grnApi.delete(id);
-      fetchData();
+      loadGRNs();
     } catch (err) {
       console.error('Error deleting GRN:', err);
       alert(err.response?.data?.message || 'Failed to delete GRN');
@@ -457,16 +481,23 @@ const GRNPage = () => {
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700">Show</span>
-            <select className="px-3 py-1 border border-gray-300 rounded-md">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
+            <select
+              value={entriesPerPage}
+              onChange={(e) => setEntriesPerPage(Number(e.target.value))}
+              className="px-3 py-1 border border-gray-300 rounded-md"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
             </select>
             <span className="text-sm text-gray-700">entries</span>
           </div>
           <div>
             <input
               type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search:"
               className="px-3 py-2 border border-gray-300 rounded-md"
             />
@@ -488,14 +519,14 @@ const GRNPage = () => {
               {grns.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                    Showing 0 to 0 of 0 entries
+                    No data available in table
                   </td>
                 </tr>
               ) : (
                 grns.map((grn) => (
                   <tr key={grn.id}>
                     <td className="px-6 py-4 text-sm">{grn.invoiceNo || '-'}</td>
-                    <td className="px-6 py-4 text-sm">{grn.poNumber}</td>
+                    <td className="px-6 py-4 text-sm">{grn.poNumber || '-'}</td>
                     <td className="px-6 py-4 text-sm">{grn.stockTypeName || '-'}</td>
                     <td className="px-6 py-4 text-sm">
                       {grn.dateAndTime ? new Date(grn.dateAndTime).toLocaleString() : '-'}
@@ -508,6 +539,35 @@ const GRNPage = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-col gap-3 mt-4 md:flex-row md:items-center md:justify-between">
+          <div className="text-sm text-gray-700">
+            {totalCount === 0
+              ? 'Showing 0 to 0 of 0 entries'
+              : `Showing ${(currentPage - 1) * entriesPerPage + 1} to ${Math.min(currentPage * entriesPerPage, totalCount)} of ${totalCount} entries`}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            <span className="text-sm text-gray-700">
+              {currentPage} / {Math.max(1, Math.ceil(totalCount / entriesPerPage))}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.max(1, Math.ceil(totalCount / entriesPerPage))))}
+              disabled={currentPage >= Math.ceil(totalCount / entriesPerPage)}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

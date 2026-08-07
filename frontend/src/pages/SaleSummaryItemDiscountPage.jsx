@@ -7,14 +7,19 @@ const SaleSummaryItemDiscountPage = () => {
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [selectedStore, setSelectedStore] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  // No default date pre-fill - defaulting to "today" guarantees zero results against
+  // historical data (the exact bug already fixed this session on the Purchase Summary and
+  // Sale Summary Wrt Stock WO Discount pages). Blank means the backend applies no date
+  // filter until the user picks one.
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedItem, setSelectedItem] = useState('');
   const [summaries, setSummaries] = useState([]);
   const [totals, setTotals] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchStores();
@@ -26,9 +31,6 @@ const SaleSummaryItemDiscountPage = () => {
     try {
       const response = await getAllStores();
       setStores(response);
-      if (response.length > 0) {
-        setSelectedStore(response[0].storeName || '');
-      }
     } catch (error) {
       console.error('Error fetching stores:', error);
     }
@@ -88,10 +90,13 @@ const SaleSummaryItemDiscountPage = () => {
   };
 
   // Pagination
+  const filteredSummaries = summaries.filter((summary) =>
+    summary.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = summaries.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(summaries.length / itemsPerPage);
+  const currentItems = filteredSummaries.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredSummaries.length / itemsPerPage);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -103,7 +108,7 @@ const SaleSummaryItemDiscountPage = () => {
             onClick={handleSearch}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            Export
+            Generate Report
           </button>
         </div>
 
@@ -181,7 +186,15 @@ const SaleSummaryItemDiscountPage = () => {
             <span className="text-sm">entries</span>
           </div>
           <div className="text-sm">
-            Search: <input type="text" className="px-2 py-1 border border-gray-300 rounded" />
+            Search: <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-2 py-1 border border-gray-300 rounded"
+            />
           </div>
         </div>
 

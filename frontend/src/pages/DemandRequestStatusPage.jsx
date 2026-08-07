@@ -24,7 +24,7 @@ const DemandRequestStatusPage = () => {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
@@ -167,7 +167,7 @@ const DemandRequestStatusPage = () => {
                   onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                   className="rounded-md border border-slate-200 px-2 py-1 text-sm"
                 >
-                  {[10, 25, 50].map((size) => (
+                  {[5, 10, 25, 50].map((size) => (
                     <option key={size} value={size}>{size}</option>
                   ))}
                 </select>

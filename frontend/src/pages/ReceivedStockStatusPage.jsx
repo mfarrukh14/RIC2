@@ -48,9 +48,10 @@ const ReceivedStockStatusPage = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyEntries, setHistoryEntries] = useState([]);
@@ -77,7 +78,6 @@ const ReceivedStockStatusPage = () => {
 
   useEffect(() => {
     loadLookups();
-    loadRequests();
   }, []);
 
   // Branch filter is always scoped to the logged-in user's own branch.
@@ -107,8 +107,17 @@ const ReceivedStockStatusPage = () => {
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll();
-      setRequests(data);
+      const response = await demandRequestApi.getAll({
+        statuses: 'Received',
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: currentPage,
+        pageSize: entriesPerPage
+      });
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading received stock records:', requestError);
       setError('Failed to load received stock records.');
@@ -117,32 +126,17 @@ const ReceivedStockStatusPage = () => {
     }
   };
 
-  const filteredRequests = useMemo(() => {
-    const receivedOnly = requests.filter((request) => (request.status || '').toLowerCase() === 'received');
-
-    return receivedOnly.filter((request) => {
-      const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
-      const matchesStore = !filters.requestingStoreId || String(request.requestingStoreId) === String(filters.requestingStoreId);
-      const matchesStockType = !filters.stockTypeId || String(request.stockTypeId) === String(filters.stockTypeId);
-      const matchesSearch = !searchTerm.trim() || [
-        request.drNo,
-        request.indentNo,
-        request.requestedStoreName,
-        request.itemSummary,
-        request.status
-      ].some((value) => (value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()));
-
-      return matchesBranch && matchesStore && matchesStockType && matchesSearch;
-    });
-  }, [filters.branchId, filters.requestingStoreId, filters.stockTypeId, requests, searchTerm]);
+  useEffect(() => {
+    loadRequests();
+  }, [entriesPerPage, currentPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [entriesPerPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pageItems = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -152,8 +146,26 @@ const ReceivedStockStatusPage = () => {
     }));
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        statuses: 'Received',
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting received stock records:', exportError);
+      setError('Failed to export received stock records.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       request.drNo,
       request.stockTypeName || '',
       request.requestedStoreName || '',
@@ -383,8 +395,8 @@ const ReceivedStockStatusPage = () => {
   const currentLifeCycleEntries = filteredLifeCycleEntries.slice(lifeCycleStartIndex, lifeCycleStartIndex + lifeCycleEntriesPerPage);
   const lifeCycleShowingFrom = filteredLifeCycleEntries.length === 0 ? 0 : lifeCycleStartIndex + 1;
   const lifeCycleShowingTo = Math.min(lifeCycleStartIndex + lifeCycleEntriesPerPage, filteredLifeCycleEntries.length);
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -456,7 +468,7 @@ const ReceivedStockStatusPage = () => {
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <span>Show</span>
               <select value={entriesPerPage} onChange={(event) => setEntriesPerPage(Number(event.target.value))} className="rounded-md border border-slate-200 px-2 py-1 text-sm">
-                {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+                {[5, 10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
               </select>
               <span>entries</span>
             </div>
@@ -544,7 +556,7 @@ const ReceivedStockStatusPage = () => {
               </div>
 
               <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries</div>
+                <div>Showing {showingFrom} to {showingTo} of {totalCount} entries</div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={currentPage === 1} className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50">‹</button>
                   <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>

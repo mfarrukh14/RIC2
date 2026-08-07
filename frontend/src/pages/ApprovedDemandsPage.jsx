@@ -69,9 +69,10 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
   const [dispatchDetail, setDispatchDetail] = useState('');
   const [submittingDispatch, setSubmittingDispatch] = useState(false);
   const [dispatchError, setDispatchError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -95,7 +96,6 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
 
   useEffect(() => {
     loadLookups();
-    loadRequests();
   }, []);
 
   // Branch filter is always scoped to the logged-in user's own branch.
@@ -120,13 +120,38 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
     }
   };
 
-  const loadRequests = async () => {
+  // This page tracks a demand once it's been acted on (approved, dispatched - fully or
+  // partially - and issued) through to receipt - not just the "Approved" status.
+  const APPROVED_STATUSES = 'Approved,Partial Issued,Issued,Received';
+
+  // Dispatching removes a row from this Approved/Partial-Issued list - that can leave the
+  // current page number pointing past the end of the now-shorter result set, which the
+  // backend legitimately answers with zero rows, making the table look "cleared" until
+  // something resets the page (a hard refresh resets currentPage back to 1, which is why
+  // that "fixes" it). Self-correct instead of requiring a refresh.
+  const loadRequests = async (pageToLoad = currentPage) => {
     setLoading(true);
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll();
-      setRequests(data);
+      const params = {
+        statuses: APPROVED_STATUSES,
+        branchId: filters.branchId || undefined,
+        requestedStoreId: filters.requestedStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageSize: entriesPerPage
+      };
+      let response = await demandRequestApi.getAll({ ...params, pageNumber: pageToLoad });
+
+      if (response.items.length === 0 && response.totalCount > 0 && pageToLoad > 1) {
+        const lastValidPage = Math.max(1, Math.ceil(response.totalCount / entriesPerPage));
+        response = await demandRequestApi.getAll({ ...params, pageNumber: lastValidPage });
+        setCurrentPage(lastValidPage);
+      }
+
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading approved demands:', requestError);
       setError('Failed to load approved demands.');
@@ -135,35 +160,17 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
     }
   };
 
-  const filteredRequests = useMemo(() => {
-    // This page tracks a demand once it's been acted on (approved, dispatched - fully or
-    // partially - and issued) through to receipt - not just the "Approved" status.
-    const approvedOnly = requests.filter((request) => ['approved', 'partial issued', 'issued', 'received'].includes((request.status || '').toLowerCase()));
-
-    return approvedOnly.filter((request) => {
-      const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
-      const matchesStore = !filters.requestedStoreId || String(request.requestedStoreId) === String(filters.requestedStoreId);
-      const matchesStockType = !filters.stockTypeId || String(request.stockTypeId) === String(filters.stockTypeId);
-      const matchesSearch = !searchTerm.trim() || [
-        request.drNo,
-        request.indentNo,
-        request.stockTypeName,
-        request.requestingBranchName,
-        request.itemSummary,
-        request.status
-      ].some((value) => (value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()));
-
-      return matchesBranch && matchesStore && matchesStockType && matchesSearch;
-    });
-  }, [filters.branchId, filters.requestedStoreId, filters.stockTypeId, requests, searchTerm]);
+  useEffect(() => {
+    loadRequests();
+  }, [entriesPerPage, currentPage, filters.branchId, filters.requestedStoreId, filters.stockTypeId, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [entriesPerPage, filters.branchId, filters.requestedStoreId, filters.stockTypeId, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pageItems = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -173,8 +180,26 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
     }));
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        statuses: APPROVED_STATUSES,
+        branchId: filters.branchId || undefined,
+        requestedStoreId: filters.requestedStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting approved demands:', exportError);
+      setError('Failed to export approved demands.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       `${request.drNo} / ${request.indentNo || ''}`,
       request.stockTypeName || '',
       request.requestingBranchName,
@@ -560,8 +585,8 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
   const lifeCycleShowingFrom = filteredLifeCycleEntries.length === 0 ? 0 : lifeCycleStartIndex + 1;
   const lifeCycleShowingTo = Math.min(lifeCycleStartIndex + lifeCycleEntriesPerPage, filteredLifeCycleEntries.length);
 
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -641,7 +666,7 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
                 onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-sm"
               >
-                {[10, 25, 50].map((size) => (
+                {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>{size}</option>
                 ))}
               </select>
@@ -777,7 +802,7 @@ const ApprovedDemandsPage = ({ onGeneratePurchaseRequisition }) => {
               </div>
 
               <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries</div>
+                <div>Showing {showingFrom} to {showingTo} of {totalCount} entries</div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"

@@ -281,12 +281,14 @@ namespace InventoryManagement.API.Services
         }
 
         // Guards against returning more than is actually on hand, same check used
-        // for stock adjustments and demand-request issuance.
+        // for stock adjustments and demand-request issuance. Reads/writes
+        // Pharmacy.PharmacyMedicinesStocks - the live ledger, not Inv.Stocks (see
+        // Stock_Procedures.sql header for why).
         private async Task DecrementStoreStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, string itemName, int storeId, int quantity)
         {
             int available;
             using (var selectCommand = new SqlCommand(
-                "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                "SELECT ISNULL(TotalItemsInStock, 0) FROM Pharmacy.PharmacyMedicinesStocks WHERE ItemId = @ItemId AND StoreId = @StoreId;",
                 connection, transaction))
             {
                 selectCommand.Parameters.AddWithValue("@ItemId", itemId);
@@ -301,7 +303,7 @@ namespace InventoryManagement.API.Services
             }
 
             using var updateCommand = new SqlCommand(
-                "UPDATE Inv.Stocks SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;",
+                "UPDATE Pharmacy.PharmacyMedicinesStocks SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId;",
                 connection, transaction);
             updateCommand.Parameters.AddWithValue("@ItemId", itemId);
             updateCommand.Parameters.AddWithValue("@StoreId", storeId);

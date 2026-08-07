@@ -107,7 +107,7 @@ namespace InventoryManagement.Api.Services
 
             return serverName.Equals(".", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals("(local)", StringComparison.OrdinalIgnoreCase)
-                || serverName.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || serverName.Equals("10.10.10.35", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
                 || serverName.Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase)
                 || normalizedDataSource.StartsWith("(localdb)", StringComparison.OrdinalIgnoreCase);
@@ -644,11 +644,17 @@ END;";
                 "SurgicalItemGroups", "SampleCollectionConsumptionItems"
             };
 
-            // Lookup tables backed by Inv views over HMS tables
+            // Lookup tables backed by Inv views over HMS tables.
+            // NOTE: "Rooms" is deliberately excluded. Unlike the others, dbo.Rooms
+            // (RID/BID/FID, joined to dbo.Building/dbo.Floors) and Inv.Rooms (Id,
+            // denormalized Building/Floor text) are two distinct tables that several
+            // AssetAllocation stored procs join simultaneously - blanket-rewriting
+            // "dbo.Rooms" to "Inv.Rooms" here corrupts those joins (invalid column
+            // RID/BID/FID). Scripts must spell out "Inv.Rooms" or "dbo.Rooms" explicitly.
             var viewTables = new[]
             {
                 "Countries", "StateOrProvinces", "Branches", "Cities",
-                "Departments", "SubDepartments", "Rooms"
+                "Departments", "SubDepartments"
             };
 
             // Replace schema-qualified references for store tables

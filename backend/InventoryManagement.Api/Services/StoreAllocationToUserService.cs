@@ -6,7 +6,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStoreAllocationToUserService
     {
-        Task<IEnumerable<StoreAllocationToUser>> GetAllAsync();
+        Task<PagedResult<StoreAllocationToUser>> GetAllAsync(int pageNumber, int pageSize, string? search);
         Task<StoreAllocationToUser?> GetByIdAsync(int id);
         Task<StoreAllocationToUser> CreateAsync(StoreAllocationToUserCreateRequest request);
         Task UpdateAsync(int id, StoreAllocationToUserUpdateRequest request);
@@ -26,12 +26,17 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StoreAllocationToUser>> GetAllAsync()
+        public async Task<PagedResult<StoreAllocationToUser>> GetAllAsync(int pageNumber, int pageSize, string? search)
         {
+            var result = new PagedResult<StoreAllocationToUser>
+            {
+                PageNumber = pageNumber < 1 ? 1 : pageNumber,
+                PageSize = pageSize < 1 ? 5 : Math.Min(pageSize, 100)
+            };
+            var allocations = new List<StoreAllocationToUser>();
+
             try
             {
-                var allocations = new List<StoreAllocationToUser>();
-
                 using (var connection = new SqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -39,18 +44,27 @@ namespace InventoryManagement.Api.Services
                     using (var command = new SqlCommand("StoreAllocationToUser_GetAll", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@PageNumber", result.PageNumber);
+                        command.Parameters.AddWithValue("@PageSize", result.PageSize);
+                        command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
+                                if (result.TotalCount == 0)
+                                {
+                                    result.TotalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+                                }
+
                                 allocations.Add(MapReaderToAllocation(reader));
                             }
                         }
                     }
                 }
 
-                return allocations;
+                result.Items = allocations;
+                return result;
             }
             catch (Exception ex)
             {
@@ -233,6 +247,7 @@ ORDER BY Text;";
                 UserId = reader.IsDBNull(reader.GetOrdinal("UserId")) ? null : reader.GetInt32(reader.GetOrdinal("UserId")),
                 EmployeeName = reader.GetString(reader.GetOrdinal("EmployeeName")),
                 IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                IsDeleted = reader.GetBoolean(reader.GetOrdinal("IsDeleted")),
                 CreatedById = reader.IsDBNull(reader.GetOrdinal("CreatedById")) ? null : reader.GetInt32(reader.GetOrdinal("CreatedById")),
                 CreatedOn = reader.GetDateTime(reader.GetOrdinal("CreatedOn")),
                 ModifiedById = reader.IsDBNull(reader.GetOrdinal("ModifiedById")) ? null : reader.GetInt32(reader.GetOrdinal("ModifiedById")),

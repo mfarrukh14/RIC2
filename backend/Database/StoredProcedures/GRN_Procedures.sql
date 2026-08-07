@@ -5,12 +5,26 @@ IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'GRN_GetAll')
     DROP PROCEDURE [dbo].[GRN_GetAll]
 GO
 
+-- Paginated - Inv.GoodsReceivingNotes has 30,000+ rows since the iHealthCure
+-- migration (see MigratePurchaseSummary_iHealthCure_HMSMAIN_TF.sql); loading
+-- them all on every page view was the same "load everything" pattern already
+-- fixed for demand requests. @PageNumber/@PageSize default to page 1 of 5,
+-- matching that same convention. TotalCount comes back via COUNT(*) OVER()
+-- so the frontend can render "Showing X to Y of Z" and Prev/Next without a
+-- second round trip.
 CREATE PROCEDURE [dbo].[GRN_GetAll]
+    @PageNumber INT = 1,
+    @PageSize INT = 5,
+    @Search NVARCHAR(200) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 5 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 5 ELSE @PageSize END;
+    DECLARE @SearchTrimmed NVARCHAR(200) = NULLIF(LTRIM(RTRIM(@Search)), '');
+
+    SELECT
         g.Id,
         g.PurchaseOrderId,
         g.PONumber,
@@ -18,15 +32,24 @@ BEGIN
         g.StockTypeId,
         st.Name as StockTypeName,
         g.VendorId,
-        v.Name as VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) as VendorName,
         g.DateAndTime,
         g.IsActive,
-        g.CreatedOn
+        g.CreatedOn,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.GoodsReceivingNotes g
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     LEFT JOIN Inv.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.IsActive = 1
-    ORDER BY g.CreatedOn DESC;
+        AND (
+            @SearchTrimmed IS NULL
+            OR ISNULL(g.InvoiceNo, '') LIKE '%' + @SearchTrimmed + '%'
+            OR ISNULL(g.PONumber, '') LIKE '%' + @SearchTrimmed + '%'
+            OR ISNULL(st.Name, '') LIKE '%' + @SearchTrimmed + '%'
+            OR ISNULL(COALESCE(v.Name, g.DenormalizedVendorName), '') LIKE '%' + @SearchTrimmed + '%'
+        )
+    ORDER BY g.CreatedOn DESC, g.Id DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 
@@ -44,12 +67,12 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Get header
-    SELECT 
+    SELECT
         g.Id,
         g.PurchaseOrderId,
         g.PONumber,
         g.VendorId,
-        v.Name as VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) as VendorName,
         g.InvoiceNo,
         g.StockTypeId,
         st.Name as StockTypeName,
@@ -65,17 +88,24 @@ BEGIN
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     LEFT JOIN Inv.StockTypes st ON g.StockTypeId = st.Id
     WHERE g.Id = @Id;
-    
+
     -- Get items
+    -- ItemName/ManufacturerName fall back to the denormalized text columns for
+    -- rows migrated from iHealthCure (see
+    -- MigratePurchaseSummary_iHealthCure_HMSMAIN_TF.sql) - ~87% of migrated
+    -- lines are Medicine/Fee purchases with no live MedicineId/SubServiceId/
+    -- ManufacturerId FK (no safe match existed at migration time), so without
+    -- this fallback COALESCE(i.Name, med.MedicineFullName, f.Name) resolves to
+    -- NULL for all of them.
     SELECT
         gi.Id,
         gi.GRNId,
         gi.ItemId,
         gi.MedicineId,
         gi.SubServiceId,
-        COALESCE(i.Name, med.MedicineFullName, f.Name) as ItemName,
+        COALESCE(i.Name, med.MedicineFullName, f.Name, gi.DenormalizedItemName, '(item not found)') as ItemName,
         gi.ManufacturerId,
-        m.Name as ManufacturerName,
+        COALESCE(m.Name, gi.DenormalizedManufacturerName) as ManufacturerName,
         gi.MfgDate,
         gi.ExpiryDate,
         gi.RegistrationNumber,
@@ -106,7 +136,7 @@ BEGIN
     LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Pharmacy.Medicines med ON gi.MedicineId = med.MedicineId
     LEFT JOIN Account.Fees f ON gi.SubServiceId = f.Id
-    LEFT JOIN Inv.Manufacturers m ON gi.ManufacturerId = m.Id
+    LEFT JOIN Inv.PharmacyManufacturers m ON gi.ManufacturerId = m.Id
     WHERE gi.GRNId = @Id;
 END
 GO
@@ -290,23 +320,30 @@ CREATE PROCEDURE [dbo].[GRN_GetLookupData]
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     -- Vendors
     SELECT Id, Name
     FROM Inv.Vendors
-    WHERE IsActive = 1 
+    WHERE IsActive = 1
     ORDER BY Name;
-    
+
     -- Stock Types
-    SELECT Id, Name 
-    FROM Inv.StockTypes 
-    WHERE IsActive = 1 
+    SELECT Id, Name
+    FROM Inv.StockTypes
+    WHERE IsActive = 1
     ORDER BY Name;
-    
+
     -- Manufacturers
-    SELECT Id, Name 
-    FROM Inv.Manufacturers 
-    WHERE IsActive = 1 
+    SELECT Id, Name
+    FROM Inv.PharmacyManufacturers
+    WHERE IsActive = 1
     ORDER BY Name;
+
+    -- Purchase Orders available to receive against
+    SELECT po.PurchaseOrderId AS Id, po.PONumber, v.Name AS VendorName
+    FROM Inv.PurchaseOrders po
+    LEFT JOIN Inv.Vendors v ON v.Id = po.VendorId
+    WHERE po.IsActive = 1
+    ORDER BY po.CreatedOn DESC;
 END
 GO

@@ -105,8 +105,9 @@ const PlaceDemandPage = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [formError, setFormError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -165,11 +166,11 @@ const PlaceDemandPage = () => {
 
   useEffect(() => {
     loadRequests();
-  }, [filters.dateFrom, filters.dateTo, filters.branchId, filters.requestingStoreId, filters.stockTypeId]);
+  }, [filters.dateFrom, filters.dateTo, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm, entriesPerPage, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, entriesPerPage, requests]);
+  }, [searchTerm, entriesPerPage, filters.dateFrom, filters.dateTo, filters.branchId, filters.requestingStoreId, filters.stockTypeId]);
 
   const loadLookups = async () => {
     try {
@@ -195,14 +196,18 @@ const PlaceDemandPage = () => {
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll({
+      const response = await demandRequestApi.getAll({
         dateFrom: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : undefined,
         dateTo: filters.dateTo ? new Date(filters.dateTo).toISOString() : undefined,
         branchId: filters.branchId || undefined,
         requestingStoreId: filters.requestingStoreId || undefined,
-        stockTypeId: filters.stockTypeId || undefined
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: currentPage,
+        pageSize: entriesPerPage
       });
-      setRequests(data);
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading demand requests:', requestError);
       setError('Failed to load demand requests.');
@@ -211,25 +216,9 @@ const PlaceDemandPage = () => {
     }
   };
 
-  const filteredRequests = requests.filter((request) => {
-    if (!searchTerm.trim()) {
-      return true;
-    }
-
-    const search = searchTerm.trim().toLowerCase();
-    return [
-      request.drNo,
-      request.indentNo,
-      request.requestingBranchName,
-      request.requestedStoreName,
-      request.stockTypeName,
-      request.status
-    ].some((value) => (value || '').toLowerCase().includes(search));
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pagedRequests = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pagedRequests = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -474,8 +463,27 @@ const PlaceDemandPage = () => {
     }
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        dateFrom: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : undefined,
+        dateTo: filters.dateTo ? new Date(filters.dateTo).toISOString() : undefined,
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting demand requests:', exportError);
+      setError('Failed to export demand requests.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       request.drNo,
       request.indentNo || '',
       request.stockTypeName || '',
@@ -502,8 +510,8 @@ const PlaceDemandPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -616,7 +624,7 @@ const PlaceDemandPage = () => {
                 onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-sm"
               >
-                {[10, 25, 50].map((size) => (
+                {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>
                     {size}
                   </option>
@@ -716,7 +724,7 @@ const PlaceDemandPage = () => {
 
               <div className="flex flex-col gap-3 px-6 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
                 <div>
-                  Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries
+                  Showing {showingFrom} to {showingTo} of {totalCount} entries
                 </div>
                 <div className="flex items-center gap-2">
                   <button

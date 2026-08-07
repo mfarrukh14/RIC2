@@ -77,7 +77,7 @@ BEGIN
         i.PackageSize
     FROM Inv.Items i
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN Inv.Brands b ON i.BrandId = b.Id
+    LEFT JOIN Data.Brands b ON i.BrandId = b.Id
     LEFT JOIN Inv.Packings p ON i.PackingId = p.Id
     LEFT JOIN Inv.ItemUnits u ON i.UnitId = u.Id
     LEFT JOIN Inv.Prices pr ON i.PriceId = pr.Id

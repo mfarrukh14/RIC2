@@ -1,5 +1,6 @@
 -- =============================================
--- Wire GRN (Inventory Receiving) into a real Purchase Order and into Inv.Stocks.
+-- Wire GRN (Inventory Receiving) into a real Purchase Order and into the live
+-- stock ledger Pharmacy.PharmacyMedicinesStocks.
 --
 -- Per user decision: GRN receiving is tied to a selected Purchase Order (not a
 -- standalone Store field like "Add Inventory"), and the store credited is the PO's
@@ -8,7 +9,12 @@
 -- placeholder). GetAllAsync/GetByIdAsync already read PurchaseOrderId as NOT NULL,
 -- confirming this was always the intended design, just never finished.
 --
--- Targets the live Inv schema (int PKs) that HMS_Jun26 actually runs.
+-- Targets Pharmacy.PharmacyMedicinesStocks, not Inv.Stocks - investigation found the
+-- latter is a one-time migrated snapshot the app's own features had been reading/
+-- writing in isolation, already diverged 44% from the live ledger the real HMS
+-- pharmacy operations actually update (see Stock_Procedures.sql header for the full
+-- writeup). That table has no BranchId/IsActive columns, and its product-key columns
+-- are ItemId/BranchMedicineId/BranchSubServiceId (not ItemId/MedicineId/SubServiceId).
 -- =============================================
 
 IF OBJECT_ID('dbo.GRN_Insert', 'P') IS NOT NULL
@@ -116,26 +122,27 @@ BEGIN
 
     DECLARE @NewItemId INT = SCOPE_IDENTITY();
 
-    -- Credit Inv.Stocks for the store on the GRN's linked Purchase Order - same
-    -- upsert pattern as AddStockAsync / InventoryDetail_Insert's fix.
-    DECLARE @StoreId INT, @BranchId INT;
-    SELECT @StoreId = po.StoreId, @BranchId = ps.BranchId
+    -- Credit Pharmacy.PharmacyMedicinesStocks for the store on the GRN's linked
+    -- Purchase Order - same upsert pattern as AddStockAsync / InventoryDetail_Insert's fix.
+    DECLARE @StoreId INT;
+    SELECT @StoreId = po.StoreId
     FROM Inv.GoodsReceivingNotes g
     INNER JOIN Inv.PurchaseOrders po ON po.PurchaseOrderId = g.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = po.StoreId
     WHERE g.Id = @GRNId;
 
     IF @ReceivedQuantity IS NOT NULL AND @ReceivedQuantity > 0 AND @StoreId IS NOT NULL
     BEGIN
-        IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE StoreId = @StoreId AND IsActive = 1
-            AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId)))
-            UPDATE Inv.Stocks
-            SET TotalItems = ISNULL(TotalItems, 0) + @ReceivedQuantity, ModifiedOn = GETDATE()
-            WHERE StoreId = @StoreId AND IsActive = 1
-                AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND MedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND SubServiceId = @SubServiceId));
+        IF EXISTS (SELECT 1 FROM Pharmacy.PharmacyMedicinesStocks WHERE StoreId = @StoreId
+            AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId)))
+            UPDATE Pharmacy.PharmacyMedicinesStocks
+            SET TotalItemsInStock = ISNULL(TotalItemsInStock, 0) + @ReceivedQuantity, ModifiedOn = GETDATE()
+            WHERE StoreId = @StoreId
+                AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));
         ELSE
-            INSERT INTO Inv.Stocks (ItemId, MedicineId, SubServiceId, StoreId, BranchId, TotalItems, IsActive, CreatedOn)
-            VALUES (@ItemId, @MedicineId, @SubServiceId, @StoreId, @BranchId, @ReceivedQuantity, 1, GETDATE());
+            INSERT INTO Pharmacy.PharmacyMedicinesStocks (ItemId, BranchMedicineId, BranchSubServiceId, StoreId, TotalItemsInStock, MinimumPanicLevel, TotalItemsInTransition, TypeBit, CreatedBy, CreatedOn)
+            VALUES (@ItemId, @MedicineId, @SubServiceId, @StoreId, @ReceivedQuantity, 0, 0,
+                CASE WHEN @ItemId IS NOT NULL THEN 15 WHEN @MedicineId IS NOT NULL THEN 4 WHEN @SubServiceId IS NOT NULL THEN 5 ELSE NULL END,
+                1, GETDATE());
     END
 
     COMMIT TRANSACTION;
@@ -161,15 +168,15 @@ BEGIN
     -- Reverse every line's credit before deactivating the whole receipt, same as
     -- Inventory_Delete.
     UPDATE s
-    SET s.TotalItems = ISNULL(s.TotalItems, 0) - gi.ReceivedQuantity, s.ModifiedOn = GETDATE()
-    FROM Inv.Stocks s
+    SET s.TotalItemsInStock = ISNULL(s.TotalItemsInStock, 0) - gi.ReceivedQuantity, s.ModifiedOn = GETDATE()
+    FROM Pharmacy.PharmacyMedicinesStocks s
     INNER JOIN Inv.GRNItems gi
         ON (gi.ItemId IS NOT NULL AND gi.ItemId = s.ItemId)
-        OR (gi.MedicineId IS NOT NULL AND gi.MedicineId = s.MedicineId)
-        OR (gi.SubServiceId IS NOT NULL AND gi.SubServiceId = s.SubServiceId)
+        OR (gi.MedicineId IS NOT NULL AND gi.MedicineId = s.BranchMedicineId)
+        OR (gi.SubServiceId IS NOT NULL AND gi.SubServiceId = s.BranchSubServiceId)
     INNER JOIN Inv.GoodsReceivingNotes g ON g.Id = gi.GRNId
     INNER JOIN Inv.PurchaseOrders po ON po.PurchaseOrderId = g.PurchaseOrderId
-    WHERE g.Id = @Id AND s.StoreId = po.StoreId AND s.IsActive = 1
+    WHERE g.Id = @Id AND s.StoreId = po.StoreId
       AND gi.ReceivedQuantity IS NOT NULL AND gi.ReceivedQuantity > 0;
 
     UPDATE Inv.GoodsReceivingNotes

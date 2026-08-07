@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { attachUserIdHeader } from './httpAuth';
 
-const API_BASE_URL = 'http://localhost:5100/api'; // Backend is running on port 5100
+const API_BASE_URL = 'http://10.10.10.35:5100/api'; // Backend is running on port 5100
 
 const api = axios.create({
   baseURL: API_BASE_URL,

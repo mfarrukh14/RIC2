@@ -36,7 +36,7 @@ SELECT
     aa.Quantity
 FROM dbo.AssetAllocations aa
 LEFT JOIN dbo.Users u ON aa.UserId = u.Id
-LEFT JOIN dbo.Rooms r ON aa.RoomId = r.Id
+LEFT JOIN Inv.Rooms r ON aa.RoomId = r.Id
 LEFT JOIN dbo.InventoryItems ii ON aa.InventoryItemId = ii.Id
 WHERE aa.IsActive = 1 AND aa.IsDeleted = 0
 ORDER BY aa.AllocatedDate DESC;

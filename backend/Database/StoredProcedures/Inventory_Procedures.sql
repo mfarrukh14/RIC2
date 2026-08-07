@@ -275,7 +275,7 @@ GO
 -- Inventory_Delete / InventoryDetail_Insert / InventoryDetail_Update /
 -- InventoryDetail_Delete are
 -- defined in InventoryDetail_StockEffect_Live.sql, not here - that version
--- also credits/reverses Inv.Stocks (which these never did) and supports
+-- also credits/reverses the live stock ledger (which these never did) and supports
 -- MedicineId/SubServiceId. Do not redefine them in this file: alphabetically
 -- "Inventory_Procedures.sql" sorts AFTER "InventoryDetail_StockEffect_Live.sql"
 -- and would silently overwrite the correct version on a fresh deploy.
@@ -314,6 +314,6 @@ BEGIN
     SELECT Id, Name FROM Inv.Categories WHERE IsActive = 1 ORDER BY Name;
     
     -- Brands
-    SELECT Id, Name FROM Inv.Brands WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Data.Brands WHERE IsActive = 1 ORDER BY Name;
 END
 GO

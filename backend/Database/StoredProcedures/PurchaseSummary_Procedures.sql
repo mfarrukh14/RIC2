@@ -19,19 +19,28 @@
 --   - Total = Qty * UnitPrice + AdvanceTax. Discount is NOT subtracted from Total
 --     (matches the old system's TotalPrice formula exactly - Discount is a
 --     separate, informational column).
---   - Old system UNIONed three separate item source tables (Items/BranchMedicines/
---     BranchFees) keyed by a TypeBit (4/5/15) because item master data was split
---     across tables there. The new schema already unifies all of that into
---     Inv.Items + Inv.ItemTypes, so the equivalent split is just a filter on
---     ItemTypeId/@ItemType - no UNION needed.
---   - Old system INNER JOINed Items (and Manufacturers) - a GRN line whose item no
---     longer exists is silently excluded, not shown as a placeholder. Matched here
---     with an INNER JOIN.
 --
--- Store note: the old Inventories table had its own StoreId column directly. The
--- new GoodsReceivingNotes table does not - store is only reachable via the linked
--- Purchase Order (Inv.PurchaseOrders.StoreId). A GRN with no linked PO therefore
--- has no resolvable store here, which the old system never had to deal with.
+-- MIGRATED-DATA support (see MigratePurchaseSummary_iHealthCure_HMSMAIN_TF.sql):
+--   - Old system UNIONed three separate item source tables (Items/BranchMedicines/
+--     BranchFees) keyed by a TypeBit (4/5/15). The migration could only build a
+--     safe live FK for the "Items" case (13% of rows) - Medicine/Fee purchases
+--     (87%) are migrated with GRNItems.SourceType set and their name carried as
+--     plain text in GRNItems.DenormalizedItemName, with no Inv.Items row at all.
+--     Items is therefore LEFT JOINed (was INNER), and ItemName/ItemTypeName fall
+--     back to the denormalized text / SourceType so migrated Medicine/Fee rows
+--     still show up instead of being silently dropped.
+--   - @ItemType has no separate "Fee" bucket in the UI (only All/Medicine/
+--     Disposable/Item) - Fee-typed rows fall into the "Item" bucket, same as
+--     any other non-Medicine/non-Disposable row.
+--   - VendorName falls back to GoodsReceivingNotes.DenormalizedVendorName when
+--     VendorId has no live match (see migration script header for why Vendors
+--     couldn't get a safe FK - not invented here, just not dropped).
+--   - StoreName/StoreId fall back to GoodsReceivingNotes.StoreId when there is
+--     no linked Purchase Order to resolve a store through (the old Inventories
+--     table had its own direct StoreId; migrated rows preserve that here).
+--
+-- Old system INNER JOINed Manufacturers too - not surfaced in this report's
+-- output at all, so no join is needed for it either way.
 -- =============================================
 CREATE OR ALTER PROCEDURE dbo.PurchaseSummary_GetAll
     @BranchId INT = NULL,
@@ -54,11 +63,11 @@ BEGIN
         g.DateAndTime AS PurchaseDate,
         gi.BatchNo,
         gi.ItemId,
-        i.Name AS ItemName,
-        po.StoreId,
+        COALESCE(i.Name, gi.DenormalizedItemName, '(item not found)') AS ItemName,
+        ISNULL(po.StoreId, g.StoreId) AS StoreId,
         s.StoreName,
         g.VendorId,
-        v.Name AS VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) AS VendorName,
         g.InvoiceNo,
         g.DateAndTime AS InvoiceDate,
         ISNULL(gi.ReceivedQuantity, 0) AS Quantity,
@@ -69,25 +78,25 @@ BEGIN
         s.BranchId,
         b.Name AS BranchName,
         i.ItemTypeId,
-        it.Name AS ItemTypeName,
+        COALESCE(it.Name, CASE WHEN gi.SourceType IN ('Medicine', 'Fee') THEN gi.SourceType ELSE NULL END) AS ItemTypeName,
         @ReportType AS ReportType
     FROM Inv.GRNItems gi
     JOIN Inv.GoodsReceivingNotes g ON gi.GRNId = g.Id
-    JOIN Inv.Items i ON gi.ItemId = i.Id
+    LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE g.IsActive = 1
         AND (@BranchId IS NULL OR s.BranchId = @BranchId)
-        AND (@StoreId IS NULL OR po.StoreId = @StoreId)
+        AND (@StoreId IS NULL OR ISNULL(po.StoreId, g.StoreId) = @StoreId)
         AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
         AND (
             @ItemType IS NULL OR @ItemType = 'All'
-            OR (@ItemType = 'Medicine' AND it.Name = 'Medicine')
+            OR (@ItemType = 'Medicine' AND (it.Name = 'Medicine' OR gi.SourceType = 'Medicine'))
             OR (@ItemType = 'Disposable' AND it.Name = 'Disposables')
-            OR (@ItemType = 'Item' AND (it.Name IS NULL OR it.Name NOT IN ('Medicine', 'Disposables')))
+            OR (@ItemType = 'Item' AND gi.SourceType <> 'Medicine' AND ISNULL(it.Name, '') <> 'Disposables')
         )
         AND (@ItemId IS NULL OR gi.ItemId = @ItemId)
         AND (@InvoiceNo IS NULL OR g.InvoiceNo LIKE '%' + @InvoiceNo + '%')
@@ -111,19 +120,19 @@ BEGIN
         ISNULL(SUM((ISNULL(gi.ReceivedQuantity, 0) * ISNULL(gi.UnitBuyingPrice, 0)) + ISNULL(gi.AdvanceTaxAmount, 0)), 0) AS TotalPrice
     FROM Inv.GRNItems gi
     JOIN Inv.GoodsReceivingNotes g ON gi.GRNId = g.Id
-    JOIN Inv.Items i ON gi.ItemId = i.Id
+    LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE g.IsActive = 1
         AND (@BranchId IS NULL OR s.BranchId = @BranchId)
-        AND (@StoreId IS NULL OR po.StoreId = @StoreId)
+        AND (@StoreId IS NULL OR ISNULL(po.StoreId, g.StoreId) = @StoreId)
         AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
         AND (
             @ItemType IS NULL OR @ItemType = 'All'
-            OR (@ItemType = 'Medicine' AND it.Name = 'Medicine')
+            OR (@ItemType = 'Medicine' AND (it.Name = 'Medicine' OR gi.SourceType = 'Medicine'))
             OR (@ItemType = 'Disposable' AND it.Name = 'Disposables')
-            OR (@ItemType = 'Item' AND (it.Name IS NULL OR it.Name NOT IN ('Medicine', 'Disposables')))
+            OR (@ItemType = 'Item' AND gi.SourceType <> 'Medicine' AND ISNULL(it.Name, '') <> 'Disposables')
         )
         AND (@ItemId IS NULL OR gi.ItemId = @ItemId)
         AND (@InvoiceNo IS NULL OR g.InvoiceNo LIKE '%' + @InvoiceNo + '%')
@@ -153,11 +162,11 @@ BEGIN
         g.DateAndTime AS PurchaseDate,
         gi.BatchNo,
         gi.ItemId,
-        i.Name AS ItemName,
-        po.StoreId,
+        COALESCE(i.Name, gi.DenormalizedItemName, '(item not found)') AS ItemName,
+        ISNULL(po.StoreId, g.StoreId) AS StoreId,
         s.StoreName,
         g.VendorId,
-        v.Name AS VendorName,
+        COALESCE(v.Name, g.DenormalizedVendorName) AS VendorName,
         g.InvoiceNo,
         g.DateAndTime AS InvoiceDate,
         ISNULL(gi.ReceivedQuantity, 0) AS Quantity,
@@ -168,13 +177,13 @@ BEGIN
         s.BranchId,
         b.Name AS BranchName,
         i.ItemTypeId,
-        it.Name AS ItemTypeName,
+        COALESCE(it.Name, CASE WHEN gi.SourceType IN ('Medicine', 'Fee') THEN gi.SourceType ELSE NULL END) AS ItemTypeName,
         CAST(NULL AS NVARCHAR(50)) AS ReportType
     FROM Inv.GRNItems gi
     JOIN Inv.GoodsReceivingNotes g ON gi.GRNId = g.Id
-    JOIN Inv.Items i ON gi.ItemId = i.Id
+    LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
-    LEFT JOIN Inv.PharmacyStores s ON po.StoreId = s.StoreId
+    LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
     LEFT JOIN Inv.Branches b ON s.BranchId = b.Id
     LEFT JOIN Inv.Vendors v ON g.VendorId = v.Id
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id

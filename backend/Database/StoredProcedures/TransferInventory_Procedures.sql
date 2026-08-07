@@ -104,14 +104,16 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Block transferring more than is actually on hand for this item in the
-    -- source store, per Inv.Stocks - the app's canonical live-balance table
-    -- (also used by Stock Consumption, Stock Audit, and the Stock search page).
+    -- source store, per Pharmacy.PharmacyMedicinesStocks - the live-balance table the
+    -- real HMS pharmacy operations update (also used by Stock Consumption, Stock Audit,
+    -- and the Stock search page - see Stock_Procedures.sql header for why it's not
+    -- Inv.Stocks).
     DECLARE @Available INT = 0;
     IF @ItemId IS NOT NULL
     BEGIN
-        SELECT @Available = ISNULL(SUM(TotalItems), 0)
-        FROM Inv.Stocks
-        WHERE ItemId = @ItemId AND StoreId = @FromStoreId AND IsActive = 1;
+        SELECT @Available = ISNULL(SUM(TotalItemsInStock), 0)
+        FROM Pharmacy.PharmacyMedicinesStocks
+        WHERE ItemId = @ItemId AND StoreId = @FromStoreId;
 
         IF @Quantity > @Available
         BEGIN
@@ -148,24 +150,25 @@ BEGIN
             INSERT INTO Inv.TransferInventoryItems (TransferInventoryId, ItemId, Quantity, Notes, IsActive, CreatedOn)
             VALUES (@NewId, @ItemId, @Quantity, @Notes, 1, GETDATE());
 
-            -- Move the balance in Inv.Stocks: decrement the source store,
-            -- increment (or create) the destination store's row.
-            UPDATE Inv.Stocks
-            SET TotalItems = TotalItems - @Quantity,
+            -- Move the balance in Pharmacy.PharmacyMedicinesStocks: decrement the source
+            -- store, increment (or create) the destination store's row. No BranchId
+            -- column on this table (branch is only reachable via the store).
+            UPDATE Pharmacy.PharmacyMedicinesStocks
+            SET TotalItemsInStock = TotalItemsInStock - @Quantity,
                 ModifiedOn = GETDATE()
-            WHERE ItemId = @ItemId AND StoreId = @FromStoreId AND IsActive = 1;
+            WHERE ItemId = @ItemId AND StoreId = @FromStoreId;
 
-            IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @ToStoreId AND IsActive = 1)
+            IF EXISTS (SELECT 1 FROM Pharmacy.PharmacyMedicinesStocks WHERE ItemId = @ItemId AND StoreId = @ToStoreId)
             BEGIN
-                UPDATE Inv.Stocks
-                SET TotalItems = ISNULL(TotalItems, 0) + @Quantity,
+                UPDATE Pharmacy.PharmacyMedicinesStocks
+                SET TotalItemsInStock = ISNULL(TotalItemsInStock, 0) + @Quantity,
                     ModifiedOn = GETDATE()
-                WHERE ItemId = @ItemId AND StoreId = @ToStoreId AND IsActive = 1;
+                WHERE ItemId = @ItemId AND StoreId = @ToStoreId;
             END
             ELSE
             BEGIN
-                INSERT INTO Inv.Stocks (ItemId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
-                VALUES (@ItemId, @Quantity, @BranchId, @ToStoreId, 1, @CreatedById, GETDATE());
+                INSERT INTO Pharmacy.PharmacyMedicinesStocks (ItemId, TotalItemsInStock, MinimumPanicLevel, TotalItemsInTransition, TypeBit, StoreId, CreatedBy, CreatedOn)
+                VALUES (@ItemId, @Quantity, 0, 0, 15, @ToStoreId, 1, GETDATE());
             END
         END
 
@@ -189,11 +192,10 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT ISNULL(SUM(TotalItems), 0) AS AvailableQuantity
-    FROM Inv.Stocks
+    SELECT ISNULL(SUM(TotalItemsInStock), 0) AS AvailableQuantity
+    FROM Pharmacy.PharmacyMedicinesStocks
     WHERE ItemId = @ItemId
-      AND StoreId = @StoreId
-      AND IsActive = 1;
+      AND StoreId = @StoreId;
 END
 GO
 

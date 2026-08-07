@@ -1,11 +1,32 @@
 -- =============================================
 -- Stock Search Stored Procedure
 --
--- Reads from the Inv.* schema (Inv.Stocks/Inv.Items/Inv.ItemTypes/Inv.Categories),
--- not the legacy dbo.Stocks/dbo.Items tables, which no longer exist. This must stay
--- in sync with InventoryManagement.Api.Services.StockService.CreateFallbackSearchCommand -
--- that C# query is used whenever this procedure is absent, and StockService.MapStockFromReader
--- expects the exact same result-set shape (including StockType/Location) from either path.
+-- Reads from Pharmacy.PharmacyMedicinesStocks - the live, actively-maintained
+-- stock ledger the real HMS pharmacy operations (dispense/sale/etc.) update -
+-- NOT Inv.Stocks, which is a one-time migrated snapshot this app's own
+-- features had been reading/writing in isolation ever since. Investigation
+-- before this rewrite found the two had already diverged: of the store+item
+-- pairs present in both, 44% disagreed on quantity, and Pharmacy.
+-- PharmacyMedicinesStocks had 18,869 store+item combinations Inv.Stocks
+-- didn't even have.
+--
+-- SCHEMA DIFFERENCES vs Inv.Stocks handled here:
+--   - No BranchId column - derived via a join to Pharmacy.PharmacyStores.
+--   - No IsActive column - every row is treated as active (no soft-delete
+--     concept exists at this table's grain).
+--   - TotalItemsInStock is DECIMAL, not INT - kept as decimal so partial-unit
+--     quantities aren't silently truncated.
+--   - Row identity is by TypeBit (15=Item/4=Medicine/5=Fee) + ItemId/
+--     BranchMedicineId/BranchSubServiceId - but BranchMedicineId/
+--     BranchSubServiceId are 100% NULL on every live row (the original
+--     iHealthCure migration into this table had no ID map for them either -
+--     see MigratePharmacyMedicinesStocks_HMSMAIN_TF.sql). For TypeBit 4/5
+--     rows (71% of the table), the only way to recover what item a row is
+--     for is by cross-referencing its SysBatchNo/BatchNo against the
+--     already-migrated Inv.GoodsReceivingNotes/Inv.GRNItems (SysBatchNo
+--     matches GoodsReceivingNotes.InvoiceNo, BatchNo matches
+--     GRNItems.BatchNo) - verified 18,691 of 18,869 otherwise-unresolvable
+--     rows (99%) recover a real name this way.
 -- =============================================
 CREATE OR ALTER PROCEDURE Stock_Search
     @BranchId INT = NULL,
@@ -34,60 +55,43 @@ BEGIN
     END
 
     SELECT
-        s.Id,
-        i.Id AS ItemId,
-        i.Name AS ItemName,
+        p.ID AS Id,
+        p.ItemId,
+        COALESCE(i.Name, grnItem.DenormalizedItemName, '(item not found)') AS ItemName,
         COALESCE(st.Name, 'Regular') AS StockType,
-        s.TotalItems,
-        COALESCE(s.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,
-        s.StoreId,
-        s.BranchId,
-        s.IsActive,
-        s.ModifiedOn,
+        p.TotalItemsInStock AS TotalItems,
+        COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,
+        p.StoreId,
+        ps.BranchId,
+        CAST(1 AS BIT) AS IsActive,
+        p.ModifiedOn,
         i.ItemTypeId,
-        it.Name AS ItemTypeName,
+        COALESCE(it.Name, CASE WHEN p.TypeBit = 4 THEN 'Medicine' WHEN p.TypeBit = 5 THEN 'Fee' ELSE NULL END) AS ItemTypeName,
         c.Name AS CategoryName,
         i.IsFridgeItem,
         i.IsConsumptionItem,
-        loc.Location
-    FROM Inv.Stocks s
-    INNER JOIN Inv.Items i ON s.ItemId = i.Id
+        CAST(NULL AS NVARCHAR(200)) AS Location
+    FROM Pharmacy.PharmacyMedicinesStocks p
+    LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = p.StoreId
+    LEFT JOIN Inv.Items i ON p.ItemId = i.Id
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN Inv.Categories c ON i.CategoryId = c.Id
+    LEFT JOIN Inv.StockTypes st ON p.StockTypeId = st.Id
     OUTER APPLY
     (
-        SELECT TOP 1 inv.StockTypeId
-        FROM Inv.InventoryDetails details
-        INNER JOIN Inv.Inventories inv ON details.InventoryId = inv.Id
-        WHERE details.ItemId = s.ItemId
-          AND inv.StoreId = s.StoreId
-          AND inv.IsActive = 1
-        ORDER BY COALESCE(inv.ModifiedOn, inv.CreatedOn) DESC, inv.Id DESC
-    ) latestInventory
-    LEFT JOIN Inv.StockTypes st ON latestInventory.StockTypeId = st.Id
-    -- Rack.Row.Column[.Drawer] shelf location, same concept as the old system's
-    -- SpaceAllocations-based Location column on this same report.
-    OUTER APPLY
-    (
-        SELECT TOP 1
-            r.Name + ISNULL('.' + rr.Name, '') + ISNULL('.' + rc.Name, '') + ISNULL('.' + rd.Name, '') AS Location
-        FROM Inv.SpaceAllocations sa
-        INNER JOIN Inv.Racks r ON r.Id = sa.RackId
-        LEFT JOIN Inv.RackRows rr ON rr.Id = sa.RackRowId
-        LEFT JOIN Inv.RackColumns rc ON rc.Id = sa.RackColumnId
-        LEFT JOIN Inv.RackDrawrs rd ON rd.Id = sa.RackDrawrId
-        WHERE sa.ItemId = s.ItemId
-          AND sa.StoreId = s.StoreId
-          AND ISNULL(sa.IsDeleted, 0) = 0
-          AND sa.IsActive = 1
-        ORDER BY sa.Id DESC
-    ) loc
-    WHERE s.IsActive = 1
-        AND (@BranchId IS NULL OR s.BranchId = @BranchId)
-        AND (@StoreId IS NULL OR s.StoreId = @StoreId)
+        SELECT TOP 1 gi.DenormalizedItemName
+        FROM Inv.GoodsReceivingNotes g
+        INNER JOIN Inv.GRNItems gi ON gi.GRNId = g.Id
+        WHERE p.ItemId IS NULL
+          AND g.InvoiceNo = p.SysBatchNo
+          AND gi.BatchNo = p.BatchNo
+        ORDER BY gi.Id DESC
+    ) grnItem
+    WHERE (@BranchId IS NULL OR ps.BranchId = @BranchId)
+        AND (@StoreId IS NULL OR p.StoreId = @StoreId)
         AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
-        AND (@ItemId IS NULL OR i.Id = @ItemId)
-        AND (@StockTypeId IS NULL OR latestInventory.StockTypeId = @StockTypeId)
+        AND (@ItemId IS NULL OR p.ItemId = @ItemId)
+        AND (@StockTypeId IS NULL OR p.StockTypeId = @StockTypeId)
         AND (
             @CategoryIds IS NULL
             OR LTRIM(RTRIM(@CategoryIds)) = ''
@@ -96,14 +100,14 @@ BEGIN
         AND (
             @StockAvailability IS NULL
             OR @StockAvailability = 'All'
-            OR (@StockAvailability = 'InStock' AND s.TotalItems > 0)
-            OR (@StockAvailability = 'OutOfStock' AND COALESCE(s.TotalItems, 0) <= 0)
+            OR (@StockAvailability = 'InStock' AND p.TotalItemsInStock > 0)
+            OR (@StockAvailability = 'OutOfStock' AND COALESCE(p.TotalItemsInStock, 0) <= 0)
         )
         AND (
             @MinimumPanicLevelOnly = 0
-            OR COALESCE(s.TotalItems, 0) <= COALESCE(s.MinimumPanicLevel, i.MinimumPanicLevel, 0)
+            OR COALESCE(p.TotalItemsInStock, 0) <= COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0)
         )
-    ORDER BY i.Name ASC;
+    ORDER BY ItemName ASC;
 END
 GO
 

@@ -140,9 +140,9 @@ namespace InventoryManagement.Api.Services
                 Leaf = reader.IsDBNull("Leaf") ? null : reader.GetInt32("Leaf"),
                 NumberOfItems = reader.IsDBNull("NumberOfItems") ? null : reader.GetInt32("NumberOfItems"),
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
-                IsActive = reader.GetBoolean("IsActive"),
-                CreatedById = reader.GetInt32("CreatedById"),
-                CreatedOn = reader.GetDateTime("CreatedOn"),
+                IsActive = reader.IsDBNull("IsActive") || reader.GetBoolean("IsActive"),
+                CreatedById = reader.IsDBNull("CreatedById") ? 0 : reader.GetInt32("CreatedById"),
+                CreatedOn = reader.IsDBNull("CreatedOn") ? DateTime.MinValue : reader.GetDateTime("CreatedOn"),
                 ModifiedById = reader.IsDBNull("ModifiedById") ? null : reader.GetInt32("ModifiedById"),
                 ModifiedOn = reader.IsDBNull("ModifiedOn") ? null : reader.GetDateTime("ModifiedOn"),
                 BranchName = reader.IsDBNull("BranchName") ? null : reader.GetString("BranchName")

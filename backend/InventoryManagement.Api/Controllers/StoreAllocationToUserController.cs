@@ -19,11 +19,12 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StoreAllocationToUser>>> GetAll()
+        public async Task<ActionResult<PagedResult<StoreAllocationToUser>>> GetAll(
+            [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 5, [FromQuery] string? search = null)
         {
             try
             {
-                var allocations = await _service.GetAllAsync();
+                var allocations = await _service.GetAllAsync(pageNumber, pageSize, search);
                 return Ok(allocations);
             }
             catch (Exception ex)

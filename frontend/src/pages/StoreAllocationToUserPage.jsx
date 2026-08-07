@@ -1,17 +1,20 @@
 import React,{ useState, useEffect } from 'react';
 import { storeAllocationToUserApi } from '../services/storeAllocationToUserApi';
 import { getPharmacyStoreDropdown } from '../services/storeApi';
+import { useSession } from '../context/SessionContext';
 
 function StoreAllocationToUserPage() {
+    const { session } = useSession();
     const [allocations, setAllocations] = useState([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [entriesPerPage, setEntriesPerPage] = useState(5);
+    const [currentPage, setCurrentPage] = useState(1);
     const [stores, setStores] = useState([]);
     const [employees, setEmployees] = useState([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingAllocation, setEditingAllocation] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
-    
+
     const [formData, setFormData] = useState({
         storeId: '',
         userId: '',
@@ -19,15 +22,32 @@ function StoreAllocationToUserPage() {
     });
 
     useEffect(() => {
-        fetchAllocations();
-        fetchStores();
         fetchEmployees();
     }, []);
 
+    useEffect(() => {
+        if (session?.branchId) {
+            fetchStores();
+        }
+    }, [session?.branchId]);
+
+    useEffect(() => {
+        fetchAllocations();
+    }, [currentPage, entriesPerPage, searchTerm]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [entriesPerPage, searchTerm]);
+
     const fetchAllocations = async () => {
         try {
-            const data = await storeAllocationToUserApi.getAll();
-            setAllocations(data);
+            const data = await storeAllocationToUserApi.getAll({
+                pageNumber: currentPage,
+                pageSize: entriesPerPage,
+                search: searchTerm.trim() || undefined
+            });
+            setAllocations(data.items);
+            setTotalCount(data.totalCount);
         } catch (error) {
             console.error('Error fetching allocations:', error);
             alert('Failed to fetch allocations');
@@ -36,7 +56,7 @@ function StoreAllocationToUserPage() {
 
     const fetchStores = async () => {
         try {
-            const data = await getPharmacyStoreDropdown();
+            const data = await getPharmacyStoreDropdown(session.branchId);
             setStores(data);
         } catch (error) {
             console.error('Error fetching stores:', error);
@@ -106,18 +126,6 @@ function StoreAllocationToUserPage() {
         setEditingAllocation(null);
         setIsFormOpen(false);
     };
-
-    const filteredAllocations = allocations.filter(allocation =>
-        allocation.storeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        allocation.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentAllocations = filteredAllocations.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredAllocations.length / itemsPerPage);
-
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -205,13 +213,27 @@ function StoreAllocationToUserPage() {
                 </div>
             )}
 
-            <div className="mb-4">
+            <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">Show</span>
+                    <select
+                        value={entriesPerPage}
+                        onChange={(e) => setEntriesPerPage(Number(e.target.value))}
+                        className="px-3 py-1 border border-gray-300 rounded-md"
+                    >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                    </select>
+                    <span className="text-sm text-gray-700">entries</span>
+                </div>
                 <input
                     type="text"
                     placeholder="Search by store or employee..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
 
@@ -227,12 +249,12 @@ function StoreAllocationToUserPage() {
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {currentAllocations.length === 0 ? (
+                        {allocations.length === 0 ? (
                             <tr>
                                 <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No allocations found</td>
                             </tr>
                         ) : (
-                            currentAllocations.map((allocation) => (
+                            allocations.map((allocation) => (
                                 <tr key={allocation.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">{allocation.storeName}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{allocation.employeeName}</td>
@@ -269,27 +291,34 @@ function StoreAllocationToUserPage() {
                 </table>
             </div>
 
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 mt-6">
-                    <button 
-                        onClick={() => paginate(currentPage - 1)} 
+            <div className="flex flex-col gap-3 mt-4 md:flex-row md:items-center md:justify-between">
+                <div className="text-sm text-gray-700">
+                    {totalCount === 0
+                        ? 'Showing 0 to 0 of 0 entries'
+                        : `Showing ${(currentPage - 1) * entriesPerPage + 1} to ${Math.min(currentPage * entriesPerPage, totalCount)} of ${totalCount} entries`}
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                         disabled={currentPage === 1}
                         className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
-                        Previous
+                        Prev
                     </button>
-                    <span className="text-gray-700">
-                        Page {currentPage} of {totalPages}
+                    <span className="text-sm text-gray-700">
+                        {currentPage} / {Math.max(1, Math.ceil(totalCount / entriesPerPage))}
                     </span>
-                    <button 
-                        onClick={() => paginate(currentPage + 1)} 
-                        disabled={currentPage === totalPages}
+                    <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.max(1, Math.ceil(totalCount / entriesPerPage))))}
+                        disabled={currentPage >= Math.ceil(totalCount / entriesPerPage)}
                         className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
                         Next
                     </button>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

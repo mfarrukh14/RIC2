@@ -19,7 +19,7 @@ BEGIN
         b.ModifiedById,
         b.ModifiedOn,
         br.Name as BranchName
-    FROM Inv.Brands b
+    FROM Data.Brands b
     LEFT JOIN Inv.Branches br ON b.BranchId = br.Id
     ORDER BY b.Name;
 END

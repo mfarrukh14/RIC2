@@ -64,7 +64,7 @@ const StockTransitionsPage = () => {
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -213,7 +213,7 @@ const StockTransitionsPage = () => {
                 onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-sm"
               >
-                {[10, 25, 50].map((size) => (
+                {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>{size}</option>
                 ))}
               </select>

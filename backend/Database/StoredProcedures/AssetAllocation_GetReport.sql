@@ -129,7 +129,7 @@ BEGIN
     LEFT JOIN Inv.SubDepartments sd ON aa.SubDepartmentId = sd.Id
     LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
     LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
-    LEFT JOIN Inv.Brands br ON i.BrandId = br.Id
+    LEFT JOIN Data.Brands br ON i.BrandId = br.Id
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE aa.IsActive = 1 
         AND (@StartDate IS NULL OR aa.AllocatedDate >= @StartDate)
