@@ -1,4 +1,5 @@
 using InventoryManagement.API.Models;
+using InventoryManagement.Api.Models;
 using Microsoft.Data.SqlClient;
 using System.Data;
 
@@ -14,9 +15,11 @@ namespace InventoryManagement.API.Services
                 ?? throw new InvalidOperationException("Connection string not found");
         }
 
-        public async Task<List<ContingentBill>> GetAllAsync(ContingentBillFilterRequest filter)
+        public async Task<PagedResult<ContingentBill>> GetAllAsync(ContingentBillFilterRequest filter)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter.PageNumber, filter.PageSize);
             var bills = new List<ContingentBill>();
+            var totalCount = 0;
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ContingentBills_GetAll", connection)
@@ -31,16 +34,22 @@ namespace InventoryManagement.API.Services
             command.Parameters.AddWithValue("@ContingentBillStatusId", (object?)filter.ContingentBillStatusId ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateStart", (object?)filter.DateStart ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateEnd", (object?)filter.DateEnd ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SearchTerm", (object?)filter.SearchTerm ?? DBNull.Value);
+            PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
             await connection.OpenAsync();
 
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (totalCount == 0)
+                {
+                    totalCount = PaginationHelper.ReadTotalCount(reader);
+                }
                 bills.Add(MapContingentBill(reader));
             }
 
-            return bills;
+            return new PagedResult<ContingentBill> { Items = bills, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<ContingentBill?> GetByIdAsync(int id)

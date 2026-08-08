@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<RackColumn>> GetAllRackColumnsAsync()
+        public async Task<IEnumerable<RackColumn>> GetAllRackColumnsAsync(int branchId)
         {
             var rackColumns = new List<RackColumn>();
 
@@ -27,6 +27,7 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@BranchId", branchId);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();

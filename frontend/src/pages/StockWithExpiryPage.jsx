@@ -10,6 +10,7 @@ import itemCategoryApi from '../services/itemCategoryApi';
 import purchaseOrderApi from '../services/purchaseOrderApi';
 import { vendorApi } from '../services/api';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 function StockWithExpiryPage() {
@@ -60,6 +61,10 @@ function StockWithExpiryPage() {
         }
     }, [session?.branchId]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [itemsPerPage]);
+
     const fetchStores = async () => {
         try {
             const data = await getAllStores();
@@ -80,7 +85,7 @@ function StockWithExpiryPage() {
 
     const fetchItems = async () => {
         try {
-            const data = await itemApi.getAll();
+            const data = await itemApi.getAllUnpaginated();
             setItems(data.filter(item => item.isActive));
         } catch (error) {
             console.error('Error fetching items:', error);
@@ -268,9 +273,6 @@ function StockWithExpiryPage() {
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentStocks = stocks.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(stocks.length / itemsPerPage);
-
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -442,30 +444,6 @@ function StockWithExpiryPage() {
                 </div>
             </div>
 
-            {/* Results Summary */}
-            <div className="mb-4 flex justify-between items-center">
-                <div className="text-sm text-gray-600">
-                    Show 
-                    <select
-                        value={itemsPerPage}
-                        onChange={(e) => {
-                            setItemsPerPage(parseInt(e.target.value));
-                            setCurrentPage(1);
-                        }}
-                        className="mx-2 px-2 py-1 border border-gray-300 rounded"
-                    >
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    entries
-                </div>
-                <div className="text-sm text-gray-600">
-                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, stocks.length)} of {stocks.length} entries
-                </div>
-            </div>
-
             {/* Table */}
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -529,43 +507,13 @@ function StockWithExpiryPage() {
                 </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 mt-6">
-                    <button 
-                        onClick={() => paginate(currentPage - 1)} 
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    >
-                        Previous
-                    </button>
-                    
-                    {[...Array(Math.min(6, totalPages))].map((_, idx) => {
-                        const pageNum = idx + 1;
-                        return (
-                            <button
-                                key={pageNum}
-                                onClick={() => paginate(pageNum)}
-                                className={`px-4 py-2 rounded-lg ${
-                                    currentPage === pageNum
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                }`}
-                            >
-                                {pageNum}
-                            </button>
-                        );
-                    })}
-                    
-                    <button
-                        onClick={() => paginate(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    >
-                        Next
-                    </button>
-                </div>
-            )}
+            <Pagination
+                currentPage={currentPage}
+                pageSize={itemsPerPage}
+                totalCount={stocks.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setItemsPerPage}
+            />
 
             {/* Detail modal */}
             {detailStock && (

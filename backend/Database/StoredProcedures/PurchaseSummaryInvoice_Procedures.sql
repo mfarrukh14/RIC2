@@ -21,6 +21,10 @@
 -- purchase returns against an invoice) has no equivalent table in the new schema
 -- yet, so it isn't included here.
 -- =============================================
+-- Paginated - see PaginationHelper.cs / GRN_GetAll for the shared convention.
+-- @PageNumber/@PageSize default to page 1 of 10 and apply only to the records
+-- result set below; the totals result set that follows always sums over the
+-- full filtered set regardless of which page is showing.
 CREATE OR ALTER PROCEDURE dbo.PurchaseSummaryInvoice_GetAll
     @BranchId INT = NULL,
     @StoreId INT = NULL,
@@ -31,10 +35,15 @@ CREATE OR ALTER PROCEDURE dbo.PurchaseSummaryInvoice_GetAll
     @InvoiceDateEnd DATETIME = NULL,
     @InvoiceNo NVARCHAR(100) = NULL,
     @ReportType NVARCHAR(50) = NULL,
-    @InvoiceType NVARCHAR(50) = NULL
+    @InvoiceType NVARCHAR(50) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     SELECT
         g.Id,
@@ -52,7 +61,8 @@ BEGIN
         s.StoreName,
         po.CreatedOn AS InventoryDate,
         @ReportType AS ReportType,
-        CAST(NULL AS NVARCHAR(50)) AS InvoiceType
+        CAST(NULL AS NVARCHAR(50)) AS InvoiceType,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.GoodsReceivingNotes g
     LEFT JOIN Inv.PurchaseOrders po ON g.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN Inv.PharmacyStores s ON ISNULL(po.StoreId, g.StoreId) = s.StoreId
@@ -81,9 +91,10 @@ BEGIN
             OR (@ReportType = 'PurchaseOrder' AND ISNULL(g.PONumber, '') <> '')
             OR (@ReportType = 'Inventory' AND ISNULL(g.PONumber, '') = '')
         )
-    ORDER BY ISNULL(g.DateAndTime, g.CreatedOn) DESC, g.Id DESC;
+    ORDER BY ISNULL(g.DateAndTime, g.CreatedOn) DESC, g.Id DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 
-    -- Return summary totals (same filters)
+    -- Return summary totals (same filters, NOT paginated - always the full filtered scope)
     SELECT
         ISNULL(SUM(ISNULL(agg.Amount, 0)), 0) AS TotalAmount,
         ISNULL(SUM(ISNULL(agg.AdvanceTax, 0)), 0) AS TotalAdvanceTax,

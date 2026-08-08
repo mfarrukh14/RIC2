@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using InventoryManagement.API.Models;
+using InventoryManagement.Api.Models;
 using System.Data;
 
 namespace InventoryManagement.API.Services
@@ -16,9 +17,11 @@ namespace InventoryManagement.API.Services
             _logger = logger;
         }
 
-        public async Task<List<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null)
+        public async Task<PagedResult<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var returns = new List<ReturnInventory>();
+            var totalCount = 0;
 
             try
             {
@@ -36,10 +39,15 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)filter?.PurchaseOrderNo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ItemId", (object?)filter?.ItemId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@InventoryNo", (object?)filter?.InventoryNo ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     returns.Add(MapToReturnInventory(reader));
                 }
             }
@@ -49,7 +57,7 @@ namespace InventoryManagement.API.Services
                 throw;
             }
 
-            return returns;
+            return new PagedResult<ReturnInventory> { Items = returns, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<ReturnInventory?> GetByIdAsync(int id)

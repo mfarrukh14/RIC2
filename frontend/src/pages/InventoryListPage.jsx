@@ -1,86 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiPrinter, FiCornerUpLeft } from 'react-icons/fi';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import inventoryApi from '../services/inventoryApi';
 import InventoryFormPage from '../components/InventoryFormPage';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const InventoryListPage = ({ onReturnInventory }) => {
-  const [inventories, setInventories] = useState([]);
-  const [filteredInventories, setFilteredInventories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [vendors, setVendors] = useState([]);
-  
+
   // Filters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [showForm, setShowForm] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
 
-  useEffect(() => {
-    fetchData();
+  const fetchPage = useCallback(async (params) => {
+    const data = await inventoryApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
   }, []);
 
+  const {
+    items: inventories,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error,
+    reload: reloadInventories,
+  } = usePagedList(
+    fetchPage,
+    { searchTerm, vendorId: selectedVendor || null, dateFrom: dateFrom || null, dateTo: dateTo || null },
+    { initialPageSize: 10 }
+  );
+
   useEffect(() => {
-    filterInventories();
-  }, [inventories, dateFrom, dateTo, selectedVendor, searchTerm]);
+    fetchVendors();
+  }, []);
 
-  const fetchData = async () => {
+  const fetchVendors = async () => {
     try {
-      setLoading(true);
-      const [inventoriesData, lookupData] = await Promise.all([
-        inventoryApi.getAll(),
-        inventoryApi.getLookupData()
-      ]);
-      
-      setInventories(inventoriesData);
-      setFilteredInventories(inventoriesData);
+      const lookupData = await inventoryApi.getLookupData();
       setVendors(lookupData.vendors);
-      setError(null);
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch inventories. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching lookup data:', err);
     }
-  };
-
-  const filterInventories = () => {
-    let filtered = [...inventories];
-
-    // Date range filter
-    if (dateFrom) {
-      filtered = filtered.filter(inv => {
-        const invDate = new Date(inv.createdOn);
-        return invDate >= new Date(dateFrom);
-      });
-    }
-    if (dateTo) {
-      filtered = filtered.filter(inv => {
-        const invDate = new Date(inv.createdOn);
-        return invDate <= new Date(dateTo);
-      });
-    }
-
-    // Vendor filter
-    if (selectedVendor) {
-      filtered = filtered.filter(inv => inv.vendorId === parseInt(selectedVendor));
-    }
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(inv =>
-        inv.vendorInvoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.vendorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.stockTypeName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredInventories(filtered);
   };
 
   const handleAddNew = () => {
@@ -100,7 +69,7 @@ const InventoryListPage = ({ onReturnInventory }) => {
 
     try {
       await inventoryApi.delete(id);
-      await fetchData();
+      await reloadInventories();
     } catch (err) {
       console.error('Error deleting inventory:', err);
       alert('Failed to delete inventory. Please try again.');
@@ -214,7 +183,7 @@ const InventoryListPage = ({ onReturnInventory }) => {
   const handleSaveForm = async () => {
     setShowForm(false);
     setSelectedInventory(null);
-    await fetchData();
+    await reloadInventories();
   };
 
   const formatDate = (dateString) => {
@@ -222,14 +191,6 @@ const InventoryListPage = ({ onReturnInventory }) => {
     const date = new Date(dateString);
     return date.toLocaleString();
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">
@@ -315,27 +276,9 @@ const InventoryListPage = ({ onReturnInventory }) => {
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-          {error}
+          Failed to fetch inventories. Please try again.
         </div>
       )}
-
-      {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-      </div>
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -367,14 +310,14 @@ const InventoryListPage = ({ onReturnInventory }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredInventories.length === 0 ? (
+              {inventories.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                filteredInventories.slice(0, entriesPerPage).map((inventory) => (
+                inventories.map((inventory) => (
                   <tr key={inventory.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {inventory.vendorInvoiceNumber || '-'}
@@ -432,10 +375,13 @@ const InventoryListPage = ({ onReturnInventory }) => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing 0 to {Math.min(entriesPerPage, filteredInventories.length)} of {filteredInventories.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
         </>
       )}
     </div>

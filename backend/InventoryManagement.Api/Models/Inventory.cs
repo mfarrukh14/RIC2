@@ -84,6 +84,14 @@ namespace InventoryManagement.Api.Models
     }
 
     // Request models
+    public class InventoryFilterRequest : PagedRequest
+    {
+        public string? SearchTerm { get; set; }
+        public int? VendorId { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+    }
+
     public class InventoryCreateRequest
     {
         public int VendorId { get; set; }
@@ -292,7 +300,7 @@ namespace InventoryManagement.Api.Models
         public int MinimumPanicLevel { get; set; }
     }
 
-    public class StockSearchRequest
+    public class StockSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }

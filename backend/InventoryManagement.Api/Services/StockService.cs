@@ -69,19 +69,26 @@ WHERE i.IsActive = 1;", connection);
             return rowsAffected > 0;
         }
 
-        public async Task<IEnumerable<Stock>> SearchStocksAsync(StockSearchRequest request)
+        public async Task<PagedResult<Stock>> SearchStocksAsync(StockSearchRequest request)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var result = new PagedResult<Stock> { PageNumber = pageNumber, PageSize = pageSize };
             var stocks = new List<Stock>();
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
-                using var command = await CreateSearchCommandAsync(connection, request);
+                using var command = await CreateSearchCommandAsync(connection, request, pageNumber, pageSize);
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (result.TotalCount == 0)
+                    {
+                        result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     stocks.Add(MapStockFromReader(reader));
                 }
             }
@@ -91,10 +98,11 @@ WHERE i.IsActive = 1;", connection);
                 throw;
             }
 
-            return stocks;
+            result.Items = stocks;
+            return result;
         }
 
-        private async Task<SqlCommand> CreateSearchCommandAsync(SqlConnection connection, StockSearchRequest request)
+        private async Task<SqlCommand> CreateSearchCommandAsync(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize)
         {
             if (await StoredProcedureExistsAsync(connection, "Stock_Search"))
             {
@@ -114,18 +122,20 @@ WHERE i.IsActive = 1;", connection);
                 procedureCommand.Parameters.AddWithValue("@StockAvailability", (object?)request.StockAvailability ?? DBNull.Value);
                 procedureCommand.Parameters.AddWithValue("@IsVaccine", (object?)request.IsVaccine ?? DBNull.Value);
                 procedureCommand.Parameters.AddWithValue("@MinimumPanicLevelOnly", request.MinimumPanicLevelOnly);
+                PaginationHelper.AddPagingParameters(procedureCommand, pageNumber, pageSize);
 
                 return procedureCommand;
             }
 
-            return CreateFallbackSearchCommand(connection, request);
+            return CreateFallbackSearchCommand(connection, request, pageNumber, pageSize);
         }
 
-        private static SqlCommand CreateFallbackSearchCommand(SqlConnection connection, StockSearchRequest request)
+        private static SqlCommand CreateFallbackSearchCommand(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize)
         {
             var command = new SqlCommand(
                 @"
 DECLARE @CategoryIdTable TABLE (CategoryId INT);
+DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
 
 IF @CategoryIds IS NOT NULL AND LTRIM(RTRIM(@CategoryIds)) <> ''
 BEGIN
@@ -135,65 +145,96 @@ BEGIN
     WHERE TRY_CAST(value AS INT) IS NOT NULL;
 END
 
+;WITH FilteredStock AS (
+    SELECT
+        p.ID AS Id,
+        p.ItemId,
+        p.SysBatchNo,
+        p.BatchNo,
+        COALESCE(i.Name, bm.MedicineName, bf.Name) AS ResolvedName,
+        COALESCE(st.Name, 'Regular') AS StockType,
+        p.TotalItemsInStock AS TotalItems,
+        COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,
+        p.StoreId,
+        ps.BranchId,
+        p.ModifiedOn,
+        i.ItemTypeId,
+        COALESCE(it.Name, CASE WHEN p.TypeBit = 4 THEN 'Medicine' WHEN p.TypeBit = 5 THEN 'Fee' ELSE NULL END) AS ItemTypeName,
+        c.Name AS CategoryName,
+        i.IsFridgeItem,
+        i.IsConsumptionItem
+    FROM Pharmacy.PharmacyMedicinesStocks p
+    LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = p.StoreId
+    LEFT JOIN Inv.Items i ON p.ItemId = i.Id
+    LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
+    LEFT JOIN Inv.Categories c ON i.CategoryId = c.Id
+    LEFT JOIN Inv.StockTypes st ON p.StockTypeId = st.Id
+    LEFT JOIN Pharmacy.BranchMedicines bm ON bm.Id = p.BranchMedicineId
+    LEFT JOIN Data.BranchFees bf ON bf.Id = p.BranchSubServiceId
+    WHERE (@BranchId IS NULL OR ps.BranchId = @BranchId)
+      AND (@StoreId IS NULL OR p.StoreId = @StoreId)
+      AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
+      AND (@ItemId IS NULL OR p.ItemId = @ItemId)
+      AND (@StockTypeId IS NULL OR p.StockTypeId = @StockTypeId)
+      AND (
+            @CategoryIds IS NULL
+            OR LTRIM(RTRIM(@CategoryIds)) = ''
+            OR i.CategoryId IN (SELECT CategoryId FROM @CategoryIdTable)
+          )
+      AND (
+            @StockAvailability IS NULL
+            OR @StockAvailability = 'All'
+            OR (@StockAvailability = 'InStock' AND p.TotalItemsInStock > 0)
+            OR (@StockAvailability = 'OutOfStock' AND COALESCE(p.TotalItemsInStock, 0) <= 0)
+          )
+      AND (
+            @MinimumPanicLevelOnly = 0
+            OR COALESCE(p.TotalItemsInStock, 0) <= COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0)
+          )
+),
+Paged AS (
+    SELECT *, COUNT(*) OVER() AS TotalCount
+    FROM FilteredStock
+    ORDER BY ResolvedName ASC
+    OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
+)
 SELECT
-    p.ID AS Id,
-    p.ItemId,
-    COALESCE(i.Name, grnItem.DenormalizedItemName, '(item not found)') AS ItemName,
-    COALESCE(st.Name, 'Regular') AS StockType,
-    p.TotalItemsInStock AS TotalItems,
-    COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,
-    p.StoreId,
-    ps.BranchId,
+    Paged.Id,
+    Paged.ItemId,
+    COALESCE(Paged.ResolvedName, grnItem.DenormalizedItemName, '(item not found)') AS ItemName,
+    Paged.StockType,
+    Paged.TotalItems,
+    Paged.MinimumPanicLevel,
+    Paged.StoreId,
+    Paged.BranchId,
     CAST(1 AS BIT) AS IsActive,
-    p.ModifiedOn,
-    i.ItemTypeId,
-    COALESCE(it.Name, CASE WHEN p.TypeBit = 4 THEN 'Medicine' WHEN p.TypeBit = 5 THEN 'Fee' ELSE NULL END) AS ItemTypeName,
-    c.Name AS CategoryName,
-    i.IsFridgeItem,
-    i.IsConsumptionItem,
-    CAST(NULL AS NVARCHAR(200)) AS Location
-FROM Pharmacy.PharmacyMedicinesStocks p
-LEFT JOIN Inv.PharmacyStores ps ON ps.StoreId = p.StoreId
-LEFT JOIN Inv.Items i ON p.ItemId = i.Id
-LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
-LEFT JOIN Inv.Categories c ON i.CategoryId = c.Id
-LEFT JOIN Inv.StockTypes st ON p.StockTypeId = st.Id
+    Paged.ModifiedOn,
+    Paged.ItemTypeId,
+    Paged.ItemTypeName,
+    Paged.CategoryName,
+    Paged.IsFridgeItem,
+    Paged.IsConsumptionItem,
+    CAST(NULL AS NVARCHAR(200)) AS Location,
+    Paged.TotalCount
+FROM Paged
 OUTER APPLY
 (
     SELECT TOP 1 gi.DenormalizedItemName
     FROM Inv.GoodsReceivingNotes g
     INNER JOIN Inv.GRNItems gi ON gi.GRNId = g.Id
-    WHERE p.ItemId IS NULL
-      AND g.InvoiceNo = p.SysBatchNo
-      AND gi.BatchNo = p.BatchNo
+    WHERE Paged.ResolvedName IS NULL
+      AND g.InvoiceNo = Paged.SysBatchNo
+      AND gi.BatchNo = Paged.BatchNo
     ORDER BY gi.Id DESC
 ) grnItem
-WHERE (@BranchId IS NULL OR ps.BranchId = @BranchId)
-  AND (@StoreId IS NULL OR p.StoreId = @StoreId)
-  AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
-  AND (@ItemId IS NULL OR p.ItemId = @ItemId)
-  AND (@StockTypeId IS NULL OR p.StockTypeId = @StockTypeId)
-  AND (
-        @CategoryIds IS NULL
-        OR LTRIM(RTRIM(@CategoryIds)) = ''
-        OR i.CategoryId IN (SELECT CategoryId FROM @CategoryIdTable)
-      )
-  AND (
-        @StockAvailability IS NULL
-        OR @StockAvailability = 'All'
-        OR (@StockAvailability = 'InStock' AND p.TotalItemsInStock > 0)
-        OR (@StockAvailability = 'OutOfStock' AND COALESCE(p.TotalItemsInStock, 0) <= 0)
-      )
-  AND (
-        @MinimumPanicLevelOnly = 0
-        OR COALESCE(p.TotalItemsInStock, 0) <= COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0)
-      )
 ORDER BY ItemName ASC;",
                 connection)
             {
                 CommandType = CommandType.Text
             };
 
+            command.Parameters.Add("@PageNumber", SqlDbType.Int).Value = pageNumber;
+            command.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
             command.Parameters.Add("@BranchId", SqlDbType.Int).Value = (object?)request.BranchId ?? DBNull.Value;
             command.Parameters.Add("@StoreId", SqlDbType.Int).Value = (object?)request.StoreId ?? DBNull.Value;
             command.Parameters.Add("@ItemTypeId", SqlDbType.Int).Value = (object?)request.ItemTypeId ?? DBNull.Value;

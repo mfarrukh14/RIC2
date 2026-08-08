@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PencilIcon, TrashIcon, PlusIcon, EyeIcon, MagnifyingGlassIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { vendorApi } from '../services/api';
+import Pagination from './Pagination';
 
 const VendorList = ({ onEdit, onAdd }) => {
   const [vendors, setVendors] = useState([]);
@@ -26,7 +27,7 @@ const VendorList = ({ onEdit, onAdd }) => {
     );
     setFilteredVendors(filtered);
     setCurrentPage(1); // Reset to first page when filtering
-  }, [vendors, searchTerm]);
+  }, [vendors, searchTerm, itemsPerPage]);
 
   const loadVendors = async () => {
     try {
@@ -88,76 +89,10 @@ const VendorList = ({ onEdit, onAdd }) => {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleItemsPerPageChange = (e) => {
-    setItemsPerPage(parseInt(e.target.value));
-    setCurrentPage(1);
-  };
-
   // Pagination calculations
-  const totalPages = Math.ceil(filteredVendors.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentVendors = filteredVendors.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  const renderPaginationButtons = () => {
-    const buttons = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    // Previous button
-    if (currentPage > 1) {
-      buttons.push(
-        <button
-          key="prev"
-          onClick={() => handlePageChange(currentPage - 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50"
-        >
-          Previous
-        </button>
-      );
-    }
-
-    // Page numbers
-    for (let i = startPage; i <= endPage; i++) {
-      buttons.push(
-        <button
-          key={i}
-          onClick={() => handlePageChange(i)}
-          className={`px-3 py-2 text-sm font-medium border ${
-            i === currentPage
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-          }`}
-        >
-          {i}
-        </button>
-      );
-    }
-
-    // Next button
-    if (currentPage < totalPages) {
-      buttons.push(
-        <button
-          key="next"
-          onClick={() => handlePageChange(currentPage + 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50"
-        >
-          Next
-        </button>
-      );
-    }
-
-    return buttons;
-  };
 
   if (loading) {
     return (
@@ -198,24 +133,7 @@ const VendorList = ({ onEdit, onAdd }) => {
         </div>
 
         {/* Search and Controls */}
-        <div className="mt-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Show</span>
-              <select
-                value={itemsPerPage}
-                onChange={handleItemsPerPageChange}
-                className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span className="text-sm text-gray-600">entries</span>
-            </div>
-          </div>
-
+        <div className="mt-4 flex justify-end items-center">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Search:</span>
             <div className="relative">
@@ -369,21 +287,13 @@ const VendorList = ({ onEdit, onAdd }) => {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredVendors.length)} of{' '}
-              {filteredVendors.length} entries
-              {searchTerm && ` (filtered from ${vendors.length} total entries)`}
-            </div>
-            <div className="flex space-x-1">
-              {renderPaginationButtons()}
-            </div>
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        pageSize={itemsPerPage}
+        totalCount={filteredVendors.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setItemsPerPage}
+      />
     </div>
   );
 };

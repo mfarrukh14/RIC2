@@ -5,7 +5,7 @@ namespace InventoryManagement.Api.Services
     public interface IInventoryService
     {
         // Inventory header operations
-        Task<IEnumerable<Inventory>> GetAllAsync();
+        Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter = null);
         Task<Inventory?> GetByIdAsync(int id);
         Task<int> CreateAsync(InventoryCreateRequest request);
         Task<bool> UpdateAsync(int id, InventoryUpdateRequest request);

@@ -222,15 +222,24 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select</option>
-                {items.map(item => {
-                  const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
-                  const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
-                  return (
-                    <option key={productOptionValue(item)} value={productOptionValue(item)}>
-                      {formData.storeId ? `${label} - ${qty}` : label}
-                    </option>
-                  );
-                })}
+                {items
+                  .filter((item) => {
+                    // Decrease is an outbound action - only show items actually in stock at
+                    // the selected store. Increase is inbound (correcting stock upward, often
+                    // from zero) so the full active list stays available for that type.
+                    if (!formData.storeId || parseInt(formData.type) !== 1) return true;
+                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
+                    return qty > 0;
+                  })
+                  .map(item => {
+                    const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
+                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
+                    return (
+                      <option key={productOptionValue(item)} value={productOptionValue(item)}>
+                        {formData.storeId ? `${label} - ${qty}` : label}
+                      </option>
+                    );
+                  })}
               </select>
             </div>
 

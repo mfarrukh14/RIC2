@@ -98,12 +98,13 @@ namespace InventoryManagement.Api.Models
         public string? Remarks { get; set; }
     }
 
-    public class StockAdjustmentSearchRequest
+    public class StockAdjustmentSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
+        public string? SearchTerm { get; set; }
     }
 
     // View model for list display

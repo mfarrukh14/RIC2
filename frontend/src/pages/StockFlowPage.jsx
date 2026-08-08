@@ -64,7 +64,7 @@ const StockFlowPage = () => {
     }
 
     try {
-      const itemsData = await itemApi.getAll();
+      const itemsData = await itemApi.getAllUnpaginated();
       setItems((itemsData || []).filter(i => i.isActive));
     } catch (err) {
       console.error('Error loading items:', err);

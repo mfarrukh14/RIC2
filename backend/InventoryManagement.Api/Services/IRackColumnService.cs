@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IRackColumnService
     {
-        Task<IEnumerable<RackColumn>> GetAllRackColumnsAsync();
+        Task<IEnumerable<RackColumn>> GetAllRackColumnsAsync(int branchId);
         Task<RackColumn?> GetRackColumnByIdAsync(int id);
         Task<IEnumerable<RackColumn>> GetRackColumnsByRackIdAsync(int rackId);
         Task<int> CreateRackColumnAsync(RackColumnCreateRequest request);

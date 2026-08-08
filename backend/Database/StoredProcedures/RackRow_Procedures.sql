@@ -11,11 +11,12 @@ IF OBJECT_ID('dbo.RackRow_GetAll', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.RackRow_GetAll
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    SELECT
         rr.Id,
         rr.Name,
         rr.Description,
@@ -32,6 +33,7 @@ BEGIN
     FROM Inv.RackRows rr
     LEFT JOIN Inv.PharmacyStores s ON rr.StoreId = s.StoreId
     LEFT JOIN Inv.Racks r ON rr.RackId = r.Id
+    WHERE rr.BranchId = @BranchId
     ORDER BY rr.Name;
 END
 GO

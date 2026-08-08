@@ -72,11 +72,13 @@ LEFT JOIN Users au ON au.UserID = pr.AssignedToId
 LEFT JOIN Employee ae ON ae.EmpID = au.EmpID
 ";
 
-        public async Task<IReadOnlyList<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter)
+        public async Task<PagedResult<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter.PageNumber, filter.PageSize);
             var results = new List<PurchaseRequisitionListItem>();
+            var totalCount = 0;
 
-            string sql = HeaderSelect + @"
+            string sql = ";WITH PRList AS (" + HeaderSelect + @"
 WHERE pr.IsActive = 1
   AND (@BranchId IS NULL OR pr.BranchId = @BranchId)
   AND (@StatusCategory IS NULL OR prs.Category = @StatusCategory)
@@ -87,18 +89,28 @@ WHERE pr.IsActive = 1
         OR ISNULL(v.Name, '') LIKE '%' + @Search + '%'
         OR ISNULL(pr.Subject, '') LIKE '%' + @Search + '%'
       )
-ORDER BY pr.ModifiedOn DESC;";
+)
+SELECT *, COUNT(*) OVER() AS TotalCount
+FROM PRList
+ORDER BY ModifiedOn DESC
+OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@BranchId", (object?)filter.BranchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StatusCategory", (object?)filter.StatusCategory ?? DBNull.Value);
             command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
+            command.Parameters.AddWithValue("@Offset", (pageNumber - 1) * pageSize);
+            command.Parameters.AddWithValue("@Take", pageSize);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (totalCount == 0)
+                {
+                    totalCount = PaginationHelper.ReadTotalCount(reader);
+                }
                 results.Add(new PurchaseRequisitionListItem
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -117,7 +129,7 @@ ORDER BY pr.ModifiedOn DESC;";
                 });
             }
 
-            return results;
+            return new PagedResult<PurchaseRequisitionListItem> { Items = results, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<PurchaseRequisitionDetails?> GetByIdAsync(int id)

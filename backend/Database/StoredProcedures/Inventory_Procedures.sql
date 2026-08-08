@@ -6,11 +6,20 @@ IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Inventory_GetA
 GO
 
 CREATE PROCEDURE [dbo].[Inventory_GetAll]
+    @SearchTerm NVARCHAR(200) = NULL,
+    @VendorId INT = NULL,
+    @DateFrom DATETIME = NULL,
+    @DateTo DATETIME = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
+
+    SELECT
         i.Id,
         i.PurchaseOrderNumber,
         i.InvoiceNo,
@@ -53,14 +62,25 @@ BEGIN
         i.GSTChargesCalculatedAmount,
         i.ManualPurchaseOrderNumber,
         -- Calculate total quantity from details
-        (SELECT ISNULL(SUM(TotalItems), 0) FROM Inv.InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
+        (SELECT ISNULL(SUM(TotalItems), 0) FROM Inv.InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.Inventories i
     LEFT JOIN Inv.Vendors v ON i.VendorId = v.Id
     LEFT JOIN Inv.PharmacyStores s ON i.StoreId = s.StoreId
     LEFT JOIN Inv.Branches b ON i.BranchId = b.Id
     LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.IsActive = 1
-    ORDER BY i.CreatedOn DESC;
+        AND (@VendorId IS NULL OR i.VendorId = @VendorId)
+        AND (@DateFrom IS NULL OR i.CreatedOn >= @DateFrom)
+        AND (@DateTo IS NULL OR i.CreatedOn <= @DateTo)
+        AND (
+            @SearchTerm IS NULL OR @SearchTerm = ''
+            OR i.VendorInvoiceNumber LIKE '%' + @SearchTerm + '%'
+            OR v.Name LIKE '%' + @SearchTerm + '%'
+            OR st.Name LIKE '%' + @SearchTerm + '%'
+        )
+    ORDER BY i.CreatedOn DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

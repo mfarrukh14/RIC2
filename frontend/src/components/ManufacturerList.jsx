@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PencilIcon, TrashIcon, PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { manufacturerApi } from '../services/manufacturerApi';
+import Pagination from './Pagination';
 
 const ManufacturerList = ({ onEdit, onAdd }) => {
   const [manufacturers, setManufacturers] = useState([]);
@@ -13,6 +14,10 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
   useEffect(() => {
     loadManufacturers();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, itemsPerPage]);
 
   const loadManufacturers = async () => {
     try {
@@ -73,78 +78,10 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleItemsPerPageChange = (e) => {
-    setItemsPerPage(parseInt(e.target.value));
-    setCurrentPage(1);
-  };
-
   // Pagination calculations
-  const totalPages = Math.ceil(filteredManufacturers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentManufacturers = filteredManufacturers.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  const renderPagination = () => {
-    const buttons = [];
-    const maxButtons = 5;
-    const halfMaxButtons = Math.floor(maxButtons / 2);
-
-    let startPage = Math.max(1, currentPage - halfMaxButtons);
-    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-
-    if (endPage - startPage < maxButtons - 1) {
-      startPage = Math.max(1, endPage - maxButtons + 1);
-    }
-
-    // Previous button
-    if (currentPage > 1) {
-      buttons.push(
-        <button
-          key="prev"
-          onClick={() => handlePageChange(currentPage - 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50"
-        >
-          Previous
-        </button>
-      );
-    }
-
-    // Page number buttons
-    for (let i = startPage; i <= endPage; i++) {
-      buttons.push(
-        <button
-          key={i}
-          onClick={() => handlePageChange(i)}
-          className={`px-3 py-2 text-sm font-medium border ${
-            i === currentPage
-              ? 'bg-blue-50 border-blue-500 text-blue-600'
-              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-          }`}
-        >
-          {i}
-        </button>
-      );
-    }
-
-    // Next button
-    if (currentPage < totalPages) {
-      buttons.push(
-        <button
-          key="next"
-          onClick={() => handlePageChange(currentPage + 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50"
-        >
-          Next
-        </button>
-      );
-    }
-
-    return buttons;
-  };
 
   if (loading) {
     return (
@@ -185,23 +122,7 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
         </div>
 
         {/* Search and Controls */}
-        <div className="mt-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Show</span>
-              <select
-                value={itemsPerPage}
-                onChange={handleItemsPerPageChange}
-                className="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span className="text-sm text-gray-700">entries</span>
-            </div>
-          </div>
+        <div className="mt-4 flex justify-end items-center">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700">Search:</span>
             <input
@@ -345,19 +266,13 @@ const ManufacturerList = ({ onEdit, onAdd }) => {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-700">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredManufacturers.length)} of {filteredManufacturers.length} entries
-            </div>
-            <div className="flex space-x-1">
-              {renderPagination()}
-            </div>
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        pageSize={itemsPerPage}
+        totalCount={filteredManufacturers.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setItemsPerPage}
+      />
     </div>
   );
 };

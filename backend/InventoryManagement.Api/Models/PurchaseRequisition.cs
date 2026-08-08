@@ -6,7 +6,7 @@ namespace InventoryManagement.Api.Models
         public string Name { get; set; } = string.Empty;
     }
 
-    public class PurchaseRequisitionFilter
+    public class PurchaseRequisitionFilter : PagedRequest
     {
         // "Pending", "Processed", or "Closed" - matches Inv.PurchaseRequisitionStatus.Category.
         public string? StatusCategory { get; set; }

@@ -21,7 +21,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var brands = await _brandService.GetAllBrandsAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var brands = await _brandService.GetAllBrandsAsync(branchId);
                 return Ok(brands);
             }
             catch (Exception ex)
@@ -58,6 +63,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Brand name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var brandId = await _brandService.CreateBrandAsync(request);
                 return CreatedAtAction(nameof(GetBrand), new { id = brandId }, brandId);
             }
@@ -86,6 +92,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Brand name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var success = await _brandService.UpdateBrandAsync(request);
                 if (!success)
                 {

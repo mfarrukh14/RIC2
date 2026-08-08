@@ -22,7 +22,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StockAdjustmentView>>> GetAll([FromQuery] StockAdjustmentSearchRequest? request)
+        public async Task<ActionResult<PagedResult<StockAdjustmentView>>> GetAll([FromQuery] StockAdjustmentSearchRequest? request)
         {
             try
             {

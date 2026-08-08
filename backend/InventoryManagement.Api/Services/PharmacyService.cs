@@ -83,8 +83,11 @@ ORDER BY Name;";
         // master and live stock ledger used everywhere else in this app (see
         // Stock_Procedures.sql header for why it's Pharmacy.PharmacyMedicinesStocks and not
         // Inv.Stocks) - filtered to active items for the given branch, with live per-store
-        // on-hand quantity. Returns the full active list (no text filter) since the frontend
-        // renders this as a plain dropdown, not a search box.
+        // on-hand quantity. Both callers (RetailPharmacyPage dispense picker,
+        // ItemWiseSalePage report filter) are outbound/consuming contexts, so items with no
+        // stock at this store are excluded rather than just shown at 0 - there is nothing to
+        // dispense/sell from an empty shelf. Returns the full list (no text filter) since the
+        // frontend renders this as a plain dropdown, not a search box.
         public async Task<IReadOnlyList<PharmacyItemSearchResult>> GetActiveItemsAsync(int branchId, int storeId)
         {
             var results = new List<PharmacyItemSearchResult>();
@@ -93,6 +96,7 @@ SELECT i.Id, i.Name, CAST(COALESCE(i.SalePrice, i.RetailPrice, 0) AS DECIMAL(18,
     CAST(ISNULL((SELECT SUM(s.TotalItemsInStock) FROM Pharmacy.PharmacyMedicinesStocks s WHERE s.ItemId = i.Id AND s.StoreId = @StoreId), 0) AS DECIMAL(18,2)) AS StoreStockQty
 FROM Inv.Items i
 WHERE i.BranchId = @BranchId AND i.IsActive = 1
+    AND ISNULL((SELECT SUM(s.TotalItemsInStock) FROM Pharmacy.PharmacyMedicinesStocks s WHERE s.ItemId = i.Id AND s.StoreId = @StoreId), 0) > 0
 ORDER BY i.Name;";
 
             using var connection = new SqlConnection(_connectionString);

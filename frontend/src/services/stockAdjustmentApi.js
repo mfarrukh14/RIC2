@@ -7,7 +7,10 @@ const stockAdjustmentApi = {
     if (filters.storeId) params.append('storeId', filters.storeId);
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
-    
+    if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
+    if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);
+    if (filters.pageSize) params.append('pageSize', filters.pageSize);
+
     const response = await api.get(`/stockadjustments?${params.toString()}`);
     return response.data;
   },

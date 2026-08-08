@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<List<TransferInventory>> GetAllAsync()
+        public async Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var transfers = new List<TransferInventory>();
+            var totalCount = 0;
 
             try
             {
@@ -27,12 +29,18 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     transfers.Add(MapToTransferInventory(reader));
                 }
             }
@@ -42,7 +50,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return transfers;
+            return new PagedResult<TransferInventory> { Items = transfers, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<TransferInventory?> GetByIdAsync(int id)

@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IAssetAllocationService
     {
-        Task<IEnumerable<AssetAllocation>> GetAllAsync();
+        Task<PagedResult<AssetAllocation>> GetAllAsync(int branchId, AssetAllocationFilterRequest? filter = null);
         Task<AssetAllocation?> GetByIdAsync(int id);
         Task<int> CreateAsync(AssetAllocationCreateRequest request);
         Task<bool> UpdateAsync(int id, AssetAllocationUpdateRequest request);

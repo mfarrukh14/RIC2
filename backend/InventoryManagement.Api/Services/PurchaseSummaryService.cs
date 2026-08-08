@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using InventoryManagement.API.Models;
+using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.API.Services
 {
@@ -17,7 +18,8 @@ namespace InventoryManagement.API.Services
 
         public async Task<PurchaseSummaryResponse> GetAllAsync(PurchaseSummaryFilterRequest? filter = null)
         {
-            var response = new PurchaseSummaryResponse();
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
+            var response = new PurchaseSummaryResponse { PageNumber = pageNumber, PageSize = pageSize };
 
             try
             {
@@ -39,12 +41,17 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@ItemId", (object?)filter?.ItemId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@InvoiceNo", (object?)filter?.InvoiceNo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ReportType", (object?)filter?.ReportType ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 using var reader = await command.ExecuteReaderAsync();
-                
+
                 // Read records
                 while (await reader.ReadAsync())
                 {
+                    if (response.TotalCount == 0)
+                    {
+                        response.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     response.Records.Add(MapToPurchaseSummary(reader));
                 }
 

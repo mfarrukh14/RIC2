@@ -2,11 +2,12 @@
 
 -- Get All Rack Drawers
 CREATE OR ALTER PROCEDURE RackDrawer_GetAll
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    SELECT
         rd.Id,
         rd.Name,
         rd.Description,
@@ -29,6 +30,7 @@ BEGIN
     LEFT JOIN Inv.Racks r ON rd.RackId = r.Id
     LEFT JOIN Inv.RackRows rr ON rd.RackRowId = rr.Id
     LEFT JOIN Inv.RackColumns rc ON rd.RackColumnId = rc.Id
+    WHERE rd.BranchId = @BranchId
     ORDER BY rd.Name;
 END
 GO

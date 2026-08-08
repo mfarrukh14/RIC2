@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { FiPlus, FiEdit2, FiPrinter, FiSearch } from 'react-icons/fi';
 import transferInventoryApi from '../services/transferInventoryApi';
 import stockApi from '../services/stockApi';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const TransferInventoryPage = () => {
-  const [transfers, setTransfers] = useState([]);
-  const [filteredTransfers, setFilteredTransfers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
+  const [lookupError, setLookupError] = useState(null);
+
   const [lookupData, setLookupData] = useState({
     stores: [],
     stockTypes: [],
@@ -31,16 +30,28 @@ const TransferInventoryPage = () => {
   const [itemQuantities, setItemQuantities] = useState({});
 
   // Filters
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    fetchData();
+  const fetchPage = useCallback(async (params) => {
+    const data = await transferInventoryApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
   }, []);
 
+  const {
+    items: transfers,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error,
+    reload: reloadTransfers,
+  } = usePagedList(fetchPage, { searchTerm }, { initialPageSize: 10 });
+
   useEffect(() => {
-    filterTransfers();
-  }, [transfers, searchTerm]);
+    fetchLookupData();
+  }, []);
 
   // Look up how much of the selected item is actually on hand in the From
   // Store, so the quantity can be checked against it before submitting.
@@ -89,39 +100,15 @@ const TransferInventoryPage = () => {
     return () => { cancelled = true; };
   }, [formData.fromStoreId]);
 
-  const fetchData = async () => {
+  const fetchLookupData = async () => {
     try {
-      setLoading(true);
-      const [transfersData, lookup] = await Promise.all([
-        transferInventoryApi.getAll(),
-        transferInventoryApi.getLookupData()
-      ]);
-      
-      setTransfers(transfersData);
-      setFilteredTransfers(transfersData);
+      const lookup = await transferInventoryApi.getLookupData();
       setLookupData(lookup);
-      setError(null);
+      setLookupError(null);
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch transfer inventories. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching lookup data:', err);
+      setLookupError('Failed to fetch lookup data. Please try again.');
     }
-  };
-
-  const filterTransfers = () => {
-    let filtered = [...transfers];
-
-    if (searchTerm) {
-      filtered = filtered.filter(transfer =>
-        transfer.drNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transfer.fromStoreName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transfer.toStoreName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transfer.itemName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredTransfers(filtered);
   };
 
   const handleAddNew = () => {
@@ -200,7 +187,7 @@ const TransferInventoryPage = () => {
 
       setShowForm(false);
       setEditingTransfer(null);
-      await fetchData();
+      await reloadTransfers();
     } catch (err) {
       console.error('Error saving transfer:', err);
       const errorMessage = err.response?.data?.message || 'Failed to save transfer. Please try again.';
@@ -230,14 +217,6 @@ const TransferInventoryPage = () => {
       minute: '2-digit'
     });
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">
@@ -323,11 +302,13 @@ const TransferInventoryPage = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Search Item</option>
-                  {lookupData.items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} - {itemQuantities[item.id] ?? 0}
-                    </option>
-                  ))}
+                  {lookupData.items
+                    .filter((item) => !formData.fromStoreId || (itemQuantities[item.id] ?? 0) > 0)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} - {itemQuantities[item.id] ?? 0}
+                      </option>
+                    ))}
                 </select>
                 {!formData.itemId && (
                   <p className="text-xs text-red-500 mt-1">Please Select</p>
@@ -414,29 +395,14 @@ const TransferInventoryPage = () => {
             </button>
           </div>
 
-          {error && (
+          {(error || lookupError) && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-              {error}
+              {error ? 'Failed to fetch transfer inventories. Please try again.' : lookupError}
             </div>
           )}
 
           {/* Table Controls */}
-          <div className="mb-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-                className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span className="text-sm text-gray-700">entries</span>
-            </div>
-
+          <div className="mb-4 flex justify-end items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-700">Search:</span>
               <input
@@ -481,14 +447,14 @@ const TransferInventoryPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTransfers.length === 0 ? (
+                  {transfers.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
-                        Showing 0 to 0 of 0 entries
+                        {loading ? 'Loading...' : 'No data available in table'}
                       </td>
                     </tr>
                   ) : (
-                    filteredTransfers.slice(0, entriesPerPage).map((transfer) => (
+                    transfers.map((transfer) => (
                       <tr key={transfer.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {transfer.drNo}
@@ -540,10 +506,13 @@ const TransferInventoryPage = () => {
             </div>
           </div>
 
-          {/* Pagination info */}
-          <div className="mt-4 text-sm text-gray-700">
-            Showing {filteredTransfers.length > 0 ? 1 : 0} to {Math.min(entriesPerPage, filteredTransfers.length)} of {filteredTransfers.length} entries
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={entriesPerPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setEntriesPerPage}
+          />
         </>
       )}
     </div>

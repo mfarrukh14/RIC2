@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import surgicalGroupApi from '../services/surgicalGroupApi';
+import Pagination from '../components/Pagination';
 
 const SurgicalGroupPage = () => {
   const [groups, setGroups] = useState([]);
@@ -20,6 +21,7 @@ const SurgicalGroupPage = () => {
   });
 
   const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -30,6 +32,10 @@ const SurgicalGroupPage = () => {
   useEffect(() => {
     filterGroups();
   }, [groups, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, entriesPerPage]);
 
   const fetchGroups = async () => {
     try {
@@ -278,22 +284,7 @@ const SurgicalGroupPage = () => {
       )}
 
       {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
+      <div className="mb-4 flex justify-end items-center">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-700">Search:</span>
           <input
@@ -339,7 +330,7 @@ const SurgicalGroupPage = () => {
                   </td>
                 </tr>
               ) : (
-                filteredGroups.slice(0, entriesPerPage).map((group) => (
+                filteredGroups.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((group) => (
                   <tr key={group.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {group.name || '-'}
@@ -367,17 +358,13 @@ const SurgicalGroupPage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 flex justify-between items-center">
-        <div className="text-sm text-gray-700">
-          Showing {filteredGroups.length > 0 ? 1 : 0} to {Math.min(entriesPerPage, filteredGroups.length)} of {filteredGroups.length} entries
-        </div>
-        <div className="flex gap-2">
-          <button className="px-3 py-1 border border-gray-300 rounded-md bg-blue-600 text-white">
-            1
-          </button>
-        </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={filteredGroups.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

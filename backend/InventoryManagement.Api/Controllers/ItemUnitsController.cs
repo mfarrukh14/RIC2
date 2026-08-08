@@ -21,7 +21,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var itemUnits = await _itemUnitService.GetAllItemUnitsAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var itemUnits = await _itemUnitService.GetAllItemUnitsAsync(branchId);
                 return Ok(itemUnits);
             }
             catch (Exception ex)
@@ -58,6 +63,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Item unit name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var itemUnitId = await _itemUnitService.CreateItemUnitAsync(request);
                 return CreatedAtAction(nameof(GetItemUnit), new { id = itemUnitId }, itemUnitId);
             }
@@ -86,6 +92,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Item unit name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var success = await _itemUnitService.UpdateItemUnitAsync(request);
                 if (!success)
                 {

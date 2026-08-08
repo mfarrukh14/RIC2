@@ -18,7 +18,7 @@ namespace InventoryManagement.API.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<SurgicalItemGroup>> GetAllAsync()
+        public async Task<IEnumerable<SurgicalItemGroup>> GetAllAsync(int branchId)
         {
             var groups = new List<SurgicalItemGroup>();
 
@@ -29,6 +29,7 @@ namespace InventoryManagement.API.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@BranchId", branchId);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();

@@ -13,6 +13,8 @@ const returnInventoryApi = {
     if (filters.purchaseOrderNo) params.append('purchaseOrderNo', filters.purchaseOrderNo);
     if (filters.itemId) params.append('itemId', filters.itemId);
     if (filters.inventoryNo) params.append('inventoryNo', filters.inventoryNo);
+    if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);
+    if (filters.pageSize) params.append('pageSize', filters.pageSize);
 
     const queryString = params.toString();
     const response = await api.get(`/returninventory${queryString ? `?${queryString}` : ''}`);

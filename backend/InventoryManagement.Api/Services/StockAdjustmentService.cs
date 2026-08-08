@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request = null)
+        public async Task<PagedResult<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request?.PageNumber ?? 1, request?.PageSize ?? PaginationHelper.DefaultPageSize);
             var stockAdjustments = new List<StockAdjustmentView>();
+            var totalCount = 0;
 
             try
             {
@@ -28,23 +30,22 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
 
-                if (request != null)
-                {
-                    if (request.BranchId.HasValue)
-                        command.Parameters.AddWithValue("@BranchId", request.BranchId.Value);
-                    if (request.StoreId.HasValue)
-                        command.Parameters.AddWithValue("@StoreId", request.StoreId.Value);
-                    if (request.StartDate.HasValue)
-                        command.Parameters.AddWithValue("@StartDate", request.StartDate.Value);
-                    if (request.EndDate.HasValue)
-                        command.Parameters.AddWithValue("@EndDate", request.EndDate.Value);
-                }
+                command.Parameters.AddWithValue("@BranchId", (object?)request?.BranchId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StoreId", (object?)request?.StoreId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StartDate", (object?)request?.StartDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@EndDate", (object?)request?.EndDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@SearchTerm", (object?)request?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     stockAdjustments.Add(new StockAdjustmentView
                     {
                         Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -65,7 +66,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return stockAdjustments;
+            return new PagedResult<StockAdjustmentView> { Items = stockAdjustments, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<StockAdjustment?> GetByIdAsync(int id)

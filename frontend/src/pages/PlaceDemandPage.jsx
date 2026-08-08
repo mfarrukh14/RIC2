@@ -837,7 +837,12 @@ const PlaceDemandPage = () => {
                     required
                   >
                     <option value="">Search Item</option>
-                    {lookups.items.map((lookupItem) => (
+                    {lookups.items
+                      .filter((lookupItem) => {
+                        if (!formData.requestedStoreId || lookupItem.itemId == null) return true;
+                        return (itemQuantities[lookupItem.itemId] ?? 0) > 0;
+                      })
+                      .map((lookupItem) => (
                       <option key={productOptionValue(lookupItem)} value={productOptionValue(lookupItem)}>
                         {lookupItem.sourceType === 'Item' ? lookupItem.name : `${lookupItem.name} (${lookupItem.sourceType})`}
                         {lookupItem.itemId != null ? ` - ${itemQuantities[lookupItem.itemId] ?? 0}` : ''}

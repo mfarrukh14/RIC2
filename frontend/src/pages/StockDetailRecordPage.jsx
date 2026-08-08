@@ -6,6 +6,7 @@ import { stockTypesApi } from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
 import { itemTypeApi } from '../services/itemTypeApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -39,6 +40,10 @@ const StockDetailRecordPage = () => {
     fetchItems();
     fetchItemTypes();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, itemsPerPage]);
 
   // Records are always scoped to the logged-in user's own branch.
   useEffect(() => {
@@ -80,7 +85,7 @@ const StockDetailRecordPage = () => {
 
   const fetchItems = async () => {
     try {
-      const data = await itemApi.getAll();
+      const data = await itemApi.getAllUnpaginated();
       setItems(data.filter(item => item.isActive));
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -133,7 +138,6 @@ const StockDetailRecordPage = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
 
   return (
     <div className="p-6">
@@ -335,21 +339,7 @@ const StockDetailRecordPage = () => {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm">entries</label>
-          </div>
+        <div className="p-4 border-b flex justify-end items-center">
           <div className="flex items-center gap-2">
             <label className="text-sm">Search:</label>
             <input
@@ -415,41 +405,13 @@ const StockDetailRecordPage = () => {
           </table>
         </div>
 
-        <div className="p-4 border-t flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredRecords.length)} of {filteredRecords.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-              const pageNum = i + 1;
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 border rounded text-sm ${
-                    currentPage === pageNum ? 'bg-blue-600 text-white' : ''
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={filteredRecords.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

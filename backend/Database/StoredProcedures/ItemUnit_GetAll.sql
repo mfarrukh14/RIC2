@@ -4,6 +4,7 @@
 -- Description: Get all item units with related data
 -- =============================================
 CREATE OR ALTER PROCEDURE [dbo].[ItemUnit_GetAll]
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -21,5 +22,6 @@ BEGIN
         br.Name as BranchName
     FROM Inv.ItemUnits iu
     LEFT JOIN Inv.Branches br ON iu.BranchId = br.Id
+    WHERE iu.BranchId = @BranchId
     ORDER BY iu.Name;
 END

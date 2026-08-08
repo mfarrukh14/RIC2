@@ -42,6 +42,10 @@
 -- Old system INNER JOINed Manufacturers too - not surfaced in this report's
 -- output at all, so no join is needed for it either way.
 -- =============================================
+-- Paginated - see PaginationHelper.cs / PurchaseSummaryInvoice_GetAll for the
+-- shared convention. @PageNumber/@PageSize default to page 1 of 10 and apply
+-- only to the records result set below; the totals result set that follows
+-- always sums over the full filtered set regardless of which page is showing.
 CREATE OR ALTER PROCEDURE dbo.PurchaseSummary_GetAll
     @BranchId INT = NULL,
     @StoreId INT = NULL,
@@ -53,10 +57,15 @@ CREATE OR ALTER PROCEDURE dbo.PurchaseSummary_GetAll
     @InventoryDateEnd DATETIME = NULL,
     @ItemId INT = NULL,
     @InvoiceNo NVARCHAR(100) = NULL,
-    @ReportType NVARCHAR(50) = NULL
+    @ReportType NVARCHAR(50) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     SELECT
         gi.Id,
@@ -79,7 +88,8 @@ BEGIN
         b.Name AS BranchName,
         i.ItemTypeId,
         COALESCE(it.Name, CASE WHEN gi.SourceType IN ('Medicine', 'Fee') THEN gi.SourceType ELSE NULL END) AS ItemTypeName,
-        @ReportType AS ReportType
+        @ReportType AS ReportType,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.GRNItems gi
     JOIN Inv.GoodsReceivingNotes g ON gi.GRNId = g.Id
     LEFT JOIN Inv.Items i ON gi.ItemId = i.Id
@@ -109,9 +119,10 @@ BEGIN
             OR (@ReportType = 'PurchaseOrder' AND ISNULL(g.PONumber, '') <> '')
             OR (@ReportType = 'Inventory' AND ISNULL(g.PONumber, '') = '')
         )
-    ORDER BY g.DateAndTime DESC, gi.Id DESC;
+    ORDER BY g.DateAndTime DESC, gi.Id DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 
-    -- Return summary totals (same filters)
+    -- Return summary totals (same filters, NOT paginated - always the full filtered scope)
     SELECT
         ISNULL(SUM(ISNULL(gi.ReceivedQuantity, 0)), 0) AS TotalQuantity,
         ISNULL(SUM(ISNULL(gi.UnitBuyingPrice, 0)), 0) AS TotalAmount,

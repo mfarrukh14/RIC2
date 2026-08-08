@@ -8,11 +8,17 @@ IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Item_GetAll')
 GO
 
 CREATE PROCEDURE [dbo].[Item_GetAll]
+    @SearchTerm NVARCHAR(200) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
+
+    SELECT
         i.Id,
         i.Name,
         i.Description,
@@ -74,7 +80,8 @@ BEGIN
         i.MinimumOrderPrice,
         i.MinimumOrderQuantity,
         i.PackageType,
-        i.PackageSize
+        i.PackageSize,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.Items i
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN Data.Brands b ON i.BrandId = b.Id
@@ -90,6 +97,14 @@ BEGIN
     LEFT JOIN Inv.TaxRates tr ON i.TaxRateId = tr.Id
     LEFT JOIN Inv.TaxDescriptions td ON i.TaxDescriptionId = td.Id
     LEFT JOIN Inv.TaxTypes tt ON i.TaxTypeId = tt.Id
-    ORDER BY i.Name;
+    WHERE (
+        @SearchTerm IS NULL OR @SearchTerm = ''
+        OR i.Name LIKE '%' + @SearchTerm + '%'
+        OR i.BarCode LIKE '%' + @SearchTerm + '%'
+        OR it.Name LIKE '%' + @SearchTerm + '%'
+        OR c.Name LIKE '%' + @SearchTerm + '%'
+    )
+    ORDER BY i.Name
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO

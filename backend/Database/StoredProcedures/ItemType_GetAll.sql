@@ -4,6 +4,7 @@
 -- Description: Get all item types with related data
 -- =============================================
 CREATE OR ALTER PROCEDURE [dbo].[ItemType_GetAll]
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -21,5 +22,6 @@ BEGIN
         br.Name as BranchName
     FROM Inv.ItemTypes it
     LEFT JOIN Inv.Branches br ON it.BranchId = br.Id
+    WHERE it.BranchId = @BranchId
     ORDER BY it.Name;
 END

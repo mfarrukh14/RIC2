@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace InventoryManagement.Api.Models
 {
-    public class PurchaseOrderFilter
+    public class PurchaseOrderFilter : PagedRequest
     {
         public DateTime? DateFrom { get; set; }
         public DateTime? DateTo { get; set; }

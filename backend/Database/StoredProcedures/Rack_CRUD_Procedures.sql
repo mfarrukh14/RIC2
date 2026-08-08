@@ -6,11 +6,12 @@
 -- Get All Racks
 -- =============================================
 CREATE OR ALTER PROCEDURE Rack_GetAll
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    SELECT
         r.Id,
         r.Name,
         r.StoreId,
@@ -24,6 +25,7 @@ BEGIN
         r.IsActive,
         r.CreatedOn
     FROM Inv.Racks r
+    WHERE r.BranchId = @BranchId
     ORDER BY r.CreatedOn DESC;
 END
 GO

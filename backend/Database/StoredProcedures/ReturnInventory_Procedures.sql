@@ -9,10 +9,15 @@ CREATE OR ALTER PROCEDURE dbo.ReturnInventory_GetAll
     @EndDate DATETIME = NULL,
     @PurchaseOrderNo NVARCHAR(50) = NULL,
     @ItemId INT = NULL,
-    @InventoryNo NVARCHAR(50) = NULL
+    @InventoryNo NVARCHAR(50) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     SELECT
         ri.Id,
@@ -38,7 +43,8 @@ BEGIN
         ri.CreatedById,
         ri.CreatedOn,
         ri.ModifiedById,
-        ri.ModifiedOn
+        ri.ModifiedOn,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.ReturnInventory ri
     LEFT JOIN Inv.Branches b ON ri.BranchId = b.Id
     LEFT JOIN Inv.PharmacyStores s ON ri.StoreId = s.StoreId
@@ -72,7 +78,8 @@ BEGIN
             SELECT 1 FROM Inv.ReturnInventoryItems rii2
             WHERE rii2.ReturnInventoryId = ri.Id AND rii2.ItemId = @ItemId AND rii2.IsActive = 1
         ))
-    ORDER BY ri.CreatedOn DESC;
+    ORDER BY ri.CreatedOn DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

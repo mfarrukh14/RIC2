@@ -20,11 +20,11 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<TransferInventory>>> GetAll()
+        public async Task<ActionResult<PagedResult<TransferInventory>>> GetAll([FromQuery] TransferInventoryFilterRequest? filter)
         {
             try
             {
-                var transfers = await _transferInventoryService.GetAllAsync();
+                var transfers = await _transferInventoryService.GetAllAsync(filter);
                 return Ok(transfers);
             }
             catch (Exception ex)

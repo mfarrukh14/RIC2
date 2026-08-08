@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAllStores, createStore, updateStore, deleteStore, getStoreLocationLookup } from '../services/storeApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 
 const StoreManagementPage = () => {
   const [stores, setStores] = useState([]);
@@ -273,7 +274,10 @@ const StoreManagementPage = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredStores.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredStores.length / itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, itemsPerPage]);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -928,24 +932,7 @@ const StoreManagementPage = () => {
           /* Table Section */
           <>
             {/* Table Header Info */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Show</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 border border-gray-300 rounded"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <span className="text-sm">entries</span>
-              </div>
+            <div className="flex items-center justify-end mb-4">
               <div>
                 <input
                   type="text"
@@ -1034,41 +1021,13 @@ const StoreManagementPage = () => {
               </div>
             )}
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-700">
-                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredStores.length)} of {filteredStores.length} entries
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
-                >
-                  &lt;
-                </button>
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`px-3 py-1 border rounded ${
-                      currentPage === i + 1
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
-                >
-                  &gt;
-                </button>
-              </div>
-            </div>
+            <Pagination
+              currentPage={currentPage}
+              pageSize={itemsPerPage}
+              totalCount={filteredStores.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setItemsPerPage}
+            />
           </>
         )}
       </div>

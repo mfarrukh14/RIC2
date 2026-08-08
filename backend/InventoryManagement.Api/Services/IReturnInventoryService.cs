@@ -4,7 +4,7 @@ namespace InventoryManagement.API.Services
 {
     public interface IReturnInventoryService
     {
-        Task<List<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null);
+        Task<InventoryManagement.Api.Models.PagedResult<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null);
         Task<ReturnInventory?> GetByIdAsync(int id);
         Task<ReturnInventory> CreateAsync(ReturnInventoryCreateRequest request, int branchId, int createdById);
         Task<bool> UpdateAsync(int id, ReturnInventoryUpdateRequest request, int modifiedById);

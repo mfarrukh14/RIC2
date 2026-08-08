@@ -21,62 +21,73 @@ namespace InventoryManagement.Api.Services
 
         private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
-        public async Task<IReadOnlyList<PurchaseOrderSummary>> GetAllAsync(PurchaseOrderFilter filter)
+        public async Task<PagedResult<PurchaseOrderSummary>> GetAllAsync(PurchaseOrderFilter filter)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter.PageNumber, filter.PageSize);
             var results = new List<PurchaseOrderSummary>();
+            var totalCount = 0;
 
+            // Two-phase: filter/sort/page the header rows FIRST (cheap, no join
+            // fan-out), then compute ItemsCount/ItemSummary via OUTER APPLY only for
+            // the @PageSize rows on the page - a GROUP BY over the full joined set
+            // would otherwise force evaluating every order's item list before OFFSET
+            // could even apply (same convention as Stock_Search / StockAdjustment_GetAll).
             const string sql = @"
+;WITH FilteredOrders AS (
+    SELECT
+        po.PurchaseOrderId,
+        po.PONumber,
+        po.ManualPONumber,
+        po.StoreId,
+        s.StoreName,
+        po.VendorId,
+        v.Name AS VendorName,
+        po.CreatedOn,
+        po.POValidityDate,
+        po.Status,
+        po.TotalQuantity,
+        po.TotalAmount,
+        po.Subject
+    FROM dbo.PurchaseOrders po
+    INNER JOIN dbo.PharmacyStores s ON s.StoreId = po.StoreId
+    INNER JOIN dbo.Vendors v ON v.Id = po.VendorId
+    WHERE po.IsActive = 1
+      AND (@DateFrom IS NULL OR po.CreatedOn >= @DateFrom)
+      AND (@DateTo IS NULL OR po.CreatedOn <= @DateTo)
+      AND (@VendorId IS NULL OR po.VendorId = @VendorId)
+      AND (@Status IS NULL OR po.Status = @Status)
+      AND (
+            @Search IS NULL
+            OR po.PONumber LIKE '%' + @Search + '%'
+            OR ISNULL(po.ManualPONumber, '') LIKE '%' + @Search + '%'
+            OR v.Name LIKE '%' + @Search + '%'
+            OR s.StoreName LIKE '%' + @Search + '%'
+            OR po.Status LIKE '%' + @Search + '%'
+          )
+),
+Paged AS (
+    SELECT *, COUNT(*) OVER() AS TotalCount
+    FROM FilteredOrders
+    ORDER BY CreatedOn DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY
+)
 SELECT
-    po.PurchaseOrderId,
-    po.PONumber,
-    po.ManualPONumber,
-    po.StoreId,
-    s.StoreName,
-    po.VendorId,
-    v.Name AS VendorName,
-    po.CreatedOn,
-    po.POValidityDate,
-    po.Status,
-    po.TotalQuantity,
-    po.TotalAmount,
-    po.Subject,
-    COUNT(poi.Id) AS ItemsCount,
-    STRING_AGG(COALESCE(i.Name, med.MedicineFullName, f.Name, 'Unassigned Item'), ', ') AS ItemSummary
-FROM dbo.PurchaseOrders po
-INNER JOIN dbo.PharmacyStores s ON s.StoreId = po.StoreId
-INNER JOIN dbo.Vendors v ON v.Id = po.VendorId
-LEFT JOIN dbo.PurchaseOrderItems poi ON poi.PurchaseOrderId = po.PurchaseOrderId AND poi.IsActive = 1
-LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
-LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = poi.MedicineId
-LEFT JOIN Account.Fees f ON f.Id = poi.SubServiceId
-WHERE po.IsActive = 1
-  AND (@DateFrom IS NULL OR po.CreatedOn >= @DateFrom)
-  AND (@DateTo IS NULL OR po.CreatedOn <= @DateTo)
-  AND (@VendorId IS NULL OR po.VendorId = @VendorId)
-  AND (@Status IS NULL OR po.Status = @Status)
-  AND (
-        @Search IS NULL
-        OR po.PONumber LIKE '%' + @Search + '%'
-        OR ISNULL(po.ManualPONumber, '') LIKE '%' + @Search + '%'
-        OR v.Name LIKE '%' + @Search + '%'
-        OR s.StoreName LIKE '%' + @Search + '%'
-        OR po.Status LIKE '%' + @Search + '%'
-      )
-GROUP BY
-    po.PurchaseOrderId,
-    po.PONumber,
-    po.ManualPONumber,
-    po.StoreId,
-    s.StoreName,
-    po.VendorId,
-    v.Name,
-    po.CreatedOn,
-    po.POValidityDate,
-    po.Status,
-    po.TotalQuantity,
-    po.TotalAmount,
-    po.Subject
-ORDER BY po.CreatedOn DESC;";
+    Paged.*,
+    ISNULL(agg.ItemsCount, 0) AS ItemsCount,
+    agg.ItemSummary
+FROM Paged
+OUTER APPLY (
+    SELECT
+        COUNT(*) AS ItemsCount,
+        STRING_AGG(COALESCE(i.Name, med.MedicineFullName, f.Name, 'Unassigned Item'), ', ') AS ItemSummary
+    FROM dbo.PurchaseOrderItems poi
+    LEFT JOIN dbo.Items i ON i.Id = poi.ItemId
+    LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = poi.MedicineId
+    LEFT JOIN Account.Fees f ON f.Id = poi.SubServiceId
+    WHERE poi.PurchaseOrderId = Paged.PurchaseOrderId
+      AND poi.IsActive = 1
+) agg
+ORDER BY Paged.CreatedOn DESC;";
 
             try
             {
@@ -87,11 +98,17 @@ ORDER BY po.CreatedOn DESC;";
                 command.Parameters.AddWithValue("@VendorId", (object?)filter.VendorId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Status", string.IsNullOrWhiteSpace(filter.Status) ? DBNull.Value : filter.Status.Trim());
                 command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
+                command.Parameters.AddWithValue("@Offset", (pageNumber - 1) * pageSize);
+                command.Parameters.AddWithValue("@Take", pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     results.Add(MapSummary(reader));
                 }
             }
@@ -101,7 +118,7 @@ ORDER BY po.CreatedOn DESC;";
                 throw;
             }
 
-            return results;
+            return new PagedResult<PurchaseOrderSummary> { Items = results, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<PurchaseOrderDetails?> GetByIdAsync(int id)

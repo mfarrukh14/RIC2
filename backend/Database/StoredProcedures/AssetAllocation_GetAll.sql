@@ -8,9 +8,16 @@ IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'AssetAllocatio
 GO
 
 CREATE PROCEDURE [dbo].[AssetAllocation_GetAll]
+    @BranchId INT,
+    @SearchTerm NVARCHAR(200) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     CREATE TABLE #UserLookup
     (
@@ -106,7 +113,8 @@ BEGIN
         aa.CreatedById,
         aa.CreatedOn,
         aa.ModifiedById,
-        aa.ModifiedOn
+        aa.ModifiedOn,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.AssetAllocations aa
     LEFT JOIN #UserLookup u ON aa.UserId = u.Id
     LEFT JOIN Inv.Departments d ON aa.DepartmentId = d.Id
@@ -117,5 +125,14 @@ BEGIN
     LEFT JOIN dbo.Floors flr ON dr.FID = flr.FID
     LEFT JOIN Inv.Branches b ON aa.BranchId = b.Id
     LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
-    ORDER BY aa.AllocatedDate DESC, aa.Id DESC;
+    WHERE aa.BranchId = @BranchId
+        AND (
+            @SearchTerm IS NULL OR @SearchTerm = ''
+            OR i.Name LIKE '%' + @SearchTerm + '%'
+            OR u.Name LIKE '%' + @SearchTerm + '%'
+            OR r.Name LIKE '%' + @SearchTerm + '%'
+            OR d.Name LIKE '%' + @SearchTerm + '%'
+        )
+    ORDER BY aa.AllocatedDate DESC, aa.Id DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END

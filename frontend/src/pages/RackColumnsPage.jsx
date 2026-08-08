@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import rackColumnApi from '../services/rackColumnApi';
 import { getAllStores } from '../services/storeApi';
 import racksApi from '../services/racksApi';
+import Pagination from '../components/Pagination';
 
 const RackColumnsPage = () => {
   const [rackColumns, setRackColumns] = useState([]);
@@ -149,9 +150,6 @@ const RackColumnsPage = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = rackColumns.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(rackColumns.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
     <div className="p-6">
@@ -278,24 +276,7 @@ const RackColumnsPage = () => {
       {/* List View */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-4 border-b">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <span>Show</span>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border rounded px-2 py-1"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span>entries</span>
-            </div>
+          <div className="flex justify-end items-center">
             <div>
               <input
                 type="text"
@@ -370,41 +351,13 @@ const RackColumnsPage = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="p-4 border-t flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, rackColumns.length)} of {rackColumns.length} entries
-          </div>
-          <div className="flex space-x-1">
-            <button
-              onClick={() => paginate(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => paginate(i + 1)}
-                className={`px-3 py-1 border rounded ${
-                  currentPage === i + 1
-                    ? 'bg-blue-500 text-white'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              onClick={() => paginate(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={rackColumns.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

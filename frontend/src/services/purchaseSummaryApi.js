@@ -18,7 +18,9 @@ const purchaseSummaryApi = {
     if (filters.itemId) params.append('itemId', filters.itemId);
     if (filters.invoiceNo) params.append('invoiceNo', filters.invoiceNo);
     if (filters.reportType) params.append('reportType', filters.reportType);
-    
+    if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);
+    if (filters.pageSize) params.append('pageSize', filters.pageSize);
+
     const queryString = params.toString();
     const url = `${API_BASE_URL}/purchasesummary${queryString ? `?${queryString}` : ''}`;
     

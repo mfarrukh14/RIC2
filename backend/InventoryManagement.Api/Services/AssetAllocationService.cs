@@ -17,9 +17,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<AssetAllocation>> GetAllAsync()
+        public async Task<PagedResult<AssetAllocation>> GetAllAsync(int branchId, AssetAllocationFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var assetAllocations = new List<AssetAllocation>();
+            var totalCount = 0;
 
             try
             {
@@ -28,12 +30,19 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@BranchId", branchId);
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     assetAllocations.Add(MapToAssetAllocation(reader));
                 }
             }
@@ -43,7 +52,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return assetAllocations;
+            return new PagedResult<AssetAllocation> { Items = assetAllocations, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<AssetAllocation?> GetByIdAsync(int id)

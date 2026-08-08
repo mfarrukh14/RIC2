@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import itemCategoryApi from '../services/itemCategoryApi';
+import Pagination from '../components/Pagination';
 
 const ItemCategoryPage = () => {
   const [categories, setCategories] = useState([]);
@@ -16,6 +17,7 @@ const ItemCategoryPage = () => {
   });
 
   const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -27,6 +29,10 @@ const ItemCategoryPage = () => {
   useEffect(() => {
     filterCategories();
   }, [categories, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, entriesPerPage]);
 
   const fetchCategories = async () => {
     try {
@@ -246,22 +252,7 @@ const ItemCategoryPage = () => {
       )}
 
       {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
+      <div className="mb-4 flex justify-end items-center">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-700">Search:</span>
           <input
@@ -307,7 +298,7 @@ const ItemCategoryPage = () => {
                   </td>
                 </tr>
               ) : (
-                filteredCategories.slice(0, entriesPerPage).map((category) => (
+                filteredCategories.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((category) => (
                   <tr key={category.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-blue-600">
                       {category.name}
@@ -355,10 +346,13 @@ const ItemCategoryPage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing 1 to {Math.min(entriesPerPage, filteredCategories.length)} of {filteredCategories.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={filteredCategories.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

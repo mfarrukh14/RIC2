@@ -19,7 +19,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<PurchaseRequisitionListItem>>> GetAll([FromQuery] PurchaseRequisitionFilter filter)
+        public async Task<ActionResult<PagedResult<PurchaseRequisitionListItem>>> GetAll([FromQuery] PurchaseRequisitionFilter filter)
         {
             try
             {

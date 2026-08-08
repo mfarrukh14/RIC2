@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.API.Models
 {
@@ -112,7 +113,7 @@ namespace InventoryManagement.API.Models
         public string? ReportType { get; set; }
     }
 
-    public class PurchaseSummaryFilterRequest
+    public class PurchaseSummaryFilterRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
@@ -140,6 +141,9 @@ namespace InventoryManagement.API.Models
     {
         public List<PurchaseSummary> Records { get; set; } = new();
         public PurchaseSummaryTotals Totals { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int PageNumber { get; set; }
+        public int PageSize { get; set; }
     }
 
     public class PurchaseSummaryLookupData

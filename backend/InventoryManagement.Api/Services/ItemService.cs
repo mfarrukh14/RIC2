@@ -17,9 +17,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Item>> GetAllAsync()
+        public async Task<PagedResult<Item>> GetAllAsync(ItemFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var items = new List<Item>();
+            var totalCount = 0;
 
             try
             {
@@ -28,12 +30,18 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     items.Add(MapToItem(reader));
                 }
             }
@@ -43,7 +51,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return items;
+            return new PagedResult<Item> { Items = items, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<IEnumerable<UnifiedItemLookupResult>> GetAllWithMedicinesAsync(string? search)

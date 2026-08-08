@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ClipboardDocumentListIcon,
   EyeIcon,
@@ -16,6 +16,8 @@ import { productOptionValue, parseProductOptionValue, findProductRow } from '../
 import { storeAllocationToUserApi } from '../services/storeAllocationToUserApi';
 import { getAllStores } from '../services/storeApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
@@ -70,10 +72,28 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
   const { session } = useSession();
 
   const [activeTab, setActiveTab] = useState('Pending');
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await purchaseRequisitionApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: list,
+    totalCount,
+    currentPage,
+    pageSize,
+    setPageSize,
+    goToPage,
+    loading,
+    error: fetchError,
+    reload: loadList,
+  } = usePagedList(
+    fetchPage,
+    { statusCategory: activeTab, branchId: session?.branchId, search: searchTerm },
+    { initialPageSize: 10 }
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [header, setHeader] = useState(emptyHeaderForm);
@@ -96,11 +116,6 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
   useEffect(() => {
     loadLookups();
   }, []);
-
-  useEffect(() => {
-    loadList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   // Launched from Approved Demands' "Generate Purchase Requisition" button - opens the
   // form pre-filled with the demand's items instead of the old simplified PO-creation modal.
@@ -137,27 +152,6 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
       console.error('Error loading purchase requisition lookups:', lookupError);
     }
   };
-
-  const loadList = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await purchaseRequisitionApi.getAll({ statusCategory: activeTab, branchId: session?.branchId });
-      setList(data);
-    } catch (listError) {
-      console.error('Error loading purchase requisitions:', listError);
-      setError('Failed to load purchase requisitions.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredList = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return list;
-    return list.filter((pr) => [pr.prNumber, pr.departmentName, pr.vendorName, pr.statusName]
-      .some((value) => (value || '').toLowerCase().includes(term)));
-  }, [list, searchTerm]);
 
   // itemApi.getAllWithMedicines() doesn't return itemTypeId, so the Item Type
   // dropdown can no longer narrow this list - it shows everything regardless of selection.
@@ -575,10 +569,8 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
             </label>
           </div>
 
-          {error ? (
-            <div className="px-4 py-4 text-sm text-rose-600">{error}</div>
-          ) : loading ? (
-            <div className="px-4 py-4 text-sm text-slate-500">Loading purchase requisitions...</div>
+          {fetchError ? (
+            <div className="px-4 py-4 text-sm text-rose-600">Failed to load purchase requisitions.</div>
           ) : (
             <div className="overflow-x-auto px-4 py-2">
               <table className="min-w-full border-separate border-spacing-0 text-sm">
@@ -598,10 +590,10 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredList.length === 0 ? (
-                    <tr><td colSpan="11" className="border-b border-slate-200 px-4 py-10 text-center text-slate-500">No data available in table</td></tr>
+                  {list.length === 0 ? (
+                    <tr><td colSpan="11" className="border-b border-slate-200 px-4 py-10 text-center text-slate-500">{loading ? 'Loading purchase requisitions...' : 'No data available in table'}</td></tr>
                   ) : (
-                    filteredList.map((pr) => (
+                    list.map((pr) => (
                       <tr key={pr.id} className="text-slate-700">
                         <td className="border-b border-slate-200 px-4 py-3 text-sky-700">{pr.prNumber}</td>
                         <td className="border-b border-slate-200 px-4 py-3">{pr.departmentName || '-'}</td>
@@ -633,6 +625,14 @@ const PurchaseRequisitionsPage = ({ prefill, onPrefillConsumed }) => {
               </table>
             </div>
           )}
+
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setPageSize}
+          />
         </section>
       </div>
 

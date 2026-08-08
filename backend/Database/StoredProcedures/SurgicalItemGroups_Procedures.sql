@@ -4,6 +4,7 @@
 
 -- 1. Get All Surgical Item Groups
 CREATE OR ALTER PROCEDURE SurgicalItemGroups_GetAll
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -23,7 +24,7 @@ BEGIN
         sg.IsDeleted
     FROM Inv.SurgicalGroups sg
     LEFT JOIN Inv.Branches b ON sg.BranchId = b.Id
-    WHERE sg.IsDeleted = 0 AND sg.IsActive = 1
+    WHERE sg.IsDeleted = 0 AND sg.IsActive = 1 AND sg.BranchId = @BranchId
     ORDER BY sg.CreatedOn DESC;
 END
 GO

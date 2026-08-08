@@ -2,11 +2,12 @@
 
 -- Get All Rack Columns
 CREATE OR ALTER PROCEDURE RackColumn_GetAll
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    SELECT 
+
+    SELECT
         rc.Id,
         rc.Name,
         rc.Description,
@@ -23,6 +24,7 @@ BEGIN
     FROM Inv.RackColumns rc
     LEFT JOIN Inv.PharmacyStores s ON rc.StoreId = s.StoreId
     LEFT JOIN Inv.Racks r ON rc.RackId = r.Id
+    WHERE rc.BranchId = @BranchId
     ORDER BY rc.Name;
 END
 GO

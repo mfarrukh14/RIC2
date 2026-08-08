@@ -1,4 +1,4 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import {
   getAllStockConsumptions,
@@ -9,18 +9,40 @@ import {
 } from '../services/stockConsumptionApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
+import stockApi from '../services/stockApi';
 import { stockTypesApi } from '../services/stockTypesApi';
 import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const StockConsumptionPage = () => {
-  const [consumptions, setConsumptions] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await getAllStockConsumptions(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: consumptions,
+    totalCount,
+    currentPage,
+    pageSize,
+    setPageSize,
+    goToPage,
+    loading,
+    reload: loadConsumptions,
+  } = usePagedList(fetchPage, { searchTerm }, { initialPageSize: 10 });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [itemQuantities, setItemQuantities] = useState({});
 
   const [formData, setFormData] = useState({
     storeId: '',
@@ -39,26 +61,43 @@ const StockConsumptionPage = () => {
   });
 
   useEffect(() => {
-    loadData();
+    loadLookups();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  // Consumption is an outbound action (using up stock) - the item dropdown
+  // should only offer items actually on hand at the selected store, with
+  // their live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!formData.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(formData.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [formData.storeId]);
+
+  const loadLookups = async () => {
     try {
-      const [consumptionsData, storesData, itemsData, stockTypesData] = await Promise.all([
-        getAllStockConsumptions(),
+      const [storesData, itemsData, stockTypesData] = await Promise.all([
         getAllStores(),
         itemApi.getAllWithMedicines(),
         stockTypesApi.getAllStockTypes()
       ]);
-      setConsumptions(consumptionsData);
       setStores(storesData);
       setItems(itemsData);
       setStockTypes(stockTypesData);
     } catch (err) {
       setError('Failed to load data: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -90,7 +129,11 @@ const StockConsumptionPage = () => {
     }));
   };
 
-  const filteredItems = items.filter(item => item.isActive);
+  const filteredItems = items.filter(item => {
+    if (!item.isActive) return false;
+    if (!formData.storeId || item.itemId == null) return true;
+    return (itemQuantities[item.itemId] ?? 0) > 0;
+  });
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...formData.details];
@@ -137,7 +180,7 @@ const StockConsumptionPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     setError(null);
 
     try {
@@ -166,12 +209,12 @@ const StockConsumptionPage = () => {
         await createStockConsumption(payload);
       }
 
-      await loadData();
+      await loadConsumptions();
       resetForm();
     } catch (err) {
       setError('Failed to save: ' + (err.response?.data?.message || err.message));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -202,7 +245,7 @@ const StockConsumptionPage = () => {
     if (window.confirm('Are you sure you want to delete this stock consumption?')) {
       try {
         await deleteStockConsumption(id);
-        await loadData();
+        await loadConsumptions();
       } catch (err) {
         setError('Failed to delete: ' + err.message);
       }
@@ -314,11 +357,15 @@ const StockConsumptionPage = () => {
                             className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="">Select Item</option>
-                            {filteredItems.map(item => (
-                              <option key={productOptionValue(item)} value={productOptionValue(item)}>
-                                {item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`}
-                              </option>
-                            ))}
+                            {filteredItems.map(item => {
+                              const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
+                              const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : null;
+                              return (
+                                <option key={productOptionValue(item)} value={productOptionValue(item)}>
+                                  {formData.storeId && qty !== null ? `${label} - ${qty}` : label}
+                                </option>
+                              );
+                            })}
                           </select>
                         </td>
                         <td className="px-4 py-3">
@@ -375,10 +422,10 @@ const StockConsumptionPage = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
-                {loading ? 'Saving...' : editingId ? 'Update' : 'Save'}
+                {submitting ? 'Saving...' : editingId ? 'Update' : 'Save'}
               </button>
             </div>
           </form>
@@ -387,6 +434,15 @@ const StockConsumptionPage = () => {
 
       {!showForm && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="flex justify-end px-4 py-3 border-b border-gray-200">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -474,6 +530,13 @@ const StockConsumptionPage = () => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
     </div>

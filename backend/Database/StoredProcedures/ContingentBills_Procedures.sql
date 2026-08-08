@@ -14,12 +14,18 @@ CREATE PROCEDURE ContingentBills_GetAll
     @PurchaseOrderTypeId INT = NULL,
     @ContingentBillStatusId INT = NULL,
     @DateStart DATETIME = NULL,
-    @DateEnd DATETIME = NULL
+    @DateEnd DATETIME = NULL,
+    @SearchTerm NVARCHAR(200) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
+
+    SELECT
         cb.Id,
         0 AS FinancialYearId,
         NULL AS FinancialYearName,
@@ -68,7 +74,8 @@ BEGIN
         CAST(cb.ModifiedById AS NVARCHAR(450)) AS ModifiedById,
         cb.ModifiedOn,
         CAST(0 AS BIT) AS IsDeleted,
-        cb.IsActive
+        cb.IsActive,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.ContingentBills cb
     LEFT JOIN Inv.Vendors v ON cb.VendorId = v.Id
     LEFT JOIN Inv.Branches b ON cb.BranchId = b.Id
@@ -78,7 +85,13 @@ BEGIN
         AND (@DateStart IS NULL OR cb.BillDate >= @DateStart)
         AND (@DateEnd IS NULL OR cb.BillDate <= @DateEnd)
         AND (@BudgetSetupId IS NULL OR cb.BudgetHeadId = TRY_CAST(@BudgetSetupId AS INT))
-    ORDER BY cb.CreatedOn DESC;
+        AND (
+            @SearchTerm IS NULL OR @SearchTerm = ''
+            OR cb.BillNumber LIKE '%' + @SearchTerm + '%'
+            OR v.Name LIKE '%' + @SearchTerm + '%'
+        )
+    ORDER BY cb.CreatedOn DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

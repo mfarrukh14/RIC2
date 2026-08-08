@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownTrayIcon,
   EyeIcon,
@@ -12,6 +12,8 @@ import vendorApi from '../services/vendorApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import { productOptionValue, parseProductOptionValue, findProductRow } from '../utils/productKey';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 function formatDateTime(value) {
   if (!value) {
@@ -107,10 +109,7 @@ function matchesItemType(item, selectedType) {
 }
 
 const PurchaseOrderPage = () => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   // No date range by default - a real purchase order can be weeks or months old, and
   // silently filtering the list down to "the last 30 days" on first load made the page
@@ -122,9 +121,36 @@ const PurchaseOrderPage = () => {
     vendorId: '',
     status: ''
   });
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [submittedFilters, setSubmittedFilters] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await purchaseOrderApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: orders,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error: fetchError,
+    reload: loadOrders,
+    search: runSearch,
+  } = usePagedList(
+    fetchPage,
+    {
+      dateFrom: submittedFilters?.dateFrom ? `${submittedFilters.dateFrom}T00:00:00.000Z` : undefined,
+      dateTo: submittedFilters?.dateTo ? `${submittedFilters.dateTo}T23:59:59.999Z` : undefined,
+      vendorId: submittedFilters?.vendorId || undefined,
+      status: submittedFilters?.status || undefined,
+      search: searchTerm || undefined,
+    },
+    { autoLoad: false, initialPageSize: 10 }
+  );
   const [lookups, setLookups] = useState({
     vendors: [],
     stores: [],
@@ -137,14 +163,20 @@ const PurchaseOrderPage = () => {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  useEffect(() => {
-    loadLookups();
-    loadOrders();
-  }, []);
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [entriesPerPage, searchTerm, orders]);
+    loadLookups();
+    setSubmittedFilters(filters);
+    runSearch({
+      dateFrom: filters.dateFrom ? `${filters.dateFrom}T00:00:00.000Z` : undefined,
+      dateTo: filters.dateTo ? `${filters.dateTo}T23:59:59.999Z` : undefined,
+      vendorId: filters.vendorId || undefined,
+      status: filters.status || undefined,
+      search: searchTerm || undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadLookups = async () => {
     try {
@@ -155,52 +187,33 @@ const PurchaseOrderPage = () => {
       ]);
 
       setLookups({ vendors, stores, items });
-    } catch (lookupError) {
-      console.error('Error loading purchase order lookups:', lookupError);
-      setError('Failed to load purchase order dropdown data.');
+    } catch (lookupErr) {
+      console.error('Error loading purchase order lookups:', lookupErr);
+      setPageError('Failed to load purchase order dropdown data.');
     }
   };
 
-  const loadOrders = async (overrideFilters = filters) => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const data = await purchaseOrderApi.getAll({
-        dateFrom: overrideFilters.dateFrom ? `${overrideFilters.dateFrom}T00:00:00.000Z` : undefined,
-        dateTo: overrideFilters.dateTo ? `${overrideFilters.dateTo}T23:59:59.999Z` : undefined,
-        vendorId: overrideFilters.vendorId || undefined,
-        status: overrideFilters.status || undefined
-      });
-      setOrders(data);
-    } catch (ordersError) {
-      console.error('Error loading purchase orders:', ordersError);
-      setError('Failed to load purchase orders.');
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    setSubmittedFilters(filters);
+    runSearch({
+      dateFrom: filters.dateFrom ? `${filters.dateFrom}T00:00:00.000Z` : undefined,
+      dateTo: filters.dateTo ? `${filters.dateTo}T23:59:59.999Z` : undefined,
+      vendorId: filters.vendorId || undefined,
+      status: filters.status || undefined,
+      search: searchTerm || undefined,
+    });
   };
 
-  const filteredOrders = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return orders;
-    }
-
-    const normalized = searchTerm.trim().toLowerCase();
-    return orders.filter((order) => [
-      order.poNumber,
-      order.manualPONumber,
-      order.vendorName,
-      order.status,
-      order.itemSummary
-    ].some((value) => (value || '').toLowerCase().includes(normalized)));
-  }, [orders, searchTerm]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / entriesPerPage));
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredOrders.slice(startIndex, startIndex + entriesPerPage);
-  const showingFrom = filteredOrders.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredOrders.length);
+  const handleSearchTermChange = (value) => {
+    setSearchTerm(value);
+    runSearch({
+      dateFrom: submittedFilters?.dateFrom ? `${submittedFilters.dateFrom}T00:00:00.000Z` : undefined,
+      dateTo: submittedFilters?.dateTo ? `${submittedFilters.dateTo}T23:59:59.999Z` : undefined,
+      vendorId: submittedFilters?.vendorId || undefined,
+      status: submittedFilters?.status || undefined,
+      search: value || undefined,
+    });
+  };
 
   const filteredLineItems = useMemo(() => {
     if (!lineSearchTerm.trim()) {
@@ -223,10 +236,6 @@ const PurchaseOrderPage = () => {
       ...current,
       [name]: value
     }));
-  };
-
-  const handleSearch = () => {
-    loadOrders(filters);
   };
 
   const handleFormChange = (event) => {
@@ -358,8 +367,10 @@ const PurchaseOrderPage = () => {
     }
   };
 
+  // Exports only the current page - the full filtered result set now lives
+  // server-side and isn't all loaded into the browser at once.
   const exportCsv = () => {
-    const rows = filteredOrders.map((order) => [
+    const rows = orders.map((order) => [
       order.poNumber,
       `${order.itemsCount} item(s) / ${formatNumber(order.totalQuantity)}`,
       order.vendorName,
@@ -393,7 +404,7 @@ const PurchaseOrderPage = () => {
     } catch (detailsError) {
       console.error('Error loading purchase order details:', detailsError);
       setSelectedOrder(null);
-      setError('Failed to load purchase order details.');
+      setPageError('Failed to load purchase order details.');
     } finally {
       setDetailsLoading(false);
     }
@@ -435,6 +446,10 @@ const PurchaseOrderPage = () => {
               </div>
             </div>
 
+            {pageError && (
+              <div className="px-6 pt-4 text-sm text-rose-600">{pageError}</div>
+            )}
+
             <div className="grid grid-cols-1 gap-x-8 gap-y-6 px-6 py-5 lg:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Date Range</label>
@@ -475,25 +490,15 @@ const PurchaseOrderPage = () => {
           </section>
 
           <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <span>Show</span>
-                <select value={entriesPerPage} onChange={(event) => setEntriesPerPage(Number(event.target.value))} className="rounded-md border border-slate-200 px-2 py-1 text-sm">
-                  {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
-                </select>
-                <span>entries</span>
-              </div>
-
+            <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-end">
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <span>Search:</span>
-                <input type="text" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 md:w-60" />
+                <input type="text" value={searchTerm} onChange={(event) => handleSearchTermChange(event.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-indigo-400 md:w-60" />
               </label>
             </div>
 
-            {error ? (
-              <div className="px-4 pb-4 text-sm text-rose-600">{error}</div>
-            ) : loading ? (
-              <div className="px-4 pb-4 text-sm text-slate-500">Loading purchase orders...</div>
+            {fetchError ? (
+              <div className="px-4 pb-4 text-sm text-rose-600">Failed to load purchase orders.</div>
             ) : (
               <>
                 <div className="overflow-x-auto px-4">
@@ -510,12 +515,12 @@ const PurchaseOrderPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {pageItems.length === 0 ? (
+                      {orders.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="border-b border-slate-200 px-4 py-12 text-center text-slate-500">No data available in table</td>
+                          <td colSpan="7" className="border-b border-slate-200 px-4 py-12 text-center text-slate-500">{loading ? 'Loading purchase orders...' : 'No data available in table'}</td>
                         </tr>
                       ) : (
-                        pageItems.map((order) => (
+                        orders.map((order) => (
                           <tr key={order.purchaseOrderId} className="text-slate-700">
                             <td className="border-b border-slate-200 px-6 py-8 align-middle">{order.poNumber}</td>
                             <td className="border-b border-slate-200 px-6 py-8 align-middle">{order.itemsCount} item(s) ({formatNumber(order.totalQuantity)})</td>
@@ -546,14 +551,13 @@ const PurchaseOrderPage = () => {
                   </table>
                 </div>
 
-                <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                  <div>Showing {showingFrom} to {showingTo} of {filteredOrders.length} entries</div>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={currentPage === 1} className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50">‹</button>
-                    <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>
-                    <button type="button" onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))} disabled={currentPage === totalPages} className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50">›</button>
-                  </div>
-                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  pageSize={entriesPerPage}
+                  totalCount={totalCount}
+                  onPageChange={goToPage}
+                  onPageSizeChange={setEntriesPerPage}
+                />
               </>
             )}
           </section>

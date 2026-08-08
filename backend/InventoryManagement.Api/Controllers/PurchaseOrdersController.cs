@@ -19,7 +19,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<PurchaseOrderSummary>>> GetAll([FromQuery] PurchaseOrderFilter filter)
+        public async Task<ActionResult<PagedResult<PurchaseOrderSummary>>> GetAll([FromQuery] PurchaseOrderFilter filter)
         {
             try
             {

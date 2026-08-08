@@ -15,7 +15,7 @@ namespace InventoryManagement.Api.Services
                 ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        public async Task<IEnumerable<Manufacturer>> GetAllManufacturersAsync()
+        public async Task<IEnumerable<Manufacturer>> GetAllManufacturersAsync(int branchId)
         {
             var manufacturers = new List<Manufacturer>();
 
@@ -24,6 +24,7 @@ namespace InventoryManagement.Api.Services
             {
                 CommandType = CommandType.StoredProcedure
             };
+            command.Parameters.AddWithValue("@BranchId", branchId);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
@@ -59,7 +60,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateManufacturerAsync(CreateManufacturerRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: null);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Manufacturer_Insert", connection)
@@ -76,7 +77,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateManufacturerAsync(UpdateManufacturerRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: request.Id);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Manufacturer_Update", connection)
@@ -114,10 +115,15 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        private async Task EnsureNameNotDuplicateAsync(string name, int? branchId, int? excludeId)
         {
+            if (branchId == null)
+            {
+                return;
+            }
+
             var normalizedName = name?.Trim() ?? string.Empty;
-            var manufacturers = await GetAllManufacturersAsync();
+            var manufacturers = await GetAllManufacturersAsync(branchId.Value);
 
             var isDuplicate = manufacturers.Any(m =>
                 (!excludeId.HasValue || m.Id != excludeId.Value) &&

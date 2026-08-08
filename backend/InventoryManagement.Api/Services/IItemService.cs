@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IItemService
     {
-        Task<IEnumerable<Item>> GetAllAsync();
+        Task<PagedResult<Item>> GetAllAsync(ItemFilterRequest? filter = null);
         Task<IEnumerable<UnifiedItemLookupResult>> GetAllWithMedicinesAsync(string? search);
         Task<Item?> GetByIdAsync(int id);
         Task<int> CreateAsync(ItemCreateRequest request);

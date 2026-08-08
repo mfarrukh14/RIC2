@@ -1,28 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 import { assetAllocationApi } from "../services/assetAllocationApi";
+import Pagination from "./Pagination";
+import usePagedList from "../hooks/usePagedList";
 
 const AssetAllocationList = ({ onAdd, onEdit }) => {
-  const [allocations, setAllocations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    fetchAllocations();
+  const fetchPage = useCallback(async (params) => {
+    const data = await assetAllocationApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
   }, []);
 
-  const fetchAllocations = async () => {
-    try {
-      setLoading(true);
-      const data = await assetAllocationApi.getAll();
-      setAllocations(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    items: allocations,
+    totalCount,
+    currentPage,
+    pageSize,
+    setPageSize,
+    goToPage,
+    loading,
+    error: fetchError,
+    reload: fetchAllocations,
+  } = usePagedList(fetchPage, { searchTerm }, { initialPageSize: 10 });
+
+  const [error, setError] = useState(null);
 
   const handleAddAllocation = () => {
     onAdd();
@@ -60,13 +62,6 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
     }
   };
 
-  const filteredAllocations = allocations.filter((allocation) =>
-    (allocation.inventoryItemName && allocation.inventoryItemName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (allocation.userName && allocation.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (allocation.roomName && allocation.roomName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (allocation.departmentName && allocation.departmentName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString();
@@ -86,14 +81,6 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
       </span>
     );
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -133,12 +120,14 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
         </div>
 
         {/* Error Alert */}
-        {error && (
+        {(error || fetchError) && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
+                <div className="mt-2 text-sm text-red-700">
+                  {error || 'Failed to fetch asset allocations.'}
+                </div>
               </div>
             </div>
           </div>
@@ -183,7 +172,7 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAllocations.map((allocation) => (
+                {allocations.map((allocation) => (
                   <tr key={allocation.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
@@ -267,23 +256,22 @@ const AssetAllocationList = ({ onAdd, onEdit }) => {
               </tbody>
             </table>
 
-            {filteredAllocations.length === 0 && (
+            {allocations.length === 0 && (
               <div className="text-center py-12">
                 <div className="text-gray-500">
-                  {searchTerm ? "No allocations found matching your search." : "No allocations found."}
+                  {loading ? "Loading..." : searchTerm ? "No allocations found matching your search." : "No allocations found."}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Pagination */}
-          <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Showing {filteredAllocations.length} of {allocations.length} entries
-              </div>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
     </div>

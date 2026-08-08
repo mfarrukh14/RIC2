@@ -21,7 +21,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var packings = await _packingService.GetAllPackingsAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var packings = await _packingService.GetAllPackingsAsync(branchId);
                 return Ok(packings);
             }
             catch (Exception ex)
@@ -58,6 +63,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Packing name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var packingId = await _packingService.CreatePackingAsync(request);
                 return CreatedAtAction(nameof(GetPacking), new { id = packingId }, packingId);
             }
@@ -86,6 +92,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Packing name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var success = await _packingService.UpdatePackingAsync(request);
                 if (!success)
                 {

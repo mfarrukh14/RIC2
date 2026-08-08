@@ -15,7 +15,7 @@ namespace InventoryManagement.Api.Services
                 ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        public async Task<IEnumerable<ItemType>> GetAllItemTypesAsync()
+        public async Task<IEnumerable<ItemType>> GetAllItemTypesAsync(int branchId)
         {
             var itemTypes = new List<ItemType>();
 
@@ -24,6 +24,7 @@ namespace InventoryManagement.Api.Services
             {
                 CommandType = CommandType.StoredProcedure
             };
+            command.Parameters.AddWithValue("@BranchId", branchId);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
@@ -59,7 +60,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateItemTypeAsync(CreateItemTypeRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: null);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemType_Insert", connection)
@@ -76,7 +77,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateItemTypeAsync(UpdateItemTypeRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: request.Id);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemType_Update", connection)
@@ -108,10 +109,15 @@ namespace InventoryManagement.Api.Services
             return Convert.ToInt32(result) > 0;
         }
 
-        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        private async Task EnsureNameNotDuplicateAsync(string name, int? branchId, int? excludeId)
         {
+            if (branchId == null)
+            {
+                return;
+            }
+
             var normalizedName = name?.Trim() ?? string.Empty;
-            var itemTypes = await GetAllItemTypesAsync();
+            var itemTypes = await GetAllItemTypesAsync(branchId.Value);
 
             var isDuplicate = itemTypes.Any(t =>
                 (!excludeId.HasValue || t.Id != excludeId.Value) &&

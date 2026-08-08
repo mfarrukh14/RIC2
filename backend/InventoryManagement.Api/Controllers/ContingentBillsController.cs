@@ -19,14 +19,17 @@ namespace InventoryManagement.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<ContingentBill>>> GetAll(
+        public async Task<ActionResult<InventoryManagement.Api.Models.PagedResult<ContingentBill>>> GetAll(
             [FromQuery] string? budgetSetupId,
             [FromQuery] int? vendorId,
             [FromQuery] int? financialYearId,
             [FromQuery] int? purchaseOrderTypeId,
             [FromQuery] int? contingentBillStatusId,
             [FromQuery] DateTime? dateStart,
-            [FromQuery] DateTime? dateEnd)
+            [FromQuery] DateTime? dateEnd,
+            [FromQuery] string? searchTerm,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
@@ -38,7 +41,10 @@ namespace InventoryManagement.API.Controllers
                     PurchaseOrderTypeId = purchaseOrderTypeId,
                     ContingentBillStatusId = contingentBillStatusId,
                     DateStart = dateStart,
-                    DateEnd = dateEnd
+                    DateEnd = dateEnd,
+                    SearchTerm = searchTerm,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
                 };
 
                 var bills = await _contingentBillService.GetAllAsync(filter);

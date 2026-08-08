@@ -7,13 +7,12 @@ import inventoryApi from '../services/inventoryApi';
 import purchaseOrderApi from '../services/purchaseOrderApi';
 import { itemTypeApi, vendorApi } from '../services/api';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const StockPage = () => {
   const { session } = useSession();
-  const [stocks, setStocks] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -30,6 +29,10 @@ const StockPage = () => {
     minimumPanicLevelOnly: false
   });
 
+  // The filters actually sent to the server - only updated when "Generate" is
+  // clicked, so editing a dropdown mid-form doesn't re-trigger a search.
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
   // Lookup data
   const [stores, setStores] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -38,10 +41,18 @@ const StockPage = () => {
   const [stockTypes, setStockTypes] = useState([]);
   const [vendors, setVendors] = useState([]);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage, setEntriesPerPage] = useState(5);
-  const [searchTerm, setSearchTerm] = useState('');
+  const {
+    items: stocks,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+    reload: reloadStocks,
+  } = usePagedList(stockApi.searchStocks, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   // Selected categories for multi-select
   const [selectedCategories, setSelectedCategories] = useState([]);
@@ -87,27 +98,18 @@ const StockPage = () => {
     }
   };
 
-  const handleSearch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const searchFilters = {
-        ...filters,
-        branchId: filters.branchId ? Number(filters.branchId) : null,
-        storeId: filters.storeId ? Number(filters.storeId) : null,
-        itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
-        itemId: filters.itemId ? Number(filters.itemId) : null,
-        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
-        categoryIds: selectedCategories.join(',')
-      };
-      const data = await stockApi.searchStocks(searchFilters);
-      setStocks(data);
-    } catch (err) {
-      setError('Failed to search stocks');
-      console.error('Error searching stocks:', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    const searchFilters = {
+      ...filters,
+      branchId: filters.branchId ? Number(filters.branchId) : null,
+      storeId: filters.storeId ? Number(filters.storeId) : null,
+      itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
+      itemId: filters.itemId ? Number(filters.itemId) : null,
+      stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
+      categoryIds: selectedCategories.join(',')
+    };
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
   };
 
   const handleFilterChange = (e) => {
@@ -127,19 +129,6 @@ const StockPage = () => {
       }
     });
   };
-
-  // Filter stocks based on search term
-  const filteredStocks = stocks.filter(stock =>
-    stock.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    stock.stockType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    stock.categoryName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredStocks.length / entriesPerPage);
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const endIndex = startIndex + entriesPerPage;
-  const currentStocks = filteredStocks.slice(startIndex, endIndex);
 
   const selectedStoreName = () => {
     if (!filters.storeId) return 'All';
@@ -237,9 +226,12 @@ const StockPage = () => {
     doc.save(`StockReport_${fileSuffix}.pdf`);
   };
 
+  // Exports only the currently-loaded page, not the whole filtered result set -
+  // results are now paged server-side, so "export everything" would need a
+  // separate non-paginated export endpoint rather than reusing this data.
   const handleExport = () => {
-    if (filteredStocks.length === 0) return;
-    generateStockReportPdf(filteredStocks, new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_'));
+    if (stocks.length === 0) return;
+    generateStockReportPdf(stocks, new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_'));
   };
 
   const handlePrintRow = (stock) => {
@@ -264,7 +256,7 @@ const StockPage = () => {
     setUpdateError(null);
     try {
       await stockApi.updateMinimumPanicLevel(updateStock.id, Number(updateMpl) || 0);
-      setStocks((prev) => prev.map((s) => (s.id === updateStock.id ? { ...s, minimumPanicLevel: Number(updateMpl) || 0 } : s)));
+      reloadStocks();
       closeUpdateModal();
     } catch (err) {
       console.error('Error updating minimum panic level:', err);
@@ -346,7 +338,7 @@ const StockPage = () => {
         </div>
         <button
           onClick={handleExport}
-          disabled={filteredStocks.length === 0}
+          disabled={stocks.length === 0}
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ArrowDownTrayIcon className="h-4 w-4" />
@@ -626,46 +618,12 @@ const StockPage = () => {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          Failed to search stocks{error.message ? `: ${error.message}` : ''}
         </div>
       )}
 
       {/* Results Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 flex justify-between items-center border-b">
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-600">Show</label>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-            <label className="text-sm text-gray-600">entries</label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-600">Search:</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="border border-gray-300 rounded px-3 py-1 text-sm"
-              placeholder="Search..."
-            />
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -694,14 +652,14 @@ const StockPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {currentStocks.length === 0 ? (
+              {stocks.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
                     {loading ? 'Loading...' : 'No entries found'}
                   </td>
                 </tr>
               ) : (
-                currentStocks.map((stock) => (
+                stocks.map((stock) => (
                   <tr key={stock.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {stock.itemName}
@@ -744,39 +702,13 @@ const StockPage = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="p-4 flex items-center justify-between border-t">
-          <div className="text-sm text-gray-600">
-            Showing {filteredStocks.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredStocks.length)} of {filteredStocks.length} entries
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              &lt;
-            </button>
-            {[...Array(Math.min(totalPages, 5))].map((_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 border border-gray-300 rounded ${
-                  currentPage === i + 1 ? 'bg-blue-600 text-white' : 'hover:bg-gray-50'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              &gt;
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={entriesPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setEntriesPerPage}
+        />
       </div>
 
       {/* Detail modal */}

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import purchaseSummaryApi from '../services/purchaseSummaryApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const PurchaseSummaryPage = () => {
   const { session } = useSession();
-  const [records, setRecords] = useState([]);
-  const [filteredRecords, setFilteredRecords] = useState([]);
   const [totals, setTotals] = useState({
     totalQuantity: 0,
     totalAmount: 0,
@@ -14,9 +14,8 @@ const PurchaseSummaryPage = () => {
     totalDiscount: 0,
     totalPrice: 0
   });
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   const [lookupData, setLookupData] = useState({
     branches: [],
     stores: [],
@@ -39,8 +38,27 @@ const PurchaseSummaryPage = () => {
     reportType: 'Both'
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  // The filters actually sent to the server - only updated on "Generate Report".
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  // Totals cover the full filtered scope, not just the current page - the
+  // fetcher below stashes them into `totals` as a side effect of each fetch.
+  const fetchPage = useCallback(async (params) => {
+    const data = await purchaseSummaryApi.getAll(params);
+    setTotals(data.totals || { totalQuantity: 0, totalAmount: 0, totalAdvanceTax: 0, totalDiscount: 0, totalPrice: 0 });
+    return { items: data.records || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: records,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(fetchPage, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     initializePage();
@@ -53,14 +71,8 @@ const PurchaseSummaryPage = () => {
     }
   }, [session?.branchId]);
 
-  useEffect(() => {
-    filterRecords();
-  }, [records, searchTerm]);
-
   const initializePage = async () => {
     try {
-      setLoading(true);
-
       // Invoice Date Range is left blank by default - defaulting it to
       // "today" meant Generate Report showed nothing unless a GRN happened
       // to be dated the exact day the page was opened, hiding virtually all
@@ -69,13 +81,9 @@ const PurchaseSummaryPage = () => {
       // Fetch lookup data
       const lookup = await purchaseSummaryApi.getLookupData();
       setLookupData(lookup);
-
-      // Set loading to false after initialization
-      setLoading(false);
     } catch (err) {
       console.error('Error initializing page:', err);
       setError('Failed to initialize page. Please try again.');
-      setLoading(false);
     }
   };
 
@@ -100,21 +108,6 @@ const PurchaseSummaryPage = () => {
     }
   };
 
-  const filterRecords = () => {
-    let filtered = [...records];
-
-    if (searchTerm) {
-      filtered = filtered.filter(record =>
-        record.invoiceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.batchNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.vendorName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredRecords(filtered);
-  };
-
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters(prev => ({
@@ -123,41 +116,22 @@ const PurchaseSummaryPage = () => {
     }));
   };
 
-  const handleGenerateReport = async () => {
-    try {
-      setLoading(true);
-      
-      // Build filter object
-      const filterParams = {
-        branchId: filters.branchId || null,
-        storeId: filters.storeId || null,
-        itemType: filters.itemType !== 'All' ? filters.itemType : null,
-        invoiceDateStart: filters.invoiceDateStart || null,
-        invoiceDateEnd: filters.invoiceDateEnd || null,
-        inventoryDateStart: filters.inventoryDateStart || null,
-        inventoryDateEnd: filters.inventoryDateEnd || null,
-        itemId: filters.itemId || null,
-        invoiceNo: filters.invoiceNo || null,
-        reportType: filters.reportType
-      };
-
-      const data = await purchaseSummaryApi.getAll(filterParams);
-      setRecords(data.records || []);
-      setFilteredRecords(data.records || []);
-      setTotals(data.totals || {
-        totalQuantity: 0,
-        totalAmount: 0,
-        totalAdvanceTax: 0,
-        totalDiscount: 0,
-        totalPrice: 0
-      });
-      setError(null);
-    } catch (err) {
-      console.error('Error generating report:', err);
-      setError('Failed to generate report. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleGenerateReport = () => {
+    const filterParams = {
+      branchId: filters.branchId || null,
+      storeId: filters.storeId || null,
+      itemType: filters.itemType !== 'All' ? filters.itemType : null,
+      invoiceDateStart: filters.invoiceDateStart || null,
+      invoiceDateEnd: filters.invoiceDateEnd || null,
+      inventoryDateStart: filters.inventoryDateStart || null,
+      inventoryDateEnd: filters.inventoryDateEnd || null,
+      itemId: filters.itemId || null,
+      invoiceNo: filters.invoiceNo || null,
+      reportType: filters.reportType
+    };
+    setError(null);
+    setSubmittedFilters(filterParams);
+    runSearch(filterParams);
   };
 
   const formatDate = (dateString) => {
@@ -387,34 +361,6 @@ const PurchaseSummaryPage = () => {
         </div>
       </div>
 
-      {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Search:</span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -437,16 +383,16 @@ const PurchaseSummaryPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredRecords.length === 0 ? (
+              {records.length === 0 ? (
                 <tr>
                   <td colSpan="13" className="px-4 py-4 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                filteredRecords.slice(0, entriesPerPage).map((record, index) => (
+                records.map((record, index) => (
                   <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{(currentPage - 1) * entriesPerPage + index + 1}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(record.purchaseDate)}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{record.batchNo || '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{record.itemName}</td>
@@ -464,7 +410,7 @@ const PurchaseSummaryPage = () => {
               )}
             </tbody>
             {/* Totals Footer */}
-            {filteredRecords.length > 0 && (
+            {records.length > 0 && (
               <tfoot className="bg-gray-100">
                 <tr className="font-semibold">
                   <td className="px-4 py-3 text-sm text-gray-900" colSpan="5">Sr.</td>
@@ -483,10 +429,13 @@ const PurchaseSummaryPage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing {filteredRecords.length > 0 ? 1 : 0} to {Math.min(entriesPerPage, filteredRecords.length)} of {filteredRecords.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

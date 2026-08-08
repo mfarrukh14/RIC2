@@ -28,7 +28,12 @@ namespace InventoryManagement.API.Controllers
         {
             try
             {
-                var groups = await _service.GetAllAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var groups = await _service.GetAllAsync(branchId);
                 return Ok(groups);
             }
             catch (Exception ex)

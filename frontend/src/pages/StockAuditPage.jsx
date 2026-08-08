@@ -3,6 +3,7 @@ import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { stockAuditApi } from '../services/stockAuditApi';
 import inventoryApi from '../services/inventoryApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 const normalizeStores = (stores) =>
@@ -66,10 +67,20 @@ const StockAuditPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
 
   useEffect(() => {
     loadLookupData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, entriesPerPage]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historyPageSize]);
 
   // Stock audits are always scoped to the logged-in user's own branch.
   useEffect(() => {
@@ -227,7 +238,8 @@ const StockAuditPage = () => {
   const indexOfLastEntry = currentPage * entriesPerPage;
   const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
   const currentItems = filteredItems.slice(indexOfFirstEntry, indexOfLastEntry);
-  const totalPages = Math.ceil(filteredItems.length / entriesPerPage);
+
+  const pastAuditsPage = pastAudits.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
 
   return (
     <div className="p-6">
@@ -440,24 +452,7 @@ const StockAuditPage = () => {
       {/* Results Table */}
       {items.length > 0 && (
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span className="text-sm text-gray-700">entries</span>
-            </div>
+          <div className="flex justify-end items-center mb-4">
             <div>
               <input
                 type="text"
@@ -577,40 +572,13 @@ const StockAuditPage = () => {
             </table>
           </div>
 
-          <div className="flex justify-between items-center mt-4">
-            <div className="text-sm text-gray-700">
-              Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredItems.length)} of {filteredItems.length} entries
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-              >
-                Previous
-              </button>
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1 border rounded-md text-sm ${
-                    currentPage === i + 1
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={entriesPerPage}
+            totalCount={filteredItems.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setEntriesPerPage}
+          />
         </div>
       )}
 
@@ -706,7 +674,7 @@ const StockAuditPage = () => {
                   </td>
                 </tr>
               ) : (
-                pastAudits.map((audit) => (
+                pastAuditsPage.map((audit) => (
                   <tr key={audit.id} className="hover:bg-gray-50">
                     <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                       {new Date(audit.auditDate).toLocaleDateString()}
@@ -726,6 +694,13 @@ const StockAuditPage = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={historyPage}
+          pageSize={historyPageSize}
+          totalCount={pastAudits.length}
+          onPageChange={setHistoryPage}
+          onPageSizeChange={setHistoryPageSize}
+        />
       </div>
     </div>
   );

@@ -7,10 +7,16 @@ CREATE OR ALTER PROCEDURE StockConsumption_GetAll
     @BranchId INT = NULL,
     @StoreId INT = NULL,
     @StartDate DATETIME = NULL,
-    @EndDate DATETIME = NULL
+    @EndDate DATETIME = NULL,
+    @SearchTerm NVARCHAR(200) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     SELECT
         scd.StockConsumptionId AS Id,
@@ -20,7 +26,8 @@ BEGIN
         st.Name AS StockType,
         scd.Quantity,
         ISNULL(e.FullName, '') AS CreatedBy,
-        sc.CreatedOn
+        sc.CreatedOn,
+        COUNT(*) OVER() AS TotalCount
     FROM Inv.StockConsumptionDetails scd
     INNER JOIN Inv.StockConsumptions sc ON scd.StockConsumptionId = sc.Id
     LEFT JOIN Inv.PharmacyStores s ON sc.StoreId = s.StoreId
@@ -36,7 +43,15 @@ BEGIN
         AND (@StoreId IS NULL OR sc.StoreId = @StoreId)
         AND (@StartDate IS NULL OR sc.CreatedOn >= @StartDate)
         AND (@EndDate IS NULL OR sc.CreatedOn <= @EndDate)
-    ORDER BY sc.CreatedOn DESC;
+        AND (
+            @SearchTerm IS NULL OR @SearchTerm = ''
+            OR s.StoreName LIKE '%' + @SearchTerm + '%'
+            OR i.Name LIKE '%' + @SearchTerm + '%'
+            OR m.MedicineFullName LIKE '%' + @SearchTerm + '%'
+            OR f.Name LIKE '%' + @SearchTerm + '%'
+        )
+    ORDER BY sc.CreatedOn DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import returnInventoryApi from '../services/returnInventoryApi';
 import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
   const { session } = useSession();
-  const [returns, setReturns] = useState([]);
-  const [filteredReturns, setFilteredReturns] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -44,11 +43,25 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
     reason: ''
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  const fetchReturnsPage = useCallback(async (params) => {
+    const data = await returnInventoryApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: returns,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error: returnsError,
+    reload: reloadReturns,
+  } = usePagedList(fetchReturnsPage, {}, { initialPageSize: 10 });
 
   useEffect(() => {
-    fetchData();
+    fetchLookupData();
   }, []);
 
   // Returns are always scoped to the logged-in user's own branch.
@@ -74,10 +87,6 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
     onPrefillConsumed?.();
   }, [prefill]);
 
-  useEffect(() => {
-    filterReturns();
-  }, [returns, searchTerm]);
-
   // Cascading Item picker: only items that actually exist (with stock > 0) in
   // the selected Store, further narrowed by the selected Item Type.
   useEffect(() => {
@@ -91,11 +100,13 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
     stockApi.searchStocks({
       storeId: filters.storeId,
       itemTypeId: filters.itemTypeId || null,
-      stockAvailability: 'InStock'
+      stockAvailability: 'InStock',
+      pageSize: 200
     })
-      .then((stocks) => {
+      .then((result) => {
         if (cancelled) return;
-        setStoreItems(stocks || []);
+        const stocks = result?.items || [];
+        setStoreItems(stocks);
         // Drop a previously selected item that no longer matches the new Store/Item Type.
         setFilters((prev) => (
           prev.itemId && !(stocks || []).some((s) => String(s.itemId) === String(prev.itemId))
@@ -114,39 +125,14 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
     return () => { cancelled = true; };
   }, [filters.storeId, filters.itemTypeId]);
 
-  const fetchData = async () => {
+  const fetchLookupData = async () => {
     try {
-      setLoading(true);
-      const [returnsData, lookup] = await Promise.all([
-        returnInventoryApi.getAll(),
-        returnInventoryApi.getLookupData()
-      ]);
-
-      setReturns(returnsData);
-      setFilteredReturns(returnsData);
+      const lookup = await returnInventoryApi.getLookupData();
       setLookupData(lookup);
-      setError(null);
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch return inventory data. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching lookup data:', err);
+      setError('Failed to fetch lookup data. Please try again.');
     }
-  };
-
-  const filterReturns = () => {
-    let filtered = [...returns];
-
-    if (searchTerm) {
-      filtered = filtered.filter(ret =>
-        ret.inventoryNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ret.purchaseOrderNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ret.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ret.storeName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredReturns(filtered);
   };
 
   const handleFilterChange = (e) => {
@@ -250,7 +236,6 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
 
     try {
       setSubmitting(true);
-      setLoading(true);
 
       const createPayload = {
         storeId: parseInt(filters.storeId, 10),
@@ -264,24 +249,10 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
 
       const created = await returnInventoryApi.create(createPayload);
 
-      // Show the new return immediately, then refresh from the server using the
-      // current filters so the list stays consistent with what's displayed.
-      setReturns((prev) => [created, ...prev]);
-
       downloadReturnPdf(created);
 
-      const filterParams = {
-        branchId: filters.branchId || null,
-        storeId: filters.storeId || null,
-        itemTypeId: filters.itemTypeId || null,
-        startDate: filters.startDate || null,
-        endDate: filters.endDate || null,
-        purchaseOrderNo: filters.purchaseOrderNo || null,
-        itemId: filters.itemId || null,
-        inventoryNo: filters.inventoryNo || null
-      };
-      const refreshed = await returnInventoryApi.getAll(filterParams);
-      setReturns(refreshed);
+      // Refresh the list from the server so it stays consistent with what's displayed.
+      await reloadReturns();
 
       // Reset the per-return inputs (keep Store/Item Type selected for convenience).
       setFilters((prev) => ({
@@ -297,7 +268,6 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
       setError(err.response?.data?.message || 'Failed to process return. Please try again.');
     } finally {
       setSubmitting(false);
-      setLoading(false);
     }
   };
 
@@ -319,9 +289,9 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
         </h1>
       </div>
 
-      {error && (
+      {(error || returnsError) && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-          {error}
+          {error || 'Failed to fetch return inventory records. Please try again.'}
         </div>
       )}
 
@@ -510,34 +480,6 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
         </div>
       </div>
 
-      {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Search:</span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -577,17 +519,17 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredReturns.length === 0 ? (
+              {returns.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                filteredReturns.slice(0, entriesPerPage).map((ret, index) => (
+                returns.map((ret, index) => (
                   <tr key={ret.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {index + 1}
+                      {(currentPage - 1) * entriesPerPage + index + 1}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {ret.inventoryNo || '-'}
@@ -630,10 +572,13 @@ const ReturnInventoryPage = ({ prefill, onPrefillConsumed }) => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing {filteredReturns.length > 0 ? 1 : 0} to {Math.min(entriesPerPage, filteredReturns.length)} of {filteredReturns.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

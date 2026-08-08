@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IPurchaseRequisitionService
     {
-        Task<IReadOnlyList<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter);
+        Task<PagedResult<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter);
         Task<PurchaseRequisitionDetails?> GetByIdAsync(int id);
         Task<PurchaseRequisitionDetails> CreateAsync(PurchaseRequisitionCreateRequest request, int userId);
         Task<PurchaseRequisitionDetails?> ForwardAsync(int id, PurchaseRequisitionForwardRequest request, int userId);

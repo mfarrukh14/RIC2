@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.API.Models
 {
@@ -78,7 +79,7 @@ namespace InventoryManagement.API.Models
         public string? Notes { get; set; }
     }
 
-    public class ReturnInventoryFilterRequest
+    public class ReturnInventoryFilterRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }

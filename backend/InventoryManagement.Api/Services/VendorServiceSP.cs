@@ -17,7 +17,7 @@ namespace InventoryManagement.Api.Services
             _connectionString = _configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string not found");
         }
 
-        public async Task<IEnumerable<VendorDto>> GetAllVendorsAsync()
+        public async Task<IEnumerable<VendorDto>> GetAllVendorsAsync(int branchId)
         {
             var vendors = new List<VendorDto>();
 
@@ -26,6 +26,7 @@ namespace InventoryManagement.Api.Services
             {
                 CommandType = CommandType.StoredProcedure
             };
+            command.Parameters.AddWithValue("@BranchId", branchId);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
@@ -59,9 +60,9 @@ namespace InventoryManagement.Api.Services
             return null;
         }
 
-        public async Task<VendorDto> CreateVendorAsync(CreateVendorDto createVendorDto)
+        public async Task<VendorDto> CreateVendorAsync(CreateVendorDto createVendorDto, int? branchId)
         {
-            await EnsureNameNotDuplicateAsync(createVendorDto.Name, excludeId: null);
+            await EnsureNameNotDuplicateAsync(createVendorDto.Name, branchId, excludeId: null);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Vendor_Insert", connection)
@@ -86,7 +87,7 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@CountryId", DBNull.Value);
             command.Parameters.AddWithValue("@StateOrProvinceId", DBNull.Value);
             command.Parameters.AddWithValue("@CityId", DBNull.Value);
-            command.Parameters.AddWithValue("@BranchId", DBNull.Value);
+            command.Parameters.AddWithValue("@BranchId", (object?)branchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@Code", (object?)createVendorDto.Code ?? DBNull.Value);
             command.Parameters.AddWithValue("@VendorOrCustomer", DBNull.Value);
             command.Parameters.AddWithValue("@IncomeTaxStatus", DBNull.Value);
@@ -117,9 +118,9 @@ namespace InventoryManagement.Api.Services
             return await GetVendorByIdAsync(newId) ?? throw new InvalidOperationException("Failed to create vendor");
         }
 
-        public async Task<VendorDto?> UpdateVendorAsync(int id, UpdateVendorDto updateVendorDto)
+        public async Task<VendorDto?> UpdateVendorAsync(int id, UpdateVendorDto updateVendorDto, int? branchId)
         {
-            await EnsureNameNotDuplicateAsync(updateVendorDto.Name, excludeId: id);
+            await EnsureNameNotDuplicateAsync(updateVendorDto.Name, branchId, excludeId: id);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("Vendor_Update", connection)
@@ -144,7 +145,7 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@CountryId", DBNull.Value);
             command.Parameters.AddWithValue("@StateOrProvinceId", DBNull.Value);
             command.Parameters.AddWithValue("@CityId", DBNull.Value);
-            command.Parameters.AddWithValue("@BranchId", DBNull.Value);
+            command.Parameters.AddWithValue("@BranchId", (object?)branchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@Code", (object?)updateVendorDto.Code ?? DBNull.Value);
             command.Parameters.AddWithValue("@VendorOrCustomer", DBNull.Value);
             command.Parameters.AddWithValue("@IncomeTaxStatus", DBNull.Value);
@@ -210,10 +211,15 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        private async Task EnsureNameNotDuplicateAsync(string name, int? branchId, int? excludeId)
         {
+            if (branchId == null)
+            {
+                return;
+            }
+
             var normalizedName = name?.Trim() ?? string.Empty;
-            var vendors = await GetAllVendorsAsync();
+            var vendors = await GetAllVendorsAsync(branchId.Value);
 
             var isDuplicate = vendors.Any(v =>
                 (!excludeId.HasValue || v.Id != excludeId.Value) &&
