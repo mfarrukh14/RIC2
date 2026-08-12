@@ -1,8 +1,10 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { getExpiredStock } from '../services/expiredStockApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const toDateInput = (date) => date.toISOString().split('T')[0];
 
@@ -20,11 +22,8 @@ const getDefaultDateRange = () => {
 };
 
 const ExpiredStockPage = () => {
-  const [expiredStocks, setExpiredStocks] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   const [filters, setFilters] = useState({
     storeName: '',
@@ -32,12 +31,29 @@ const ExpiredStockPage = () => {
     item: ''
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await getExpiredStock(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: expiredStocks,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(fetchPage, { ...filters, searchTerm }, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     loadLookupData();
-    handleSearch();
+    runSearch({ ...filters, searchTerm });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadLookupData = async () => {
@@ -64,25 +80,23 @@ const ExpiredStockPage = () => {
     }));
   };
 
-  const handleSearch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getExpiredStock(filters);
-      setExpiredStocks(data);
-    } catch (err) {
-      setError('Failed to load expired stock data: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    runSearch({ ...filters, searchTerm });
   };
 
+  const handleSearchTermChange = (value) => {
+    setSearchTerm(value);
+    runSearch({ ...filters, searchTerm: value });
+  };
+
+  // Exports only the currently-loaded page, not the whole filtered result set -
+  // results are now paged server-side, same tradeoff as StockPage's export.
   const handleExport = () => {
     const headers = ['Name', 'Stock Type', 'Batch No.', 'Mfg. Date', 'Exp. Date', 'Total Items'];
-    
+
     const csvContent = [
       headers.join(','),
-      ...filteredStocks.map(row => [
+      ...expiredStocks.map(row => [
         row.name,
         row.stockType,
         row.batchNo || '',
@@ -100,13 +114,6 @@ const ExpiredStockPage = () => {
     a.click();
   };
 
-  const filteredStocks = expiredStocks.filter(stock => 
-    !searchTerm || 
-    stock.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    stock.stockType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    stock.batchNo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -118,7 +125,7 @@ const ExpiredStockPage = () => {
         </div>
         <button
           onClick={handleExport}
-          disabled={filteredStocks.length === 0}
+          disabled={expiredStocks.length === 0}
           className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
         >
           <ArrowDownTrayIcon className="h-5 w-5" />
@@ -205,33 +212,19 @@ const ExpiredStockPage = () => {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+          Failed to load expired stock data{error.message ? `: ${error.message}` : ''}
         </div>
       )}
 
       {/* Table Section */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-              className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-sm text-gray-600">entries</span>
-          </div>
+        <div className="p-4 border-b border-gray-200 flex items-center justify-end">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Search:</span>
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchTermChange(e.target.value)}
               className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -271,14 +264,14 @@ const ExpiredStockPage = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : filteredStocks.length === 0 ? (
+              ) : expiredStocks.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                     No data available in table
                   </td>
                 </tr>
               ) : (
-                filteredStocks.slice(0, entriesPerPage).map((stock, index) => (
+                expiredStocks.map((stock, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {stock.name}
@@ -308,19 +301,13 @@ const ExpiredStockPage = () => {
           </table>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Showing 0 to {Math.min(entriesPerPage, filteredStocks.length)} of {filteredStocks.length} entries
-          </div>
-          <div className="flex gap-1">
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">
-              ‹
-            </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">
-              ›
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={entriesPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setEntriesPerPage}
+        />
       </div>
     </div>
   );

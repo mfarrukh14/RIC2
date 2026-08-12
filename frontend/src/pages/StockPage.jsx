@@ -40,6 +40,7 @@ const StockPage = () => {
   const [categories, setCategories] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [itemQuantities, setItemQuantities] = useState({});
 
   const {
     items: stocks,
@@ -79,6 +80,29 @@ const StockPage = () => {
       setFilters((prev) => ({ ...prev, branchId: session.branchId }));
     }
   }, [session?.branchId]);
+
+  // Item dropdown narrows to what's actually on hand at the selected store,
+  // with the live quantity shown inline (e.g. "Syringe 10ml - 8") - this is a
+  // filter picker, not the results themselves, so "Out of Stock" browsing
+  // still works via the Stock Availability radio with no item selected.
+  useEffect(() => {
+    if (!filters.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(filters.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId]);
 
   const loadLookupData = async () => {
     try {
@@ -407,16 +431,24 @@ const StockPage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Item</option>
-              {items.map((item, index) => {
-                const itemId = item.id ?? item.itemId ?? '';
-                const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+              {items
+                .filter((item) => {
+                  if (!filters.storeId) return true;
+                  const itemId = item.id ?? item.itemId;
+                  if (itemId == null) return true;
+                  return (itemQuantities[itemId] ?? 0) > 0;
+                })
+                .map((item, index) => {
+                  const itemId = item.id ?? item.itemId ?? '';
+                  const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+                  const qty = filters.storeId && itemId !== '' ? itemQuantities[itemId] ?? 0 : null;
 
-                return (
-                <option key={`item-${itemId || index}`} value={itemId}>
-                  {itemName}
-                </option>
-                );
-              })}
+                  return (
+                  <option key={`item-${itemId || index}`} value={itemId}>
+                    {qty !== null ? `${itemName} - ${qty}` : itemName}
+                  </option>
+                  );
+                })}
             </select>
           </div>
 

@@ -31,6 +31,7 @@ namespace InventoryManagement.Api.Services
                 };
                 command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
                 command.Parameters.AddWithValue("@VendorId", (object?)filter?.VendorId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StoreId", (object?)filter?.StoreId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@DateFrom", (object?)filter?.DateFrom ?? DBNull.Value);
                 command.Parameters.AddWithValue("@DateTo", (object?)filter?.DateTo ?? DBNull.Value);
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);

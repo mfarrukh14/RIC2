@@ -88,6 +88,7 @@ namespace InventoryManagement.Api.Models
     {
         public string? SearchTerm { get; set; }
         public int? VendorId { get; set; }
+        public int? StoreId { get; set; }
         public DateTime? DateFrom { get; set; }
         public DateTime? DateTo { get; set; }
     }
@@ -215,12 +216,13 @@ namespace InventoryManagement.Api.Models
         public string? StoreName { get; set; }
     }
 
-    public class StockExpiringRequest
+    public class StockExpiringRequest : PagedRequest
     {
         public int? StoreId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string? ItemIds { get; set; } // Comma-separated list
+        public string? SearchTerm { get; set; }
     }
 
     public class InventoryLookupData

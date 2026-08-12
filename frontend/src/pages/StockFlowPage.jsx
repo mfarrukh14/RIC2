@@ -1,10 +1,12 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { MagnifyingGlassIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { getStockFlow } from '../services/stockFlowApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import grnApi from '../services/grnApi';
 import demandRequestApi from '../services/demandRequestApi';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 // Default to the last 30 days up to now, instead of a zero-width "right now to right
 // now" window that can never match any historical row.
@@ -30,14 +32,11 @@ const distinctValues = (records, key) =>
   Array.from(new Set((records || []).map(r => r[key]).filter(Boolean))).sort();
 
 const StockFlowPage = () => {
-  const [stockFlows, setStockFlows] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [poNumbers, setPoNumbers] = useState([]);
   const [invoiceNumbers, setInvoiceNumbers] = useState([]);
   const [demandRequestNumbers, setDemandRequestNumbers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   const [filters, setFilters] = useState({
     ...getDefaultDateRange(),
@@ -49,7 +48,22 @@ const StockFlowPage = () => {
     demandRequestNo: ''
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const fetchPage = useCallback(async (params) => {
+    const data = await getStockFlow(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: stockFlows,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(fetchPage, filters, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     loadFilterLookups();
@@ -94,19 +108,12 @@ const StockFlowPage = () => {
     }));
   };
 
-  const handleSearch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getStockFlow(filters);
-      setStockFlows(data);
-    } catch (err) {
-      setError('Failed to load stock flow data: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    runSearch(filters);
   };
 
+  // Exports only the currently-loaded page, not the whole filtered result set -
+  // results are now paged server-side, same tradeoff as StockPage's export.
   const handleExport = () => {
     // Export functionality - convert to CSV
     const headers = ['Date & Time', 'Transaction Type', 'Ref Number', 'Item Name', 'Demand Requested Store', 
@@ -304,36 +311,12 @@ const StockFlowPage = () => {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+          Failed to load stock flow data{error.message ? `: ${error.message}` : ''}
         </div>
       )}
 
       {/* Stock Flow Table */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-              className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-            <span className="text-sm text-gray-600">entries</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Search:</span>
-            <input
-              type="text"
-              className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -390,7 +373,7 @@ const StockFlowPage = () => {
                   </td>
                 </tr>
               ) : (
-                stockFlows.slice(0, entriesPerPage).map((flow, index) => (
+                stockFlows.map((flow, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {new Date(flow.dateTime).toLocaleString()}
@@ -435,9 +418,13 @@ const StockFlowPage = () => {
           </table>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
-          Showing 0 to {Math.min(entriesPerPage, stockFlows.length)} of {stockFlows.length} entries
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={entriesPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setEntriesPerPage}
+        />
       </div>
     </div>
   );

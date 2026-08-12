@@ -9,11 +9,13 @@ import usePagedList from '../hooks/usePagedList';
 
 const InventoryListPage = ({ onReturnInventory }) => {
   const [vendors, setVendors] = useState([]);
+  const [stores, setStores] = useState([]);
 
   // Filters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
+  const [selectedStore, setSelectedStore] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
@@ -35,18 +37,25 @@ const InventoryListPage = ({ onReturnInventory }) => {
     reload: reloadInventories,
   } = usePagedList(
     fetchPage,
-    { searchTerm, vendorId: selectedVendor || null, dateFrom: dateFrom || null, dateTo: dateTo || null },
+    {
+      searchTerm,
+      vendorId: selectedVendor || null,
+      storeId: selectedStore || null,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+    },
     { initialPageSize: 10 }
   );
 
   useEffect(() => {
-    fetchVendors();
+    fetchLookupData();
   }, []);
 
-  const fetchVendors = async () => {
+  const fetchLookupData = async () => {
     try {
       const lookupData = await inventoryApi.getLookupData();
       setVendors(lookupData.vendors);
+      setStores(lookupData.stores);
     } catch (err) {
       console.error('Error fetching lookup data:', err);
     }
@@ -216,7 +225,7 @@ const InventoryListPage = ({ onReturnInventory }) => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date Range
@@ -251,6 +260,24 @@ const InventoryListPage = ({ onReturnInventory }) => {
               {vendors.map((vendor) => (
                 <option key={vendor.id} value={vendor.id}>
                   {vendor.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Store
+            </label>
+            <select
+              value={selectedStore}
+              onChange={(e) => setSelectedStore(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Store</option>
+              {stores.map((store) => (
+                <option key={store.storeId} value={store.storeId}>
+                  {store.storeName}
                 </option>
               ))}
             </select>

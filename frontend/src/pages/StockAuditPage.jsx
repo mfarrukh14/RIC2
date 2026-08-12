@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { stockAuditApi } from '../services/stockAuditApi';
 import inventoryApi from '../services/inventoryApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
@@ -58,7 +59,8 @@ const StockAuditPage = () => {
   const [itemList, setItemList] = useState([]);
   const [manufacturers, setManufacturers] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
-  
+  const [itemQuantities, setItemQuantities] = useState({});
+
   // Selected items and manufacturers for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState([]);
@@ -90,6 +92,27 @@ const StockAuditPage = () => {
       loadPastAudits(session.branchId);
     }
   }, [session?.branchId]);
+
+  // Item multi-select narrows to what's actually on hand at the selected
+  // store, with the live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!filters.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(filters.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId]);
 
   const loadPastAudits = async (branchId) => {
     setLoadingHistory(true);
@@ -377,16 +400,24 @@ const StockAuditPage = () => {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              {itemList.map((item, index) => {
-                const itemId = item.id ?? item.itemId ?? '';
-                const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+              {itemList
+                .filter((item) => {
+                  if (!filters.storeId) return true;
+                  const itemId = item.id ?? item.itemId;
+                  if (itemId == null) return true;
+                  return (itemQuantities[itemId] ?? 0) > 0;
+                })
+                .map((item, index) => {
+                  const itemId = item.id ?? item.itemId ?? '';
+                  const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+                  const qty = filters.storeId && itemId !== '' ? itemQuantities[itemId] ?? 0 : null;
 
-                return (
-                <option key={`audit-item-${itemId || index}`} value={itemId}>
-                  {itemName}
-                </option>
-                );
-              })}
+                  return (
+                  <option key={`audit-item-${itemId || index}`} value={itemId}>
+                    {qty !== null ? `${itemName} - ${qty}` : itemName}
+                  </option>
+                  );
+                })}
             </select>
           </div>
 

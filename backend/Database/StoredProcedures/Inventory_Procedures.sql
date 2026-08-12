@@ -1,3 +1,14 @@
+-- Inv.Inventories/Inv.InventoryDetails carry filtered indexes (IX_Inventories_QID,
+-- IX_InventoryDetails_QID), which SQL Server requires QUOTED_IDENTIFIER ON to write
+-- through. These SET options get baked into each proc at CREATE time, so they must
+-- be in effect here, not just at execution time - a proc created with them OFF
+-- (e.g. via a bare sqlcmd redeploy without -I) fails every INSERT/UPDATE with
+-- error 1934 regardless of the caller's own session settings.
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 -- =============================================
 -- Get all inventories with details
 -- =============================================
@@ -8,6 +19,7 @@ GO
 CREATE PROCEDURE [dbo].[Inventory_GetAll]
     @SearchTerm NVARCHAR(200) = NULL,
     @VendorId INT = NULL,
+    @StoreId INT = NULL,
     @DateFrom DATETIME = NULL,
     @DateTo DATETIME = NULL,
     @PageNumber INT = 1,
@@ -71,6 +83,7 @@ BEGIN
     LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.IsActive = 1
         AND (@VendorId IS NULL OR i.VendorId = @VendorId)
+        AND (@StoreId IS NULL OR i.StoreId = @StoreId)
         AND (@DateFrom IS NULL OR i.CreatedOn >= @DateFrom)
         AND (@DateTo IS NULL OR i.CreatedOn <= @DateTo)
         AND (

@@ -22,7 +22,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StockExpiringItem>>> GetExpiringStock(
+        public async Task<ActionResult<PagedResult<StockExpiringItem>>> GetExpiringStock(
             [FromQuery] int? storeId,
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
@@ -49,7 +49,7 @@ namespace InventoryManagement.Api.Controllers
         }
         
         [HttpPost("search")]
-        public async Task<ActionResult<IEnumerable<StockExpiringItem>>> SearchExpiringStock([FromBody] StockExpiringRequest request)
+        public async Task<ActionResult<PagedResult<StockExpiringItem>>> SearchExpiringStock([FromBody] StockExpiringRequest request)
         {
             try
             {

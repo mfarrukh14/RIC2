@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { stockStatsApi } from '../services/stockStatsApi';
 import inventoryApi from '../services/inventoryApi';
 import { itemTypeApi } from '../services/itemTypeApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
@@ -46,7 +47,8 @@ const StockStatsPage = () => {
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
-  
+  const [itemQuantities, setItemQuantities] = useState({});
+
   // Selected items for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
 
@@ -69,6 +71,27 @@ const StockStatsPage = () => {
       setFilters((prev) => ({ ...prev, branchId: session.branchId }));
     }
   }, [session?.branchId]);
+
+  // Item multi-select narrows to what's actually on hand at the selected
+  // store, with the live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!filters.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(filters.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId]);
 
   const loadLookupData = async () => {
     try {
@@ -295,11 +318,13 @@ const StockStatsPage = () => {
                 className="w-full border-0 focus:ring-0 text-sm"
                 size="1"
               >
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
+                {items
+                  .filter((item) => !filters.storeId || (itemQuantities[item.id] ?? 0) > 0)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {filters.storeId ? `${item.name} - ${itemQuantities[item.id] ?? 0}` : item.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>

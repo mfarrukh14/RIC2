@@ -8,6 +8,7 @@ const inventoryApi = {
     const params = new URLSearchParams();
     if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
     if (filters.vendorId) params.append('vendorId', filters.vendorId);
+    if (filters.storeId) params.append('storeId', filters.storeId);
     if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
     if (filters.dateTo) params.append('dateTo', filters.dateTo);
     if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);

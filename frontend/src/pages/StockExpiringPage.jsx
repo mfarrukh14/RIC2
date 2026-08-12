@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import stockExpiringApi from '../services/stockExpiringApi';
 import inventoryApi from '../services/inventoryApi';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 // Default to today through 3 years out - expiry dates are inherently forward-looking,
 // so (unlike a historical transaction log) the sensible default here is a wide
@@ -19,20 +21,41 @@ const getDefaultDateRange = () => {
 };
 
 const StockExpiringPage = () => {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
-  const [error, setError] = useState(null);
   const [stores, setStores] = useState([]);
   const [allItems, setAllItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [filters, setFilters] = useState({
     storeId: '',
     ...getDefaultDateRange(),
   });
+
+  const buildSearchParams = (overrideSearchTerm) => ({
+    storeId: filters.storeId ? parseInt(filters.storeId) : null,
+    startDate: filters.startDate || null,
+    endDate: filters.endDate || null,
+    itemIds: selectedItems.length > 0 ? selectedItems.join(',') : null,
+    searchTerm: overrideSearchTerm !== undefined ? overrideSearchTerm : searchTerm
+  });
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await stockExpiringApi.searchExpiringStock(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(fetchPage, buildSearchParams(), { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     loadLookupData();
@@ -61,33 +84,22 @@ const StockExpiringPage = () => {
     }));
   };
 
-  const handleSearch = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const searchParams = {
-        storeId: filters.storeId ? parseInt(filters.storeId) : null,
-        startDate: filters.startDate || null,
-        endDate: filters.endDate || null,
-        itemIds: selectedItems.length > 0 ? selectedItems.join(',') : null
-      };
-      
-      const data = await stockExpiringApi.searchExpiringStock(searchParams);
-      setItems(data);
-    } catch (err) {
-      setError('Failed to search expiring stock: ' + (err.response?.data || err.message));
-      console.error('Error searching expiring stock:', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    runSearch(buildSearchParams());
   };
 
+  const handleSearchTermChange = (value) => {
+    setSearchTerm(value);
+    runSearch(buildSearchParams(value));
+  };
+
+  // Exports only the currently-loaded page, not the whole filtered result set -
+  // results are now paged server-side, same tradeoff as StockPage's export.
   const handleExport = () => {
     const headers = ['Name', 'Stock Type', 'Batch No.', 'Mfg. Date', 'Exp. Date', 'Total Items'];
     const csvContent = [
       headers.join(','),
-      ...filteredItems.map(item => [
+      ...items.map(item => [
         `"${item.itemName}"`,
         `"${item.stockType || ''}"`,
         `"${item.batchNo || ''}"`,
@@ -107,14 +119,6 @@ const StockExpiringPage = () => {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
-
-  const filteredItems = items.filter(item =>
-    item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.stockType && item.stockType.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.batchNo && item.batchNo.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const currentItems = filteredItems.slice(0, itemsPerPage);
 
   if (loadingData) {
     return (
@@ -141,7 +145,7 @@ const StockExpiringPage = () => {
             <button
               onClick={handleExport}
               className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors"
-              disabled={filteredItems.length === 0}
+              disabled={items.length === 0}
             >
               <ArrowDownTrayIcon className="w-5 h-5" />
               Export
@@ -232,32 +236,18 @@ const StockExpiringPage = () => {
         {/* Error Message */}
         {error && (
           <div className="px-6 py-4 bg-red-50 border-b border-red-200">
-            <p className="text-red-600">{error}</p>
+            <p className="text-red-600">Failed to search expiring stock{error.message ? `: ${error.message}` : ''}</p>
           </div>
         )}
 
         {/* Controls */}
-        <div className="px-6 py-4 flex justify-between items-center border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-700">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(parseInt(e.target.value))}
-              className="px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm text-gray-700">entries</label>
-          </div>
+        <div className="px-6 py-4 flex justify-end items-center border-b border-gray-200">
           <div>
             <input
               type="text"
               placeholder="Search..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchTermChange(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -297,14 +287,14 @@ const StockExpiringPage = () => {
                     </div>
                   </td>
                 </tr>
-              ) : currentItems.length === 0 ? (
+              ) : items.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                     No data available in table
                   </td>
                 </tr>
               ) : (
-                currentItems.map((item, index) => (
+                items.map((item, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{item.itemName}</div>
@@ -335,12 +325,13 @@ const StockExpiringPage = () => {
           </table>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
-          <div className="text-sm text-gray-700">
-            Showing {items.length > 0 ? 1 : 0} to {Math.min(itemsPerPage, filteredItems.length)} of {filteredItems.length} entries
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

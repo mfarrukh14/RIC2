@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockValueItem>> GetStockValueItemsAsync(StockValueSearchRequest request)
+        public async Task<PagedResult<StockValueItem>> GetStockValueItemsAsync(StockValueSearchRequest request)
         {
             var items = new List<StockValueItem>();
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var totalCount = 0;
 
             try
             {
@@ -32,12 +34,19 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@EndDate", request.EndDate.HasValue ? (object)request.EndDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@Store", string.IsNullOrEmpty(request.Store) ? (object)DBNull.Value : request.Store);
                 command.Parameters.AddWithValue("@ItemType", string.IsNullOrEmpty(request.ItemType) ? (object)DBNull.Value : request.ItemType);
+                command.Parameters.AddWithValue("@SearchTerm", string.IsNullOrEmpty(request.SearchTerm) ? (object)DBNull.Value : request.SearchTerm);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     items.Add(new StockValueItem
                     {
                         StoreName = reader.GetString(reader.GetOrdinal("StoreName")),
@@ -57,7 +66,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return items;
+            return new PagedResult<StockValueItem> { Items = items, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<GRNReport> GetGRNReportByBatchAsync(StockValueDetailRequest request)

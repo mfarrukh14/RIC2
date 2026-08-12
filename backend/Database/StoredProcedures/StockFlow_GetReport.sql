@@ -10,29 +10,20 @@ CREATE OR ALTER PROCEDURE StockFlow_GetReport
     @InventoryNo NVARCHAR(100) = NULL,
     @ChallanNo NVARCHAR(100) = NULL,
     @InvoiceNo NVARCHAR(100) = NULL,
-    @DemandRequestNo NVARCHAR(100) = NULL
+    @DemandRequestNo NVARCHAR(100) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DECLARE @StoreId INT = TRY_CAST(@Store AS INT);
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     -- This is a composite report that shows stock movements from multiple sources
 
-    SELECT
-        CreatedOn AS DateTime,
-        TransactionType,
-        RefNumber,
-        ItemName,
-        DemandRequestedStore,
-        StockType,
-        OpeningQuantity,
-        ReceivedQuantity,
-        IssuedQuantity,
-        BalanceQuantity,
-        BatchNo,
-        ActionBy
-    FROM (
+    ;WITH StockMovements AS (
         -- Add Inventory Records (Received) - this app's other stock-receiving path
         -- alongside GRN below. Confirmed against the old system: its equivalent
         -- (Inventories/InventoryItems) was the PRIMARY receiving mechanism, always
@@ -257,8 +248,24 @@ BEGIN
             AND (@StartDate IS NULL OR aa.CreatedOn >= @StartDate)
             AND (@EndDate IS NULL OR aa.CreatedOn <= @EndDate)
             AND (@Item IS NULL OR i.Name LIKE '%' + @Item + '%')
-    ) AS StockMovements
-    ORDER BY DateTime DESC;
+    )
+    SELECT
+        CreatedOn AS DateTime,
+        TransactionType,
+        RefNumber,
+        ItemName,
+        DemandRequestedStore,
+        StockType,
+        OpeningQuantity,
+        ReceivedQuantity,
+        IssuedQuantity,
+        BalanceQuantity,
+        BatchNo,
+        ActionBy,
+        COUNT(*) OVER() AS TotalCount
+    FROM StockMovements
+    ORDER BY DateTime DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

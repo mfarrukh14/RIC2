@@ -531,7 +531,18 @@ END;";
             var sqlScript = await File.ReadAllTextAsync(scriptPath);
             if (!skipNormalization)
                 sqlScript = NormalizeScriptForSharedDatabase(sqlScript);
-            
+
+            // Several tables (Inv.Inventories, Inv.Items, Users, etc.) carry filtered
+            // indexes, which require QUOTED_IDENTIFIER ON at CREATE time for any proc
+            // that writes to them - otherwise every INSERT/UPDATE/DELETE through that
+            // proc fails with error 1934 regardless of the caller's own session
+            // settings. Force it ON before each script runs so no proc gets created
+            // with it OFF, whatever the connection's prior state.
+            using (var setOptionsCommand = new SqlCommand("SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON;", connection))
+            {
+                await setOptionsCommand.ExecuteNonQueryAsync();
+            }
+
             // Split by GO statements (case-insensitive)
             var batches = System.Text.RegularExpressions.Regex.Split(
                 sqlScript, 

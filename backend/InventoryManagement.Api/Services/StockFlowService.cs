@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockFlow>> GetStockFlowAsync(StockFlowSearchRequest request)
+        public async Task<PagedResult<StockFlow>> GetStockFlowAsync(StockFlowSearchRequest request)
         {
             var stockFlows = new List<StockFlow>();
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var totalCount = 0;
 
             try
             {
@@ -37,12 +39,18 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@ChallanNo", string.IsNullOrEmpty(request.ChallanNo) ? (object)DBNull.Value : request.ChallanNo);
                 command.Parameters.AddWithValue("@InvoiceNo", string.IsNullOrEmpty(request.InvoiceNo) ? (object)DBNull.Value : request.InvoiceNo);
                 command.Parameters.AddWithValue("@DemandRequestNo", string.IsNullOrEmpty(request.DemandRequestNo) ? (object)DBNull.Value : request.DemandRequestNo);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     stockFlows.Add(new StockFlow
                     {
                         DateTime = reader.GetDateTime(reader.GetOrdinal("DateTime")),
@@ -66,7 +74,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return stockFlows;
+            return new PagedResult<StockFlow> { Items = stockFlows, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
     }
 }

@@ -1,9 +1,11 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { stockValueItemsApi } from '../services/stockValueItemsApi';
 import { getAllStores } from '../services/storeApi';
 import { itemTypeApi } from '../services/itemTypeApi';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const StockValueWRTItemsPage = () => {
@@ -15,16 +17,44 @@ const StockValueWRTItemsPage = () => {
   const [selectedItemType, setSelectedItemType] = useState('');
   const [stores, setStores] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
-  const [stockValueItems, setStockValueItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const buildParams = (overrideSearchTerm) => {
+    const params = {
+      store: selectedStore || undefined,
+      itemType: selectedItemType || undefined,
+      searchTerm: (overrideSearchTerm !== undefined ? overrideSearchTerm : searchTerm) || undefined
+    };
+
+    if (dateRangeEnabled && startDate && endDate) {
+      params.startDate = new Date(startDate).toISOString();
+      params.endDate = new Date(endDate).toISOString();
+    }
+
+    return params;
+  };
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await stockValueItemsApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: stockValueItems,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(fetchPage, buildParams(), { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     fetchStores();
     fetchItemTypes();
-    fetchData();
+    runSearch(buildParams());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStores = async () => {
@@ -42,28 +72,6 @@ const StockValueWRTItemsPage = () => {
       setItemTypes(data.filter(itemType => itemType.isActive));
     } catch (error) {
       console.error('Error fetching item types:', error);
-    }
-  };
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const params = {
-        store: selectedStore || undefined,
-        itemType: selectedItemType || undefined
-      };
-
-      if (dateRangeEnabled && startDate && endDate) {
-        params.startDate = new Date(startDate).toISOString();
-        params.endDate = new Date(endDate).toISOString();
-      }
-
-      const data = await stockValueItemsApi.getAll(params);
-      setStockValueItems(data);
-    } catch (error) {
-      console.error('Error fetching stock value items:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -214,12 +222,19 @@ const StockValueWRTItemsPage = () => {
   };
 
   const handleGenerate = () => {
-    fetchData();
+    runSearch(buildParams());
+  };
+
+  const handleSearchTermChange = (value) => {
+    setSearchTerm(value);
+    runSearch(buildParams(value));
   };
 
   // "Item Wise Stock Report" export - RIC letterhead, User line, Filters line, then
   // the same Store/Name/Batch/Qty/Rate columns as the on-screen table, matching the
-  // old system's export against the currently applied filters.
+  // old system's export against the currently applied filters. Exports only the
+  // currently-loaded page, not the whole filtered result set - results are now
+  // paged server-side, same tradeoff as StockPage's export.
   const handleExport = async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
@@ -271,7 +286,7 @@ const StockValueWRTItemsPage = () => {
       styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
     });
 
-    const body = filteredItems.map((item) => [
+    const body = stockValueItems.map((item) => [
       item.storeName || 'N/A',
       item.name,
       item.batchNo || '-',
@@ -316,18 +331,9 @@ const StockValueWRTItemsPage = () => {
     doc.save(`ItemWiseStockReport_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.pdf`);
   };
 
-  const filteredItems = stockValueItems.filter(item =>
-    item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.batchNo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredItems.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
-
-  // Calculate totals
-  const totals = filteredItems.reduce((acc, item) => ({
+  // Totals reflect only the current page now that results are paged server-side
+  // (search/filtering also happens server-side - see buildParams/runSearch).
+  const totals = stockValueItems.reduce((acc, item) => ({
     totalItems: acc.totalItems + item.totalItems,
     unitPurchaseRate: acc.unitPurchaseRate + parseFloat(item.unitPurchaseRate),
     totalPurchaseRate: acc.totalPurchaseRate + parseFloat(item.totalPurchaseRate),
@@ -352,7 +358,7 @@ const StockValueWRTItemsPage = () => {
         </div>
         <button
           onClick={handleExport}
-          disabled={filteredItems.length === 0}
+          disabled={stockValueItems.length === 0}
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span>⬇</span>
@@ -428,9 +434,10 @@ const StockValueWRTItemsPage = () => {
           <div className="flex items-end">
             <button
               onClick={handleGenerate}
-              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+              disabled={loading}
+              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-blue-300"
             >
-              Generate
+              {loading ? 'Generating...' : 'Generate'}
             </button>
           </div>
         </div>
@@ -438,27 +445,13 @@ const StockValueWRTItemsPage = () => {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm">entries</label>
-          </div>
+        <div className="p-4 border-b flex justify-end items-center">
           <div className="flex items-center gap-2">
             <label className="text-sm">Search:</label>
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchTermChange(e.target.value)}
               className="border rounded px-3 py-1 text-sm"
             />
           </div>
@@ -479,7 +472,7 @@ const StockValueWRTItemsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {currentItems.map((item, index) => (
+              {stockValueItems.map((item, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">{item.storeName || 'N/A'}</td>
                   <td className="px-4 py-3 text-sm">{item.name}</td>
@@ -498,10 +491,10 @@ const StockValueWRTItemsPage = () => {
                   <td className="px-4 py-3 text-sm">{parseFloat(item.totalSaleRate).toFixed(2)}</td>
                 </tr>
               ))}
-              {/* Totals Row */}
-              {filteredItems.length > 0 && (
+              {/* Totals Row - current page only, now that results are paged server-side */}
+              {stockValueItems.length > 0 && (
                 <tr className="bg-gray-100 font-semibold">
-                  <td className="px-4 py-3 text-sm" colSpan="3">Store Name</td>
+                  <td className="px-4 py-3 text-sm" colSpan="3">Page Totals</td>
                   <td className="px-4 py-3 text-sm">Total Items:{totals.totalItems.toFixed(2)}</td>
                   <td className="px-4 py-3 text-sm">Unit Purchase Rate: {totals.unitPurchaseRate.toFixed(2)}</td>
                   <td className="px-4 py-3 text-sm">Total Purchase Rate: {totals.totalPurchaseRate.toFixed(2)}</td>
@@ -513,38 +506,13 @@ const StockValueWRTItemsPage = () => {
           </table>
         </div>
 
-        <div className="p-4 border-t flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredItems.length)} of {filteredItems.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 border rounded text-sm ${
-                  currentPage === i + 1 ? 'bg-blue-600 text-white' : ''
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

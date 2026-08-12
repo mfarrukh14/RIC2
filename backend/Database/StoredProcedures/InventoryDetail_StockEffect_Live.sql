@@ -27,6 +27,13 @@
 -- one populated) - see Item_GetAllWithMedicines / ProductKey.
 -- =============================================
 
+-- Inv.Inventories/Inv.InventoryDetails carry filtered indexes, which require
+-- QUOTED_IDENTIFIER ON to write through (see Inventory_Procedures.sql header).
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
 IF OBJECT_ID('dbo.InventoryDetail_Insert', 'P') IS NOT NULL
     DROP PROCEDURE dbo.InventoryDetail_Insert;
 GO
