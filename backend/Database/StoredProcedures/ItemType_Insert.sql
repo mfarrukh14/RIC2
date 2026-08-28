@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.ItemTypes (
+    INSERT INTO Inv.ItemTypes (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

@@ -45,10 +45,10 @@ BEGIN
         ic.Name AS CategoryName,
         i.IsFridgeItem,
         i.IsConsumptionItem
-    FROM dbo.Stocks s
-    INNER JOIN dbo.Items i ON s.ItemId = i.Id
-    LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN dbo.ItemCategories ic ON i.CategoryId = ic.Id
+    FROM Inv.Stocks s
+    INNER JOIN Inv.Items i ON s.ItemId = i.Id
+    LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
+    LEFT JOIN Inv.Categories ic ON i.CategoryId = ic.Id
     WHERE s.IsActive = 1
         AND (@BranchId IS NULL OR s.BranchId = @BranchId)
         AND (@StoreId IS NULL OR s.StoreId = @StoreId)

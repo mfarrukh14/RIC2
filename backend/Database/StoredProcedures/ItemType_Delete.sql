@@ -10,7 +10,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.ItemTypes
+    UPDATE Inv.ItemTypes
     SET
         IsActive = 0,
         ModifiedById = @ModifiedById,

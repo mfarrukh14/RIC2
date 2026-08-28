@@ -1,4 +1,4 @@
-﻿USE InventoryManagementDB_SP;
+USE InventoryManagementDB_SP;
 GO
 
 -- =============================================
@@ -36,7 +36,7 @@ BEGIN
         CAST(NULL AS DATETIME)        AS InventoryDate,
         CAST(NULL AS NVARCHAR(50))    AS ReportType,
         CAST(NULL AS NVARCHAR(50))    AS InvoiceType
-    FROM dbo.PurchaseSummaryInvoices psi
+    FROM Inv.PurchaseSummaryInvoices psi
     WHERE psi.IsActive = 1
         AND (@InvoiceDateStart IS NULL OR psi.InvoiceDate >= @InvoiceDateStart)
         AND (@InvoiceDateEnd   IS NULL OR psi.InvoiceDate <= @InvoiceDateEnd)
@@ -49,7 +49,7 @@ BEGIN
         CAST(0 AS DECIMAL(18,2))   AS TotalAdvanceTax,
         CAST(0 AS DECIMAL(18,2))   AS TotalDiscount,
         ISNULL(SUM(psi.Amount), 0) AS GrandTotal
-    FROM dbo.PurchaseSummaryInvoices psi
+    FROM Inv.PurchaseSummaryInvoices psi
     WHERE psi.IsActive = 1
         AND (@InvoiceDateStart IS NULL OR psi.InvoiceDate >= @InvoiceDateStart)
         AND (@InvoiceDateEnd   IS NULL OR psi.InvoiceDate <= @InvoiceDateEnd)
@@ -83,7 +83,7 @@ BEGIN
         CAST(NULL AS DATETIME)        AS InventoryDate,
         CAST(NULL AS NVARCHAR(50))    AS ReportType,
         CAST(NULL AS NVARCHAR(50))    AS InvoiceType
-    FROM dbo.PurchaseSummaryInvoices psi
+    FROM Inv.PurchaseSummaryInvoices psi
     WHERE psi.Id = @Id;
 END
 GO
@@ -110,7 +110,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.PurchaseSummaryInvoices (
+    INSERT INTO Inv.PurchaseSummaryInvoices (
         PurchaseSummaryId, InvoiceNumber, InvoiceDate,
         Amount, Notes, IsActive, CreatedOn
     )
@@ -146,7 +146,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.PurchaseSummaryInvoices
+    UPDATE Inv.PurchaseSummaryInvoices
     SET
         InvoiceNumber = @InvoiceNo,
         InvoiceDate   = @InvoiceDate,
@@ -167,7 +167,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.PurchaseSummaryInvoices
+    UPDATE Inv.PurchaseSummaryInvoices
     SET IsActive = 0
     WHERE Id = @Id;
 
@@ -184,20 +184,20 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Branches
-    SELECT Id, Name
-    FROM dbo.Branches
+    SELECT BranchId AS Id, BranchName AS Name
+    FROM dbo.Branch
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Stores
     SELECT StoreId AS Id, StoreName AS Name
-    FROM dbo.Stores
+    FROM Inv.Stores
     WHERE IsActive = 1
     ORDER BY StoreName;
 
     -- Vendors
     SELECT Id, Name
-    FROM dbo.Vendors
+    FROM Inv.Vendors
     WHERE IsActive = 1
     ORDER BY Name;
 END

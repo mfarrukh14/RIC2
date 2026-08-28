@@ -75,21 +75,21 @@ BEGIN
         i.MinimumOrderQuantity,
         i.PackageType,
         i.PackageSize
-    FROM dbo.Items i
-    LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
+    FROM Inv.Items i
+    LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN Inv.Brands b ON i.BrandId = b.Id
-    LEFT JOIN dbo.Packings p ON i.PackingId = p.Id
-    LEFT JOIN dbo.ItemUnits u ON i.UnitId = u.Id
-    LEFT JOIN dbo.Prices pr ON i.PriceId = pr.Id
-    LEFT JOIN dbo.Categories c ON i.CategoryId = c.Id
-    LEFT JOIN dbo.SubCategories sc ON i.SubCategoryId = sc.Id
-    LEFT JOIN dbo.ItemUnits su ON i.SaleUnitId = su.Id
-    LEFT JOIN dbo.AccountCOAs sa ON i.SalesAccountId = sa.Id
-    LEFT JOIN dbo.AccountCOAs ia ON i.InventoryAccountId = ia.Id
-    LEFT JOIN dbo.AccountCOAs ea ON i.ExpenseAccountId = ea.Id
-    LEFT JOIN dbo.TaxRates tr ON i.TaxRateId = tr.Id
-    LEFT JOIN dbo.TaxDescriptions td ON i.TaxDescriptionId = td.Id
-    LEFT JOIN dbo.TaxTypes tt ON i.TaxTypeId = tt.Id
+    LEFT JOIN Inv.Packings p ON i.PackingId = p.Id
+    LEFT JOIN Inv.ItemUnits u ON i.UnitId = u.Id
+    LEFT JOIN Inv.Prices pr ON i.PriceId = pr.Id
+    LEFT JOIN Inv.Categories c ON i.CategoryId = c.Id
+    LEFT JOIN Inv.SubCategories sc ON i.SubCategoryId = sc.Id
+    LEFT JOIN Inv.ItemUnits su ON i.SaleUnitId = su.Id
+    LEFT JOIN Inv.AccountCOAs sa ON i.SalesAccountId = sa.Id
+    LEFT JOIN Inv.AccountCOAs ia ON i.InventoryAccountId = ia.Id
+    LEFT JOIN Inv.AccountCOAs ea ON i.ExpenseAccountId = ea.Id
+    LEFT JOIN Inv.TaxRates tr ON i.TaxRateId = tr.Id
+    LEFT JOIN Inv.TaxDescriptions td ON i.TaxDescriptionId = td.Id
+    LEFT JOIN Inv.TaxTypes tt ON i.TaxTypeId = tt.Id
     ORDER BY i.Name;
 END
 GO

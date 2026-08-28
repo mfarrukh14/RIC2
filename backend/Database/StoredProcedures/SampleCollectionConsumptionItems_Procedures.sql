@@ -21,7 +21,7 @@ BEGIN
         sc.DepartmentId,
         d.Name AS DepartmentName,
         sc.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         sc.Quantity,
         sc.CreatedById,
         sc.CreatedOn,
@@ -29,10 +29,10 @@ BEGIN
         sc.ModifiedOn,
         sc.IsDeleted,
         sc.IsActive
-    FROM dbo.SampleCollectionConsumptionItems sc
-    LEFT JOIN dbo.Items i ON sc.ItemId = i.Id
-    LEFT JOIN dbo.Departments d ON sc.DepartmentId = d.Id
-    LEFT JOIN dbo.Branches b ON sc.BranchId = b.Id
+    FROM Inv.SampleCollectionConsumptionItems sc
+    LEFT JOIN Inv.Items i ON sc.ItemId = i.Id
+    LEFT JOIN dbo.Departments d ON sc.DepartmentId = d.DID
+    LEFT JOIN dbo.Branch b ON sc.BranchId = b.BranchId
     WHERE sc.IsDeleted = 0 AND sc.IsActive = 1
     ORDER BY sc.CreatedOn DESC;
 END
@@ -58,7 +58,7 @@ BEGIN
         sc.DepartmentId,
         d.Name AS DepartmentName,
         sc.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         sc.Quantity,
         sc.CreatedById,
         sc.CreatedOn,
@@ -66,10 +66,10 @@ BEGIN
         sc.ModifiedOn,
         sc.IsDeleted,
         sc.IsActive
-    FROM dbo.SampleCollectionConsumptionItems sc
-    LEFT JOIN dbo.Items i ON sc.ItemId = i.Id
-    LEFT JOIN dbo.Departments d ON sc.DepartmentId = d.Id
-    LEFT JOIN dbo.Branches b ON sc.BranchId = b.Id
+    FROM Inv.SampleCollectionConsumptionItems sc
+    LEFT JOIN Inv.Items i ON sc.ItemId = i.Id
+    LEFT JOIN dbo.Departments d ON sc.DepartmentId = d.DID
+    LEFT JOIN dbo.Branch b ON sc.BranchId = b.BranchId
     WHERE sc.Id = @Id AND sc.IsDeleted = 0;
 END
 GO
@@ -91,7 +91,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.SampleCollectionConsumptionItems (
+    INSERT INTO Inv.SampleCollectionConsumptionItems (
         ItemId,
         MedicineId,
         FeeId,
@@ -138,7 +138,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.SampleCollectionConsumptionItems
+    UPDATE Inv.SampleCollectionConsumptionItems
     SET 
         ItemId = @ItemId,
         MedicineId = @MedicineId,
@@ -165,7 +165,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.SampleCollectionConsumptionItems
+    UPDATE Inv.SampleCollectionConsumptionItems
     SET 
         IsDeleted = 1,
         IsActive = 0,
@@ -187,8 +187,8 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Departments
-    SELECT 
-        Id,
+    SELECT
+        DID AS Id,
         Name
     FROM dbo.Departments
     WHERE IsActive = 1
@@ -198,15 +198,15 @@ BEGIN
     SELECT 
         Id,
         Name
-    FROM dbo.Items
+    FROM Inv.Items
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Branches
-    SELECT 
-        Id,
-        Name
-    FROM dbo.Branches
+    SELECT
+        BranchId AS Id,
+        BranchName AS Name
+    FROM dbo.Branch
     WHERE IsActive = 1
     ORDER BY Name;
 END

@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.ItemUnits (
+    INSERT INTO Inv.ItemUnits (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

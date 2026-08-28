@@ -1,4 +1,4 @@
-﻿USE InventoryManagementDB_SP;
+USE InventoryManagementDB_SP;
 GO
 
 -- =============================================
@@ -38,14 +38,14 @@ BEGIN
         CAST(NULL AS DECIMAL(18,2)) AS Discount,
         ps.TotalAmount        AS TotalPrice,
         ps.BranchId,
-        b.Name                AS BranchName,
+        b.BranchName          AS BranchName,
         CAST(NULL AS INT)     AS ItemTypeId,
         CAST(NULL AS NVARCHAR(MAX)) AS ItemTypeName,
         CAST(NULL AS NVARCHAR(50))  AS ReportType
-    FROM dbo.PurchaseSummaries ps
-    LEFT JOIN dbo.Branches b ON ps.BranchId = b.Id
-    LEFT JOIN dbo.Stores s   ON ps.StoreId  = s.StoreId
-    LEFT JOIN dbo.Vendors v  ON ps.VendorId = v.Id
+    FROM Inv.PurchaseSummaries ps
+    LEFT JOIN dbo.Branch b ON ps.BranchId = b.BranchId
+    LEFT JOIN Inv.Stores s   ON ps.StoreId  = s.StoreId
+    LEFT JOIN Inv.Vendors v  ON ps.VendorId = v.Id
     WHERE ps.IsActive = 1
         AND (@BranchId IS NULL OR ps.BranchId = @BranchId)
         AND (@StoreId  IS NULL OR ps.StoreId  = @StoreId)
@@ -60,7 +60,7 @@ BEGIN
         CAST(0 AS DECIMAL(18,2)) AS TotalAdvanceTax,
         CAST(0 AS DECIMAL(18,2)) AS TotalDiscount,
         ISNULL(SUM(ps.TotalAmount), 0) AS TotalPrice
-    FROM dbo.PurchaseSummaries ps
+    FROM Inv.PurchaseSummaries ps
     WHERE ps.IsActive = 1
         AND (@BranchId IS NULL OR ps.BranchId = @BranchId)
         AND (@StoreId  IS NULL OR ps.StoreId  = @StoreId)
@@ -96,14 +96,14 @@ BEGIN
         CAST(NULL AS DECIMAL(18,2)) AS Discount,
         ps.TotalAmount        AS TotalPrice,
         ps.BranchId,
-        b.Name                AS BranchName,
+        b.BranchName          AS BranchName,
         CAST(NULL AS INT)     AS ItemTypeId,
         CAST(NULL AS NVARCHAR(MAX)) AS ItemTypeName,
         CAST(NULL AS NVARCHAR(50))  AS ReportType
-    FROM dbo.PurchaseSummaries ps
-    LEFT JOIN dbo.Branches b ON ps.BranchId = b.Id
-    LEFT JOIN dbo.Stores s   ON ps.StoreId  = s.StoreId
-    LEFT JOIN dbo.Vendors v  ON ps.VendorId = v.Id
+    FROM Inv.PurchaseSummaries ps
+    LEFT JOIN dbo.Branch b ON ps.BranchId = b.BranchId
+    LEFT JOIN Inv.Stores s   ON ps.StoreId  = s.StoreId
+    LEFT JOIN Inv.Vendors v  ON ps.VendorId = v.Id
     WHERE ps.Id = @Id;
 END
 GO
@@ -135,7 +135,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.PurchaseSummaries (
+    INSERT INTO Inv.PurchaseSummaries (
         SummaryDate, StoreId, VendorId, TotalAmount,
         BranchId, Notes, Status,
         IsActive, CreatedById, CreatedOn
@@ -178,7 +178,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.PurchaseSummaries
+    UPDATE Inv.PurchaseSummaries
     SET
         SummaryDate  = @PurchaseDate,
         StoreId      = @StoreId,
@@ -203,7 +203,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.PurchaseSummaries
+    UPDATE Inv.PurchaseSummaries
     SET
         IsActive     = 0,
         ModifiedById = @ModifiedById,
@@ -223,32 +223,32 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Branches
-    SELECT Id, Name
-    FROM dbo.Branches
+    SELECT BranchId AS Id, BranchName AS Name
+    FROM dbo.Branch
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Stores
     SELECT StoreId AS Id, StoreName AS Name
-    FROM dbo.Stores
+    FROM Inv.Stores
     WHERE IsActive = 1
     ORDER BY StoreName;
 
     -- Item Types
     SELECT Id, Name
-    FROM dbo.ItemTypes
+    FROM Inv.ItemTypes
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Vendors
     SELECT Id, Name
-    FROM dbo.Vendors
+    FROM Inv.Vendors
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Items
     SELECT Id, Name
-    FROM dbo.Items
+    FROM Inv.Items
     WHERE IsActive = 1
     ORDER BY Name;
 END

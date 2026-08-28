@@ -24,11 +24,11 @@ BEGIN
         r.Name AS RackName,
         rr.Name AS RowName,
         rc.Name AS ColumnName
-    FROM dbo.RackDrawers rd
-    LEFT JOIN dbo.Stores s ON rd.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rd.RackId = r.Id
-    LEFT JOIN dbo.RackRows rr ON rd.RackRowId = rr.Id
-    LEFT JOIN dbo.RackColumns rc ON rd.RackColumnId = rc.Id
+    FROM Inv.RackDrawrs rd
+    LEFT JOIN Inv.Stores s ON rd.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rd.RackId = r.Id
+    LEFT JOIN Inv.RackRows rr ON rd.RackRowId = rr.Id
+    LEFT JOIN Inv.RackColumns rc ON rd.RackColumnId = rc.Id
     ORDER BY rd.Name;
 END
 GO
@@ -58,11 +58,11 @@ BEGIN
         r.Name AS RackName,
         rr.Name AS RowName,
         rc.Name AS ColumnName
-    FROM dbo.RackDrawers rd
-    LEFT JOIN dbo.Stores s ON rd.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rd.RackId = r.Id
-    LEFT JOIN dbo.RackRows rr ON rd.RackRowId = rr.Id
-    LEFT JOIN dbo.RackColumns rc ON rd.RackColumnId = rc.Id
+    FROM Inv.RackDrawrs rd
+    LEFT JOIN Inv.Stores s ON rd.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rd.RackId = r.Id
+    LEFT JOIN Inv.RackRows rr ON rd.RackRowId = rr.Id
+    LEFT JOIN Inv.RackColumns rc ON rd.RackColumnId = rc.Id
     WHERE rd.Id = @Id;
 END
 GO
@@ -81,7 +81,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.RackDrawers (
+    INSERT INTO Inv.RackDrawrs (
         Name, Description, StoreId, RackId, RackRowId, RackColumnId,
         BranchId, IsActive, CreatedOn
     )
@@ -109,7 +109,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.RackDrawers
+    UPDATE Inv.RackDrawrs
     SET 
         Name = @Name,
         Description = @Description,
@@ -131,7 +131,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    DELETE FROM dbo.RackDrawers
+    DELETE FROM Inv.RackDrawrs
     WHERE Id = @Id;
 END
 GO

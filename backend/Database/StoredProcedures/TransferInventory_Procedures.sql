@@ -1,4 +1,4 @@
-﻿USE InventoryManagementDB_SP;
+USE InventoryManagementDB_SP;
 GO
 
 -- =============================================
@@ -20,15 +20,15 @@ BEGIN
         NULL AS StockTypeName,
         NULL AS ItemId,
         NULL AS ItemName,
-        ISNULL((SELECT SUM(ti.Quantity) FROM dbo.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
+        ISNULL((SELECT SUM(ti.Quantity) FROM Inv.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
         t.TransferDate,
         t.Status,
         t.Notes,
         t.IsActive,
         t.CreatedOn
-    FROM dbo.TransferInventory t
-    LEFT JOIN dbo.Stores fs ON t.FromStoreId = fs.StoreId
-    LEFT JOIN dbo.Stores ts ON t.ToStoreId = ts.StoreId
+    FROM Inv.TransferInventory t
+    LEFT JOIN Inv.Stores fs ON t.FromStoreId = fs.StoreId
+    LEFT JOIN Inv.Stores ts ON t.ToStoreId = ts.StoreId
     WHERE t.IsActive = 1
     ORDER BY t.CreatedOn DESC;
 END
@@ -54,7 +54,7 @@ BEGIN
         NULL AS StockTypeName,
         NULL AS ItemId,
         NULL AS ItemName,
-        ISNULL((SELECT SUM(ti.Quantity) FROM dbo.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
+        ISNULL((SELECT SUM(ti.Quantity) FROM Inv.TransferInventoryItems ti WHERE ti.TransferInventoryId = t.Id AND ti.IsActive = 1), 0) AS Quantity,
         t.TransferDate,
         t.Status,
         t.Notes,
@@ -63,9 +63,9 @@ BEGIN
         t.CreatedOn,
         t.ModifiedById,
         t.ModifiedOn
-    FROM dbo.TransferInventory t
-    LEFT JOIN dbo.Stores fs ON t.FromStoreId = fs.StoreId
-    LEFT JOIN dbo.Stores ts ON t.ToStoreId = ts.StoreId
+    FROM Inv.TransferInventory t
+    LEFT JOIN Inv.Stores fs ON t.FromStoreId = fs.StoreId
+    LEFT JOIN Inv.Stores ts ON t.ToStoreId = ts.StoreId
     WHERE t.Id = @Id;
 END
 GO
@@ -90,10 +90,10 @@ BEGIN
     
     DECLARE @TransferNumber NVARCHAR(50);
     DECLARE @NextId INT;
-    SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM dbo.TransferInventory;
+    SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM Inv.TransferInventory;
     SET @TransferNumber = 'DR-' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
     
-    INSERT INTO dbo.TransferInventory (
+    INSERT INTO Inv.TransferInventory (
         TransferNumber, FromStoreId, ToStoreId, BranchId,
         TransferDate, Status, Notes,
         IsActive, CreatedById, CreatedOn
@@ -108,7 +108,7 @@ BEGIN
     
     IF @ItemId IS NOT NULL
     BEGIN
-        INSERT INTO dbo.TransferInventoryItems (TransferInventoryId, ItemId, Quantity, Notes, IsActive, CreatedOn)
+        INSERT INTO Inv.TransferInventoryItems (TransferInventoryId, ItemId, Quantity, Notes, IsActive, CreatedOn)
         VALUES (@NewId, @ItemId, @Quantity, @Notes, 1, GETDATE());
     END
     
@@ -134,7 +134,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.TransferInventory
+    UPDATE Inv.TransferInventory
     SET 
         FromStoreId = @FromStoreId,
         ToStoreId = @ToStoreId,
@@ -158,7 +158,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.TransferInventory
+    UPDATE Inv.TransferInventory
     SET 
         IsActive = 0,
         ModifiedById = @ModifiedById,
@@ -177,25 +177,25 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- dbo.Stores
+    -- Inv.Stores
     SELECT StoreId as Id, StoreName as Name
-    FROM dbo.Stores
+    FROM Inv.Stores
     WHERE IsActive = 1
     ORDER BY StoreName;
     
     -- Stock Types
     SELECT Id, Name
-    FROM dbo.StockTypes
+    FROM Inv.StockTypes
     WHERE IsActive = 1
     ORDER BY Name;
     
-    -- dbo.Items
+    -- Inv.Items
     SELECT Id, Name
-    FROM dbo.Items
+    FROM Inv.Items
     WHERE IsActive = 1
     ORDER BY Name;
 END
 GO
 
-PRINT 'All dbo.TransferInventory stored procedures created successfully';
+PRINT 'All Inv.TransferInventory stored procedures created successfully';
 

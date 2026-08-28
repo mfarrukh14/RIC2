@@ -18,17 +18,17 @@ BEGIN
         CAST(AVG(CAST(COALESCE(gi.UnitSellingPrice, 0) AS DECIMAL(18, 2))) AS DECIMAL(18, 2)) AS UnitSaleRate,
         SUM(COALESCE(gi.TotalSellingPrice, 0)) AS TotalSaleRate
     FROM 
-        dbo.GRNItems gi
+        Inv.GRNItems gi
     INNER JOIN 
-        dbo.Items i ON gi.ItemId = i.Id
+        Inv.Items i ON gi.ItemId = i.Id
     INNER JOIN 
-        dbo.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
+        Inv.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
     LEFT JOIN
         dbo.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN 
-        dbo.Stores s ON po.StoreId = s.StoreId
+        Inv.Stores s ON po.StoreId = s.StoreId
     LEFT JOIN
-        dbo.ItemTypes it ON i.ItemTypeId = it.Id
+        Inv.ItemTypes it ON i.ItemTypeId = it.Id
     WHERE 
         (@StartDate IS NULL OR grn.DateAndTime >= @StartDate)
         AND (@EndDate IS NULL OR grn.DateAndTime <= @EndDate)

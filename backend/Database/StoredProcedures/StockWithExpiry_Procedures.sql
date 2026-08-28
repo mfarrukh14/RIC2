@@ -59,8 +59,8 @@ BEGIN
         
         -- Total Items in Transition (all items for this ItemId in this store)
         (SELECT ISNULL(SUM(id2.TotalItems), 0) 
-         FROM dbo.InventoryDetails id2
-         INNER JOIN dbo.Inventories inv2 ON id2.InventoryId = inv2.Id
+         FROM Inv.InventoryDetails id2
+         INNER JOIN Inv.Inventories inv2 ON id2.InventoryId = inv2.Id
          WHERE id2.ItemId = i.Id AND inv2.StoreId = inv.StoreId) AS TotalItemsInTransition,
         
         inv.ModifiedOn,
@@ -68,26 +68,26 @@ BEGIN
         inv.CreatedOn,
         inv.CreatedById
         
-    FROM dbo.InventoryDetails id
-    INNER JOIN dbo.Inventories inv ON id.InventoryId = inv.Id
-    INNER JOIN dbo.Items i ON id.ItemId = i.Id
-    INNER JOIN dbo.Stores st ON inv.StoreId = st.StoreId
-    LEFT JOIN dbo.ItemTypes it ON i.ItemTypeId = it.Id
-    LEFT JOIN dbo.StockTypes sty ON inv.StockTypeId = sty.Id
+    FROM Inv.InventoryDetails id
+    INNER JOIN Inv.Inventories inv ON id.InventoryId = inv.Id
+    INNER JOIN Inv.Items i ON id.ItemId = i.Id
+    INNER JOIN Inv.Stores st ON inv.StoreId = st.StoreId
+    LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
+    LEFT JOIN Inv.StockTypes sty ON inv.StockTypeId = sty.Id
         OUTER APPLY (
                 SELECT TOP 1 ii.Batch, ii.SysBatchNo
-                FROM dbo.InventoryItems ii
+                FROM Inv.InventoryItems ii
                 WHERE ii.InventoryId = id.InventoryId
                     AND ii.ItemId = id.ItemId
                     AND ii.IsActive = 1
                     AND (ii.IsDeleted = 0 OR ii.IsDeleted IS NULL)
                 ORDER BY ii.Id DESC
         ) ii
-    LEFT JOIN dbo.SpaceAllocations sa ON sa.ItemId = i.Id
-    LEFT JOIN dbo.Racks r ON sa.RackId = r.Id
-    LEFT JOIN dbo.RackRows rr ON sa.RackRowId = rr.Id
-    LEFT JOIN dbo.RackColumns rc ON sa.RackColumnId = rc.Id
-    LEFT JOIN dbo.RackDrawers rd ON sa.RackDrawrId = rd.Id
+    LEFT JOIN Inv.SpaceAllocations sa ON sa.ItemId = i.Id
+    LEFT JOIN Inv.Racks r ON sa.RackId = r.Id
+    LEFT JOIN Inv.RackRows rr ON sa.RackRowId = rr.Id
+    LEFT JOIN Inv.RackColumns rc ON sa.RackColumnId = rc.Id
+    LEFT JOIN Inv.RackDrawrs rd ON sa.RackDrawrId = rd.Id
     
     WHERE 
         (@BranchId IS NULL OR inv.BranchId = @BranchId)

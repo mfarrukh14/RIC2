@@ -19,8 +19,8 @@ BEGIN
         b.CreatedOn,
         b.ModifiedById,
         b.ModifiedOn,
-        br.Name as BranchName
-    FROM dbo.Brands b
-    LEFT JOIN dbo.Branches br ON b.BranchId = br.Id
+        br.BranchName as BranchName
+    FROM Inv.Brands b
+    LEFT JOIN dbo.Branch br ON b.BranchId = br.BranchId
     WHERE b.Id = @Id AND b.IsActive = 1;
 END

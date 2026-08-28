@@ -1,4 +1,4 @@
-﻿-- =============================================
+-- =============================================
 -- Stored Procedures for ItemTypeSaleLevels
 -- =============================================
 
@@ -20,16 +20,16 @@ BEGIN
         itsl.SlowMovingLevel,
         itsl.DeadLevel,
         itsl.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         itsl.IsActive,
         CAST(itsl.CreatedById AS NVARCHAR(450)) AS CreatedById,
         itsl.CreatedOn,
         CAST(itsl.ModifiedById AS NVARCHAR(450)) AS ModifiedById,
         itsl.ModifiedOn,
         CAST(0 AS BIT) AS IsDeleted
-    FROM dbo.ItemTypeSaleLevels itsl
-    LEFT JOIN dbo.ItemTypes it ON itsl.ItemTypeId = it.Id
-    LEFT JOIN dbo.Branches b ON itsl.BranchId = b.Id
+    FROM Inv.ItemTypeSaleLevels itsl
+    LEFT JOIN Inv.ItemTypes it ON itsl.ItemTypeId = it.Id
+    LEFT JOIN dbo.Branch b ON itsl.BranchId = b.BranchId
     WHERE itsl.IsActive = 1
     ORDER BY itsl.CreatedOn DESC;
 END
@@ -54,16 +54,16 @@ BEGIN
         itsl.SlowMovingLevel,
         itsl.DeadLevel,
         itsl.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         itsl.IsActive,
         CAST(itsl.CreatedById AS NVARCHAR(450)) AS CreatedById,
         itsl.CreatedOn,
         CAST(itsl.ModifiedById AS NVARCHAR(450)) AS ModifiedById,
         itsl.ModifiedOn,
         CAST(0 AS BIT) AS IsDeleted
-    FROM dbo.ItemTypeSaleLevels itsl
-    LEFT JOIN dbo.ItemTypes it ON itsl.ItemTypeId = it.Id
-    LEFT JOIN dbo.Branches b ON itsl.BranchId = b.Id
+    FROM Inv.ItemTypeSaleLevels itsl
+    LEFT JOIN Inv.ItemTypes it ON itsl.ItemTypeId = it.Id
+    LEFT JOIN dbo.Branch b ON itsl.BranchId = b.BranchId
     WHERE itsl.Id = @Id;
 END
 GO
@@ -84,7 +84,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.ItemTypeSaleLevels (
+    INSERT INTO Inv.ItemTypeSaleLevels (
         ItemTypeId,
         FastRunningLevel,
         SlowMovingLevel,
@@ -126,7 +126,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.ItemTypeSaleLevels
+    UPDATE Inv.ItemTypeSaleLevels
     SET 
         ItemTypeId = @ItemTypeId,
         FastRunningLevel = @FastRunningLevel,
@@ -152,7 +152,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.ItemTypeSaleLevels
+    UPDATE Inv.ItemTypeSaleLevels
     SET 
         IsActive = 0,
         ModifiedOn = GETDATE()
@@ -176,15 +176,15 @@ BEGIN
     SELECT 
         Id,
         Name
-    FROM dbo.ItemTypes
+    FROM Inv.ItemTypes
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Branches
-    SELECT 
-        Id,
-        Name
-    FROM dbo.Branches
+    SELECT
+        BranchId AS Id,
+        BranchName AS Name
+    FROM dbo.Branch
     WHERE IsActive = 1
     ORDER BY Name;
 END

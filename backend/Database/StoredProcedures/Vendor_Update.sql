@@ -43,7 +43,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Vendors 
+    UPDATE Inv.Vendors 
     SET 
         Name = @Name,
         Description = @Description,

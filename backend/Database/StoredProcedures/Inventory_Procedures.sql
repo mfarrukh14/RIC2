@@ -20,7 +20,7 @@ BEGIN
         i.StoreId,
         s.StoreName,
         i.BranchId,
-        b.Name as BranchName,
+        b.BranchName as BranchName,
         i.IsActive,
         i.CreatedById,
         i.CreatedOn,
@@ -54,11 +54,11 @@ BEGIN
         i.ManualPurchaseOrderNumber,
         -- Calculate total quantity from details
         (SELECT ISNULL(SUM(TotalItems), 0) FROM InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
-    FROM dbo.Inventories i
-    LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
-    LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
-    LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
+    FROM Inv.Inventories i
+    LEFT JOIN Inv.Vendors v ON i.VendorId = v.Id
+    LEFT JOIN Inv.Stores s ON i.StoreId = s.StoreId
+    LEFT JOIN dbo.Branch b ON i.BranchId = b.BranchId
+    LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.IsActive = 1
     ORDER BY i.CreatedOn DESC;
 END
@@ -88,7 +88,7 @@ BEGIN
         i.StoreId,
         s.StoreName,
         i.BranchId,
-        b.Name as BranchName,
+        b.BranchName as BranchName,
         i.IsActive,
         i.CreatedById,
         i.CreatedOn,
@@ -122,11 +122,11 @@ BEGIN
         i.ManualPurchaseOrderNumber,
         -- Calculate total quantity from details
         (SELECT ISNULL(SUM(TotalItems), 0) FROM InventoryDetails WHERE InventoryId = i.Id) as TotalQuantity
-    FROM dbo.Inventories i
-    LEFT JOIN dbo.Vendors v ON i.VendorId = v.Id
-    LEFT JOIN dbo.Stores s ON i.StoreId = s.StoreId
-    LEFT JOIN dbo.Branches b ON i.BranchId = b.Id
-    LEFT JOIN dbo.StockTypes st ON i.StockTypeId = st.Id
+    FROM Inv.Inventories i
+    LEFT JOIN Inv.Vendors v ON i.VendorId = v.Id
+    LEFT JOIN Inv.Stores s ON i.StoreId = s.StoreId
+    LEFT JOIN dbo.Branch b ON i.BranchId = b.BranchId
+    LEFT JOIN Inv.StockTypes st ON i.StockTypeId = st.Id
     WHERE i.Id = @Id;
     
     -- Get details
@@ -158,9 +158,9 @@ BEGIN
         id.TotalSellingPrice,
         id.ProfitMarginPerItem,
         id.ProfitPerItem
-    FROM dbo.InventoryDetails id
-    LEFT JOIN dbo.Items it ON id.ItemId = it.Id
-    LEFT JOIN dbo.Manufacturers m ON id.ManufacturerId = m.Id
+    FROM Inv.InventoryDetails id
+    LEFT JOIN Inv.Items it ON id.ItemId = it.Id
+    LEFT JOIN Inv.Manufacturers m ON id.ManufacturerId = m.Id
     WHERE id.InventoryId = @Id;
 END
 GO
@@ -185,7 +185,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.Inventories (
+    INSERT INTO Inv.Inventories (
         VendorId, StoreId, BranchId, StockTypeId,
         VendorInvoiceNumber, VendorInvoiceTimestamp,
         ManualPurchaseOrderNumber,
@@ -239,7 +239,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Inventories
+    UPDATE Inv.Inventories
     SET 
         VendorId = @VendorId,
         StoreId = @StoreId,
@@ -282,7 +282,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Inventories
+    UPDATE Inv.Inventories
     SET 
         IsActive = 0,
         ModifiedById = @ModifiedById,
@@ -329,7 +329,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.InventoryDetails (
+    INSERT INTO Inv.InventoryDetails (
         InventoryId, ItemId, ManufacturerId, MfgDate, ExpiryDate,
         NoOfBoxes, NoOfPackets, ItemsPerPacket, TotalItems, PackQuantity,
         UnitBuyingPrice, TotalBuyingPrice, AdvanceTaxPercentage, AdvanceTaxAmount,
@@ -386,7 +386,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.InventoryDetails
+    UPDATE Inv.InventoryDetails
     SET 
         ItemId = @ItemId,
         ManufacturerId = @ManufacturerId,
@@ -430,7 +430,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    DELETE FROM dbo.InventoryDetails
+    DELETE FROM Inv.InventoryDetails
     WHERE Id = @Id;
     
     SELECT @@ROWCOUNT as AffectedRows;
@@ -450,27 +450,27 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Vendors
-    SELECT Id, Name FROM dbo.Vendors WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Vendors WHERE IsActive = 1 ORDER BY Name;
     
     -- Stores
-    SELECT StoreId as Id, StoreName as Name FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreName;
+    SELECT StoreId as Id, StoreName as Name FROM Inv.Stores WHERE IsActive = 1 ORDER BY StoreName;
     
     -- Stock Types
-    SELECT Id, Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.StockTypes WHERE IsActive = 1 ORDER BY Name;
     
     -- Items
-    SELECT Id, Name FROM dbo.Items WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Items WHERE IsActive = 1 ORDER BY Name;
     
     -- Manufacturers
-    SELECT Id, Name FROM dbo.Manufacturers WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Manufacturers WHERE IsActive = 1 ORDER BY Name;
     
     -- Branches
-    SELECT Id, Name FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name;
+    SELECT BranchId AS Id, BranchName AS Name FROM dbo.Branch WHERE IsActive = 1 ORDER BY BranchName;
     
     -- Categories
-    SELECT Id, Name FROM dbo.Categories WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Categories WHERE IsActive = 1 ORDER BY Name;
     
     -- Brands
-    SELECT Id, Name FROM dbo.Brands WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Brands WHERE IsActive = 1 ORDER BY Name;
 END
 GO

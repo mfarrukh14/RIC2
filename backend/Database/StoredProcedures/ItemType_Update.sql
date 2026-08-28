@@ -14,7 +14,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.ItemTypes
+    UPDATE Inv.ItemTypes
     SET
         Name = @Name,
         Description = @Description,

@@ -1,4 +1,4 @@
-﻿-- =============================================
+-- =============================================
 -- Stored Procedures for ContingentBills (HMS-compatible)
 -- =============================================
 
@@ -58,7 +58,7 @@ BEGIN
         NULL AS RegisterPageNo,
         NULL AS SRNO,
         cb.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         NULL AS ContingentBillStatusId,
         NULL AS AssignedToId,
         NULL AS AssignedFromId,
@@ -69,10 +69,10 @@ BEGIN
         cb.ModifiedOn,
         CAST(0 AS BIT) AS IsDeleted,
         cb.IsActive
-    FROM dbo.ContingentBills cb
-    LEFT JOIN dbo.Vendors v ON cb.VendorId = v.Id
-    LEFT JOIN dbo.Branches b ON cb.BranchId = b.Id
-    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.Id
+    FROM Inv.ContingentBills cb
+    LEFT JOIN Inv.Vendors v ON cb.VendorId = v.Id
+    LEFT JOIN dbo.Branch b ON cb.BranchId = b.BranchId
+    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.DID
     WHERE cb.IsActive = 1
         AND (@VendorId IS NULL OR cb.VendorId = @VendorId)
         AND (@DateStart IS NULL OR cb.BillDate >= @DateStart)
@@ -132,7 +132,7 @@ BEGIN
         NULL AS RegisterPageNo,
         NULL AS SRNO,
         cb.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         NULL AS ContingentBillStatusId,
         NULL AS AssignedToId,
         NULL AS AssignedFromId,
@@ -143,10 +143,10 @@ BEGIN
         cb.ModifiedOn,
         CAST(0 AS BIT) AS IsDeleted,
         cb.IsActive
-    FROM dbo.ContingentBills cb
-    LEFT JOIN dbo.Vendors v ON cb.VendorId = v.Id
-    LEFT JOIN dbo.Branches b ON cb.BranchId = b.Id
-    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.Id
+    FROM Inv.ContingentBills cb
+    LEFT JOIN Inv.Vendors v ON cb.VendorId = v.Id
+    LEFT JOIN dbo.Branch b ON cb.BranchId = b.BranchId
+    LEFT JOIN dbo.Departments d ON cb.BudgetHeadId = d.DID
     WHERE cb.Id = @Id;
 END
 GO
@@ -199,9 +199,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @DefaultStoreId INT = (SELECT TOP 1 StoreId FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreId);
+    DECLARE @DefaultStoreId INT = (SELECT TOP 1 StoreId FROM Inv.Stores WHERE IsActive = 1 ORDER BY StoreId);
 
-    INSERT INTO dbo.ContingentBills (
+    INSERT INTO Inv.ContingentBills (
         BillNumber,
         Amount,
         BillDate,
@@ -282,7 +282,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.ContingentBills
+    UPDATE Inv.ContingentBills
     SET
         BillNumber = @BillNo,
         Amount = @BillAmount,
@@ -309,7 +309,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.ContingentBills
+    UPDATE Inv.ContingentBills
     SET 
         IsActive = 0,
         ModifiedOn = GETDATE()
@@ -333,7 +333,7 @@ BEGIN
     SELECT 
         Id,
         Name
-    FROM dbo.FinancialYears
+    FROM Inv.FinancialYears
     WHERE IsActive = 1
     ORDER BY Name;
 
@@ -341,7 +341,7 @@ BEGIN
     SELECT 
         Id,
         Name
-    FROM dbo.PurchaseOrderTypes
+    FROM Inv.PurchaseOrderTypes
     WHERE IsActive = 1
     ORDER BY Name;
 
@@ -349,15 +349,15 @@ BEGIN
     SELECT 
         Id,
         Name
-    FROM dbo.Vendors
+    FROM Inv.Vendors
     WHERE IsActive = 1
     ORDER BY Name;
 
     -- Branches
     SELECT
-        Id,
-        Name
-    FROM dbo.Branches
+        BranchId AS Id,
+        BranchName AS Name
+    FROM dbo.Branch
     WHERE IsActive = 1
     ORDER BY Name;
 
@@ -365,8 +365,8 @@ BEGIN
     -- duplicate Name rows; collapse to one row per distinct Name (lowest Id).
     ;WITH DedupedDepartments AS (
         SELECT
-            Id, Name,
-            ROW_NUMBER() OVER (PARTITION BY Name ORDER BY Id) AS rn
+            DID AS Id, Name,
+            ROW_NUMBER() OVER (PARTITION BY Name ORDER BY DID) AS rn
         FROM dbo.Departments
         WHERE IsActive = 1
     )

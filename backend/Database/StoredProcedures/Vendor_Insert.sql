@@ -44,7 +44,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.Vendors (
+    INSERT INTO Inv.Vendors (
         Name, Description, Email, CNo, Address, NTN, STN,
         CPName1, CPEmail1, CPContactNumber1,
         CPName2, CPEmail2, CPContactNumber2,

@@ -29,9 +29,9 @@ BEGIN
         rr.ModifiedOn,
         s.StoreName AS StoreName,
         r.Name AS RackName
-    FROM dbo.RackRows rr
-    LEFT JOIN dbo.Stores s ON rr.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rr.RackId = r.Id
+    FROM Inv.RackRows rr
+    LEFT JOIN Inv.Stores s ON rr.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rr.RackId = r.Id
     ORDER BY rr.Name;
 END
 GO
@@ -64,9 +64,9 @@ BEGIN
         rr.ModifiedOn,
         s.StoreName AS StoreName,
         r.Name AS RackName
-    FROM dbo.RackRows rr
-    LEFT JOIN dbo.Stores s ON rr.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rr.RackId = r.Id
+    FROM Inv.RackRows rr
+    LEFT JOIN Inv.Stores s ON rr.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rr.RackId = r.Id
     WHERE rr.Id = @Id;
 END
 GO
@@ -99,9 +99,9 @@ BEGIN
         rr.ModifiedOn,
         s.StoreName AS StoreName,
         r.Name AS RackName
-    FROM dbo.RackRows rr
-    LEFT JOIN dbo.Stores s ON rr.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rr.RackId = r.Id
+    FROM Inv.RackRows rr
+    LEFT JOIN Inv.Stores s ON rr.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rr.RackId = r.Id
     WHERE rr.RackId = @RackId
     ORDER BY rr.Name;
 END
@@ -127,7 +127,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    INSERT INTO dbo.RackRows (
+    INSERT INTO Inv.RackRows (
         Name,
         Description,
         StoreId,
@@ -173,7 +173,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    UPDATE dbo.RackRows
+    UPDATE Inv.RackRows
     SET 
         Name = @Name,
         Description = @Description,
@@ -202,13 +202,13 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Check if the rack row is being used by any rack drawers
-    IF EXISTS (SELECT 1 FROM dbo.RackDrawers WHERE RackRowId = @Id)
+    IF EXISTS (SELECT 1 FROM Inv.RackDrawrs WHERE RackRowId = @Id)
     BEGIN
         RAISERROR('Cannot delete rack row. It is being used by one or more rack drawers.', 16, 1);
         RETURN;
     END
 
-    DELETE FROM dbo.RackRows WHERE Id = @Id;
+    DELETE FROM Inv.RackRows WHERE Id = @Id;
 END
 GO
 

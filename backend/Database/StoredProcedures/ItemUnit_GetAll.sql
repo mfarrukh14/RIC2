@@ -18,8 +18,8 @@ BEGIN
         iu.CreatedOn,
         iu.ModifiedById,
         iu.ModifiedOn,
-        br.Name as BranchName
-    FROM dbo.ItemUnits iu
-    LEFT JOIN dbo.Branches br ON iu.BranchId = br.Id
+        br.BranchName as BranchName
+    FROM Inv.ItemUnits iu
+    LEFT JOIN dbo.Branch br ON iu.BranchId = br.BranchId
     ORDER BY iu.Name;
 END

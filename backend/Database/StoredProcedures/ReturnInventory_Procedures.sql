@@ -1,4 +1,4 @@
-﻿USE InventoryManagementDB_SP;
+USE InventoryManagementDB_SP;
 GO
 
 -- =============================================
@@ -23,7 +23,7 @@ BEGIN
         ri.ReturnNumber AS InventoryNo,
         NULL AS PurchaseOrderNo,
         ri.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         ri.StoreId,
         s.StoreName AS StoreName,
         NULL AS ItemTypeId,
@@ -43,23 +43,23 @@ BEGIN
         ri.CreatedOn,
         ri.ModifiedById,
         ri.ModifiedOn
-    FROM dbo.ReturnInventory ri
-    LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
-    LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
-    LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
+    FROM Inv.ReturnInventory ri
+    LEFT JOIN dbo.Branch b ON ri.BranchId = b.BranchId
+    LEFT JOIN Inv.Stores s ON ri.StoreId = s.StoreId
+    LEFT JOIN Inv.Vendors v ON ri.VendorId = v.Id
     OUTER APPLY (
         SELECT TOP (1)
             rii.ItemId,
             i.Name AS ItemName
-        FROM dbo.ReturnInventoryItems rii
-        LEFT JOIN dbo.Items i ON rii.ItemId = i.Id
+        FROM Inv.ReturnInventoryItems rii
+        LEFT JOIN Inv.Items i ON rii.ItemId = i.Id
         WHERE rii.ReturnInventoryId = ri.Id
             AND rii.IsActive = 1
         ORDER BY rii.Id DESC
     ) primaryItem
     OUTER APPLY (
         SELECT SUM(rii.Quantity) AS ReturnQuantity
-        FROM dbo.ReturnInventoryItems rii
+        FROM Inv.ReturnInventoryItems rii
         WHERE rii.ReturnInventoryId = ri.Id
             AND rii.IsActive = 1
     ) itemTotals
@@ -86,7 +86,7 @@ BEGIN
         ri.ReturnNumber AS InventoryNo,
         NULL AS PurchaseOrderNo,
         ri.BranchId,
-        b.Name AS BranchName,
+        b.BranchName AS BranchName,
         ri.StoreId,
         s.StoreName AS StoreName,
         NULL AS ItemTypeId,
@@ -106,23 +106,23 @@ BEGIN
         ri.CreatedOn,
         ri.ModifiedById,
         ri.ModifiedOn
-    FROM dbo.ReturnInventory ri
-    LEFT JOIN dbo.Branches b ON ri.BranchId = b.Id
-    LEFT JOIN dbo.Stores s ON ri.StoreId = s.StoreId
-    LEFT JOIN dbo.Vendors v ON ri.VendorId = v.Id
+    FROM Inv.ReturnInventory ri
+    LEFT JOIN dbo.Branch b ON ri.BranchId = b.BranchId
+    LEFT JOIN Inv.Stores s ON ri.StoreId = s.StoreId
+    LEFT JOIN Inv.Vendors v ON ri.VendorId = v.Id
     OUTER APPLY (
         SELECT TOP (1)
             rii.ItemId,
             i.Name AS ItemName
-        FROM dbo.ReturnInventoryItems rii
-        LEFT JOIN dbo.Items i ON rii.ItemId = i.Id
+        FROM Inv.ReturnInventoryItems rii
+        LEFT JOIN Inv.Items i ON rii.ItemId = i.Id
         WHERE rii.ReturnInventoryId = ri.Id
             AND rii.IsActive = 1
         ORDER BY rii.Id DESC
     ) primaryItem
     OUTER APPLY (
         SELECT SUM(rii.Quantity) AS ReturnQuantity
-        FROM dbo.ReturnInventoryItems rii
+        FROM Inv.ReturnInventoryItems rii
         WHERE rii.ReturnInventoryId = ri.Id
             AND rii.IsActive = 1
     ) itemTotals
@@ -158,11 +158,11 @@ BEGIN
     IF @InventoryNo IS NULL
     BEGIN
         DECLARE @NextId INT;
-        SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM dbo.ReturnInventory;
+        SELECT @NextId = ISNULL(MAX(Id), 0) + 1 FROM Inv.ReturnInventory;
         SET @InventoryNo = 'RET-' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
     END
     
-    INSERT INTO dbo.ReturnInventory (
+    INSERT INTO Inv.ReturnInventory (
         ReturnNumber, BranchId, StoreId, VendorId,
         ReturnDate, Reason, Notes, Status,
         IsActive, CreatedById, CreatedOn
@@ -177,7 +177,7 @@ BEGIN
     
     IF @ItemId IS NOT NULL
     BEGIN
-        INSERT INTO dbo.ReturnInventoryItems (ItemId, ReturnInventoryId, Quantity, Reason, Notes, IsActive, CreatedOn)
+        INSERT INTO Inv.ReturnInventoryItems (ItemId, ReturnInventoryId, Quantity, Reason, Notes, IsActive, CreatedOn)
         VALUES (@ItemId, @NewId, @ReturnQuantity, @Reason, @Notes, 1, GETDATE());
     END
     
@@ -208,7 +208,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.ReturnInventory
+    UPDATE Inv.ReturnInventory
     SET 
         BranchId = @BranchId,
         StoreId = @StoreId,
@@ -234,7 +234,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.ReturnInventory
+    UPDATE Inv.ReturnInventory
     SET 
         IsActive = 0,
         ModifiedById = @ModifiedById,
@@ -253,14 +253,14 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    SELECT Id, Name FROM dbo.Branches WHERE IsActive = 1 ORDER BY Name;
-    SELECT StoreId AS Id, StoreName AS Name FROM dbo.Stores WHERE IsActive = 1 ORDER BY StoreName;
-    SELECT Id, Name FROM dbo.ItemTypes WHERE IsActive = 1 ORDER BY Name;
-    SELECT Id, Name FROM dbo.StockTypes WHERE IsActive = 1 ORDER BY Name;
-    SELECT Id, Name FROM dbo.Vendors WHERE IsActive = 1 ORDER BY Name;
-    SELECT Id, Name FROM dbo.Items WHERE IsActive = 1 ORDER BY Name;
+    SELECT BranchId AS Id, BranchName AS Name FROM dbo.Branch WHERE IsActive = 1 ORDER BY BranchName;
+    SELECT StoreId AS Id, StoreName AS Name FROM Inv.Stores WHERE IsActive = 1 ORDER BY StoreName;
+    SELECT Id, Name FROM Inv.ItemTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.StockTypes WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Vendors WHERE IsActive = 1 ORDER BY Name;
+    SELECT Id, Name FROM Inv.Items WHERE IsActive = 1 ORDER BY Name;
 END
 GO
 
-PRINT 'All dbo.ReturnInventory stored procedures created successfully';
+PRINT 'All Inv.ReturnInventory stored procedures created successfully';
 

@@ -35,8 +35,8 @@ BEGIN
             sa.CreatedOn,
             sa.ModifiedById,
             sa.ModifiedOn
-        FROM dbo.StoreAllocationToUser sa
-        INNER JOIN dbo.Stores s ON sa.StoreId = s.StoreId
+        FROM Inv.StoreAllocationToUser sa
+        INNER JOIN Inv.Stores s ON sa.StoreId = s.StoreId
         ORDER BY sa.CreatedOn DESC;
 
         RETURN;
@@ -58,8 +58,8 @@ SELECT
     sa.CreatedOn,
     sa.ModifiedById,
     sa.ModifiedOn
-FROM dbo.StoreAllocationToUser sa
-INNER JOIN dbo.Stores s ON sa.StoreId = s.StoreId
+FROM Inv.StoreAllocationToUser sa
+INNER JOIN Inv.Stores s ON sa.StoreId = s.StoreId
 LEFT JOIN dbo.Users u ON sa.UserId = u.' + QUOTENAME(@UsersIdColumn) + N'
 ORDER BY sa.CreatedOn DESC;';
 
@@ -101,8 +101,8 @@ BEGIN
             sa.CreatedOn,
             sa.ModifiedById,
             sa.ModifiedOn
-        FROM dbo.StoreAllocationToUser sa
-        INNER JOIN dbo.Stores s ON sa.StoreId = s.StoreId
+        FROM Inv.StoreAllocationToUser sa
+        INNER JOIN Inv.Stores s ON sa.StoreId = s.StoreId
         WHERE sa.Id = @Id;
 
         RETURN;
@@ -124,8 +124,8 @@ SELECT
     sa.CreatedOn,
     sa.ModifiedById,
     sa.ModifiedOn
-FROM dbo.StoreAllocationToUser sa
-INNER JOIN dbo.Stores s ON sa.StoreId = s.StoreId
+FROM Inv.StoreAllocationToUser sa
+INNER JOIN Inv.Stores s ON sa.StoreId = s.StoreId
 LEFT JOIN dbo.Users u ON sa.UserId = u.' + QUOTENAME(@UsersIdColumn) + N'
 WHERE sa.Id = @Id;';
 
@@ -174,14 +174,14 @@ WHERE ' + QUOTENAME(@UsersIdColumn) + N' = @UserId;';
         THROW 50001, 'Selected user was not found in dbo.Users.', 1;
     END
 
-    IF COL_LENGTH('dbo.Stores', 'BranchId') IS NOT NULL
+    IF COL_LENGTH('Inv.PharmacyStores', 'BranchId') IS NOT NULL
     BEGIN
         SELECT TOP 1 @BranchId = BranchId
-        FROM dbo.Stores
+        FROM Inv.PharmacyStores
         WHERE StoreId = @StoreId;
     END
 
-    INSERT INTO dbo.StoreAllocationToUser (
+    INSERT INTO Inv.StoreAllocationToUser (
         StoreId, UserId, BranchId, IsActive, CreatedById, CreatedOn
     )
     VALUES (
@@ -234,14 +234,14 @@ WHERE ' + QUOTENAME(@UsersIdColumn) + N' = @UserId;';
         THROW 50001, 'Selected user was not found in dbo.Users.', 1;
     END
 
-    IF COL_LENGTH('dbo.Stores', 'BranchId') IS NOT NULL
+    IF COL_LENGTH('Inv.PharmacyStores', 'BranchId') IS NOT NULL
     BEGIN
         SELECT TOP 1 @BranchId = BranchId
-        FROM dbo.Stores
+        FROM Inv.PharmacyStores
         WHERE StoreId = @StoreId;
     END
 
-    UPDATE dbo.StoreAllocationToUser
+    UPDATE Inv.StoreAllocationToUser
     SET 
         StoreId = @StoreId,
         UserId = @UserId,
@@ -262,7 +262,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DELETE FROM dbo.StoreAllocationToUser WHERE Id = @Id;
+    DELETE FROM Inv.StoreAllocationToUser WHERE Id = @Id;
 END
 GO
 

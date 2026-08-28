@@ -14,7 +14,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.Brands
+    UPDATE Inv.Brands
     SET
         Name = @Name,
         Description = @Description,

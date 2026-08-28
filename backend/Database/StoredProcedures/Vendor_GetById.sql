@@ -31,7 +31,7 @@ BEGIN
         v.CityId,
         ct.Name as CityName,
         v.BranchId,
-        b.Name as BranchName,
+        b.BranchName as BranchName,
         v.IsActive,
         v.CreatedById,
         v.CreatedOn,
@@ -55,13 +55,13 @@ BEGIN
         v.CreditLimit,
         v.FaxNo,
         v.IsVerified
-    FROM dbo.Vendors v
+    FROM Inv.Vendors v
     LEFT JOIN dbo.Countries c ON v.CountryId = c.Id
-    LEFT JOIN dbo.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
+    LEFT JOIN Inv.StateOrProvinces sp ON v.StateOrProvinceId = sp.Id
     LEFT JOIN dbo.Cities ct ON v.CityId = ct.Id
-    LEFT JOIN dbo.Branches b ON v.BranchId = b.Id
-    LEFT JOIN dbo.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
-    LEFT JOIN dbo.AccountCOAs ap ON v.AccountPayableId = ap.Id
-    LEFT JOIN dbo.AccountCOAs ar ON v.AccountReceivableId = ar.Id
+    LEFT JOIN dbo.Branch b ON v.BranchId = b.BranchId
+    LEFT JOIN Inv.TaxPayerCategories tpc ON v.TaxPayerCategoryId = tpc.Id
+    LEFT JOIN Inv.AccountCOAs ap ON v.AccountPayableId = ap.Id
+    LEFT JOIN Inv.AccountCOAs ar ON v.AccountReceivableId = ar.Id
     WHERE v.Id = @Id;
 END

@@ -20,9 +20,9 @@ BEGIN
         rc.ModifiedOn,
         s.StoreName,
         r.Name AS RackName
-    FROM dbo.RackColumns rc
-    LEFT JOIN dbo.Stores s ON rc.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rc.RackId = r.Id
+    FROM Inv.RackColumns rc
+    LEFT JOIN Inv.Stores s ON rc.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rc.RackId = r.Id
     ORDER BY rc.Name;
 END
 GO
@@ -48,9 +48,9 @@ BEGIN
         rc.ModifiedOn,
         s.StoreName,
         r.Name AS RackName
-    FROM dbo.RackColumns rc
-    LEFT JOIN dbo.Stores s ON rc.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rc.RackId = r.Id
+    FROM Inv.RackColumns rc
+    LEFT JOIN Inv.Stores s ON rc.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rc.RackId = r.Id
     WHERE rc.Id = @Id;
 END
 GO
@@ -76,9 +76,9 @@ BEGIN
         rc.ModifiedOn,
         s.StoreName,
         r.Name AS RackName
-    FROM dbo.RackColumns rc
-    LEFT JOIN dbo.Stores s ON rc.StoreId = s.StoreId
-    LEFT JOIN dbo.Racks r ON rc.RackId = r.Id
+    FROM Inv.RackColumns rc
+    LEFT JOIN Inv.Stores s ON rc.StoreId = s.StoreId
+    LEFT JOIN Inv.Racks r ON rc.RackId = r.Id
     WHERE rc.RackId = @RackId
     ORDER BY rc.Name;
 END
@@ -96,7 +96,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    INSERT INTO dbo.RackColumns (
+    INSERT INTO Inv.RackColumns (
         Name, Description, StoreId, RackId, BranchId, IsActive, CreatedOn
     )
     VALUES (
@@ -120,7 +120,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    UPDATE dbo.RackColumns
+    UPDATE Inv.RackColumns
     SET 
         Name = @Name,
         Description = @Description,
@@ -141,13 +141,13 @@ BEGIN
     SET NOCOUNT ON;
     
     -- Check if the rack column is being used by any rack drawers
-    IF EXISTS (SELECT 1 FROM dbo.RackDrawers WHERE RackColumnId = @Id)
+    IF EXISTS (SELECT 1 FROM Inv.RackDrawrs WHERE RackColumnId = @Id)
     BEGIN
         RAISERROR('Cannot delete rack column. It is being used by one or more rack drawers.', 16, 1);
         RETURN;
     END
     
-    DELETE FROM dbo.RackColumns
+    DELETE FROM Inv.RackColumns
     WHERE Id = @Id;
 END
 GO

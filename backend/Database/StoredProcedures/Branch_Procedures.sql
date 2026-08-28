@@ -14,18 +14,18 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT 
-        Id,
-        Name,
+    SELECT
+        BranchId AS Id,
+        BranchName AS Name,
         Code,
         Address,
         CityId,
         IsActive,
         CreatedOn,
         ModifiedOn
-    FROM dbo.Branches
+    FROM dbo.Branch
     WHERE IsActive = 1
-    ORDER BY Name;
+    ORDER BY BranchName;
 END
 GO
 

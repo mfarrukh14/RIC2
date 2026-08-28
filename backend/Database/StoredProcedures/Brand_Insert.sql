@@ -15,7 +15,7 @@ BEGIN
     
     DECLARE @NewId INT;
     
-    INSERT INTO dbo.Brands (
+    INSERT INTO Inv.Brands (
         Name, Description, BranchId,
         IsActive, CreatedById, CreatedOn
     )

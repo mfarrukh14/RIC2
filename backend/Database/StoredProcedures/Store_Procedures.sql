@@ -9,7 +9,7 @@
 -- Reads/writes go through Inv.PharmacyStores (a view over the shared
 -- Pharmacy.PharmacyStores table, redefined as insertable/updatable in
 -- Tables/AlterPharmacyStoresForStoreManagement.sql), not the legacy
--- dbo.Stores table, and include BranchId since
+-- Inv.Stores table, and include BranchId since
 -- Pharmacy.PharmacyStores.BranchId is NOT NULL. These definitions must be
 -- the only ones for Store_GetAll/GetById/Insert/Update in the repo - a
 -- second competing definition here previously fought with this one for
