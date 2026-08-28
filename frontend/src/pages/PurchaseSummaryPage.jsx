@@ -34,6 +34,7 @@ const PurchaseSummaryPage = () => {
     inventoryDateStart: '',
     inventoryDateEnd: '',
     itemId: '',
+    vendorId: '',
     invoiceNo: '',
     reportType: 'Both'
   });
@@ -126,6 +127,7 @@ const PurchaseSummaryPage = () => {
       inventoryDateStart: filters.inventoryDateStart || null,
       inventoryDateEnd: filters.inventoryDateEnd || null,
       itemId: filters.itemId || null,
+      vendorId: filters.vendorId || null,
       invoiceNo: filters.invoiceNo || null,
       reportType: filters.reportType
     };
@@ -295,7 +297,7 @@ const PurchaseSummaryPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           {/* Item */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -311,6 +313,26 @@ const PurchaseSummaryPage = () => {
               {lookupData.items.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Vendor */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Vendor
+            </label>
+            <select
+              name="vendorId"
+              value={filters.vendorId}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Vendors</option>
+              {lookupData.vendors.map((vendor) => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.name}
                 </option>
               ))}
             </select>

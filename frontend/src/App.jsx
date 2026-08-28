@@ -94,7 +94,6 @@ function App() {
   const [showPackingForm, setShowPackingForm] = useState(false);
   const [editingPacking, setEditingPacking] = useState(null);
   const [prPrefillData, setPrPrefillData] = useState(null);
-  const [returnInventoryPrefill, setReturnInventoryPrefill] = useState(null);
 
   // Approved Demands' "Generate Purchase Requisition" row action hands off here:
   // App.jsx uses a switch(activeSection) state machine with no per-page nav-prop
@@ -103,14 +102,6 @@ function App() {
   const navigateToPurchaseRequisition = (prefillData) => {
     setPrPrefillData(prefillData);
     setActiveSection('purchase-requisition');
-  };
-
-  // Add Inventory's "Return Inventory" row action hands off here, same pattern as
-  // navigateToPurchaseRequisition above - carries the triggering inventory's store
-  // (and item, when there's exactly one line) across to the Return Inventory page.
-  const navigateToReturnInventory = (prefillData) => {
-    setReturnInventoryPrefill(prefillData);
-    setActiveSection('return-inventory');
   };
 
   const handleSectionChange = (section) => {
@@ -293,7 +284,7 @@ function App() {
         );
 
       case 'add-inventory':
-        return <InventoryListPage onReturnInventory={navigateToReturnInventory} />;
+        return <InventoryListPage />;
 
       case 'add-items':
         return <ItemsPage />;
@@ -343,7 +334,7 @@ function App() {
         return <TransferInventoryPage />;
 
       case 'return-inventory':
-        return <ReturnInventoryPage prefill={returnInventoryPrefill} onPrefillConsumed={() => setReturnInventoryPrefill(null)} />;
+        return <ReturnInventoryPage />;
 
       case 'purchase-summary':
         return <PurchaseSummaryPage />;

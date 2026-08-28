@@ -24,7 +24,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var transfers = await _transferInventoryService.GetAllAsync(filter);
+                var transfers = await _transferInventoryService.GetAllAsync(filter, IsAdmin, AllowedStoreIds);
                 return Ok(transfers);
             }
             catch (Exception ex)
@@ -138,6 +138,7 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 var lookupData = await _transferInventoryService.GetLookupDataAsync();
+                lookupData.Stores = StoreScopeHelper.FilterStores(lookupData.Stores, IsAdmin, AllowedStoreIds, s => s.StoreId);
                 return Ok(lookupData);
             }
             catch (Exception ex)

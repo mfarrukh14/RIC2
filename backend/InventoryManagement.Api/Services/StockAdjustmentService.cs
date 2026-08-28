@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<PagedResult<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request = null)
+        public async Task<PagedResult<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var (pageNumber, pageSize) = PaginationHelper.Normalize(request?.PageNumber ?? 1, request?.PageSize ?? PaginationHelper.DefaultPageSize);
             var stockAdjustments = new List<StockAdjustmentView>();
@@ -35,6 +35,8 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StartDate", (object?)request?.StartDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", (object?)request?.EndDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@SearchTerm", (object?)request?.SearchTerm ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                command.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();

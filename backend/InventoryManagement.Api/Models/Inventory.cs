@@ -83,6 +83,32 @@ namespace InventoryManagement.Api.Models
         public float? ProfitPerItem { get; set; }
     }
 
+    // Backs the "Return Inventory" modal launched from an Add Inventory row -
+    // one entry per InventoryDetail line, enriched with how much of it has
+    // already been returned (via Inv.ReturnInventoryItems.SourceInventoryDetailId)
+    // so the modal can cap Return Quantity at what's actually still available.
+    public class InventoryReturnableItem
+    {
+        public int InventoryDetailId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
+        public string? ItemName { get; set; }
+        public int ReceivedQuantity { get; set; }
+        public int AlreadyReturnedQuantity { get; set; }
+        public int AvailableQuantity { get; set; }
+        public float? UnitBuyingPrice { get; set; }
+    }
+
+    public class InventoryReturnableItemsResponse
+    {
+        public int InventoryId { get; set; }
+        public string? InvoiceNo { get; set; }
+        public int StoreId { get; set; }
+        public int BranchId { get; set; }
+        public List<InventoryReturnableItem> Items { get; set; } = new();
+    }
+
     // Request models
     public class InventoryFilterRequest : PagedRequest
     {
@@ -300,6 +326,18 @@ namespace InventoryManagement.Api.Models
     public class UpdateMinimumPanicLevelRequest
     {
         public int MinimumPanicLevel { get; set; }
+    }
+
+    // Per-store on-hand quantities keyed by the three disjoint product kinds that back
+    // Pharmacy.PharmacyMedicinesStocks rows (Inv.Items / Pharmacy.BranchMedicines /
+    // Data.BranchFees - see Stock.ItemId comment above). Split into three dictionaries
+    // rather than one, since an ItemId, BranchMedicineId and BranchSubServiceId can all
+    // collide on the same integer value.
+    public class StoreItemQuantities
+    {
+        public Dictionary<int, int> Items { get; set; } = new();
+        public Dictionary<int, int> Medicines { get; set; } = new();
+        public Dictionary<int, int> SubServices { get; set; } = new();
     }
 
     public class StockSearchRequest : PagedRequest

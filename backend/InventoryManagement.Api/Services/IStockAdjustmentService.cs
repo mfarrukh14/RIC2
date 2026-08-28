@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStockAdjustmentService
     {
-        Task<PagedResult<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request = null);
+        Task<PagedResult<StockAdjustmentView>> GetAllAsync(StockAdjustmentSearchRequest? request, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds);
         Task<StockAdjustment?> GetByIdAsync(int id);
         Task<StockAdjustment> CreateAsync(StockAdjustmentCreateRequest request);
         Task<StockAdjustment> UpdateAsync(StockAdjustmentUpdateRequest request);

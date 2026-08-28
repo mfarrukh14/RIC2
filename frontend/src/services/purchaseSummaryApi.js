@@ -16,6 +16,7 @@ const purchaseSummaryApi = {
     if (filters.inventoryDateStart) params.append('inventoryDateStart', filters.inventoryDateStart);
     if (filters.inventoryDateEnd) params.append('inventoryDateEnd', filters.inventoryDateEnd);
     if (filters.itemId) params.append('itemId', filters.itemId);
+    if (filters.vendorId) params.append('vendorId', filters.vendorId);
     if (filters.invoiceNo) params.append('invoiceNo', filters.invoiceNo);
     if (filters.reportType) params.append('reportType', filters.reportType);
     if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);

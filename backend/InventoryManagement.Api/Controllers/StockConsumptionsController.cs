@@ -27,7 +27,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var stockConsumptions = await _stockConsumptionService.GetAllAsync(request);
+                if (!IsAdmin && request?.StoreId.HasValue == true && !IsStoreAllowed(request.StoreId))
+                {
+                    return Ok(new PagedResult<StockConsumptionView> { Items = new List<StockConsumptionView>(), TotalCount = 0, PageNumber = request.PageNumber, PageSize = request.PageSize });
+                }
+
+                var stockConsumptions = await _stockConsumptionService.GetAllAsync(request, IsAdmin, AllowedStoreIds);
                 return Ok(stockConsumptions);
             }
             catch (Exception ex)

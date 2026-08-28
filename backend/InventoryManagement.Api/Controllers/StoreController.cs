@@ -25,7 +25,8 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 var stores = await _storeService.GetAllAsync();
-                return Ok(stores);
+                var scoped = StoreScopeHelper.FilterStores(stores, IsAdmin, AllowedStoreIds, s => s.Id);
+                return Ok(scoped);
             }
             catch (Exception ex)
             {
@@ -153,7 +154,7 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 var payload = request ?? new PharmacyStoreDropdownRequest();
-                var items = await _storeService.GetPharmacyStoreDropdownAsync(payload);
+                var items = await _storeService.GetPharmacyStoreDropdownAsync(payload, IsAdmin, AllowedStoreIds);
 
                 var response = new PharmacyStoreDropdownResponse
                 {

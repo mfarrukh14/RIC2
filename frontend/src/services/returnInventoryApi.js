@@ -34,6 +34,13 @@ const returnInventoryApi = {
     return response.data;
   },
 
+  // Processes every checked line from the "Return Inventory" modal as one
+  // return - see ReturnInventoryController.CreateBatch.
+  createBatch: async (data) => {
+    const response = await api.post('/returninventory/batch', data);
+    return response.data;
+  },
+
   // Update existing return inventory (header fields only)
   update: async (id, data) => {
     const response = await api.put(`/returninventory/${id}`, data);

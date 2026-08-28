@@ -41,7 +41,7 @@ namespace InventoryManagement.Api.Services
 
         private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
-        public async Task<PagedResult<DemandRequestSummary>> GetAllAsync(DemandRequestFilter filter)
+        public async Task<PagedResult<DemandRequestSummary>> GetAllAsync(DemandRequestFilter filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
             var pageSize = filter.PageSize < 1 ? 5 : Math.Min(filter.PageSize, 100);
@@ -63,6 +63,11 @@ namespace InventoryManagement.Api.Services
       AND (@BranchId IS NULL OR dr.BranchId = @BranchId)
       AND (@RequestingStoreId IS NULL OR dr.RequestingStoreId = @RequestingStoreId)
       AND (@RequestedStoreId IS NULL OR dr.RequestedToStoreId = @RequestedStoreId)
+      AND (
+            @IsAdmin = 1
+            OR dr.RequestingStoreId IN (SELECT StoreId FROM @AllowedStoreIdTable)
+            OR dr.RequestedToStoreId IN (SELECT StoreId FROM @AllowedStoreIdTable)
+          )
       AND (@StockTypeId IS NULL OR dr.StockTypeId = @StockTypeId)
       AND (@DateFrom IS NULL OR COALESCE(dr.ModifiedOn, dr.CreatedOn) >= @DateFrom)
       AND (@DateTo IS NULL OR dr.CreatedOn <= @DateTo)
@@ -78,9 +83,22 @@ namespace InventoryManagement.Api.Services
             OR drs.Name LIKE '%' + @Search + '%'
           )";
 
-            string countSql = NormalizeSql($"SELECT COUNT(*) FROM ({filteredIdsCte}) AS FilteredRequests;");
+            // @AllowedStoreIdTable is referenced inside filteredIdsCte's WHERE clause above,
+            // but table variables are batch-scoped - must be declared/populated in the same
+            // batch as (i.e. prepended to) every SqlCommand text that embeds filteredIdsCte.
+            const string storeScopeSetup = @"
+DECLARE @AllowedStoreIdTable TABLE (StoreId INT);
+IF @IsAdmin = 0 AND @AllowedStoreIds IS NOT NULL AND LTRIM(RTRIM(@AllowedStoreIds)) <> ''
+BEGIN
+    INSERT INTO @AllowedStoreIdTable (StoreId)
+    SELECT TRY_CAST(value AS INT) FROM STRING_SPLIT(@AllowedStoreIds, ',') WHERE TRY_CAST(value AS INT) IS NOT NULL;
+END
+";
+
+            string countSql = NormalizeSql($"{storeScopeSetup}SELECT COUNT(*) FROM ({filteredIdsCte}) AS FilteredRequests;");
 
             string pageIdsSql = NormalizeSql($@"
+{storeScopeSetup}
 SELECT Id FROM ({filteredIdsCte}) AS FilteredRequests
 ORDER BY CreatedOn DESC, Id DESC
 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;");
@@ -106,6 +124,8 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;");
                     cmd.Parameters.AddWithValue("@DateTo", (object?)filter.DateTo ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@Statuses", string.IsNullOrWhiteSpace(filter.Statuses) ? DBNull.Value : filter.Statuses.Trim());
                     cmd.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
+                    cmd.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                    cmd.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 }
 
                 using (var countCommand = new SqlCommand(countSql, connection))

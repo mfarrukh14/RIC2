@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using InventoryManagement.API.Models;
 using InventoryManagement.API.Services;
+using InventoryManagement.Api.Models;
 using InventoryManagement.Api.Services;
 using InventoryManagement.Api.Controllers;
 
@@ -28,7 +29,7 @@ namespace InventoryManagement.API.Controllers
         {
             try
             {
-                var returns = await _returnInventoryService.GetAllAsync(filter);
+                var returns = await _returnInventoryService.GetAllAsync(filter, IsAdmin, AllowedStoreIds);
                 return Ok(returns);
             }
             catch (Exception ex)
@@ -81,6 +82,30 @@ namespace InventoryManagement.API.Controllers
             }
         }
 
+        [HttpPost("batch")]
+        public async Task<ActionResult<ReturnInventoryBatchResult>> CreateBatch([FromBody] ReturnInventoryBatchCreateRequest request)
+        {
+            try
+            {
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Your session has no branch assigned; cannot create a return." });
+                }
+
+                var result = await _returnInventoryService.CreateBatchAsync(request, branchId, UserId);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating batch return inventory");
+                return StatusCode(500, new { message = "An error occurred while creating the return", error = ex.Message });
+            }
+        }
+
         [HttpPut("{id}")]
         public async Task<ActionResult> Update(int id, [FromBody] ReturnInventoryUpdateRequest request)
         {
@@ -125,6 +150,7 @@ namespace InventoryManagement.API.Controllers
             try
             {
                 var lookupData = await _returnInventoryService.GetLookupDataAsync();
+                lookupData.Stores = StoreScopeHelper.FilterStores(lookupData.Stores, IsAdmin, AllowedStoreIds, s => s.Id);
                 return Ok(lookupData);
             }
             catch (Exception ex)

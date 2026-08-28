@@ -39,6 +39,7 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@InventoryDateStart", (object?)filter?.InventoryDateStart ?? DBNull.Value);
                 command.Parameters.AddWithValue("@InventoryDateEnd", (object?)filter?.InventoryDateEnd ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ItemId", (object?)filter?.ItemId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@VendorId", (object?)filter?.VendorId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@InvoiceNo", (object?)filter?.InvoiceNo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ReportType", (object?)filter?.ReportType ?? DBNull.Value);
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);

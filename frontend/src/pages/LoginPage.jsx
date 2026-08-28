@@ -2,11 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import { systemApi } from '../services/systemApi';
 
-const DEBUG_USER_ID = 3;
+// UserID 1852 ("ricadmin", Branch Admin / UTId 3) - unrestricted access to every
+// store, the right default for a debug login now that data is store-scoped
+// (the old default, UserID 3, is a non-admin Doctor with no store allocation,
+// which made every store-scoped screen look empty when debugging through it).
+const DEFAULT_ADMIN_USER_ID = 1852;
 
 const LoginPage = () => {
   const { login, error } = useSession();
   const [loggingIn, setLoggingIn] = useState(false);
+  const [userIdInput, setUserIdInput] = useState(String(DEFAULT_ADMIN_USER_ID));
 
   const [dbInfo, setDbInfo] = useState(null);
   const [dbLoading, setDbLoading] = useState(true);
@@ -21,9 +26,15 @@ const LoginPage = () => {
   }, []);
 
   const handleDebugLogin = async () => {
+    // Blank, whitespace-only, or non-numeric input falls back to the default
+    // admin - same as leaving it untouched.
+    const trimmed = userIdInput.trim();
+    const parsed = trimmed === '' ? DEFAULT_ADMIN_USER_ID : Number(trimmed);
+    const userId = Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_ADMIN_USER_ID;
+
     setLoggingIn(true);
     try {
-      await login(DEBUG_USER_ID);
+      await login(userId);
     } catch {
       // error is surfaced via session context
     } finally {
@@ -56,14 +67,29 @@ const LoginPage = () => {
 
         {error && <p className="mb-4 text-sm text-rose-600">{error}</p>}
 
+        <label htmlFor="debug-user-id" className="mb-1 block text-left text-xs font-medium text-gray-500">
+          User ID
+        </label>
+        <input
+          id="debug-user-id"
+          type="number"
+          value={userIdInput}
+          onChange={(e) => setUserIdInput(e.target.value)}
+          placeholder={String(DEFAULT_ADMIN_USER_ID)}
+          className="mb-3 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+
         <button
           type="button"
           onClick={handleDebugLogin}
           disabled={loggingIn}
           className="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loggingIn ? 'Logging in...' : `Debug Login (User ${DEBUG_USER_ID})`}
+          {loggingIn ? 'Logging in...' : 'Debug Login'}
         </button>
+        <p className="mt-2 text-xs text-gray-400">
+          Leave blank to use the default admin user ({DEFAULT_ADMIN_USER_ID}).
+        </p>
 
         <div className="mt-6 border-t border-gray-200 pt-4 text-left">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">

@@ -303,10 +303,10 @@ const TransferInventoryPage = () => {
                 >
                   <option value="">Search Item</option>
                   {lookupData.items
-                    .filter((item) => !formData.fromStoreId || (itemQuantities[item.id] ?? 0) > 0)
+                    .filter((item) => !formData.fromStoreId || (itemQuantities.items?.[item.id] ?? 0) > 0)
                     .map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name} - {itemQuantities[item.id] ?? 0}
+                        {item.name} - {itemQuantities.items?.[item.id] ?? 0}
                       </option>
                     ))}
                 </select>

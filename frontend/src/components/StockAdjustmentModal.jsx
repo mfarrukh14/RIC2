@@ -3,7 +3,7 @@ import itemApi from '../services/itemApi';
 import stockAdjustmentApi from '../services/stockAdjustmentApi';
 import stockApi from '../services/stockApi';
 import inventoryApi from '../services/inventoryApi';
-import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
+import { productOptionValue, parseProductOptionValue, quantityForProduct } from '../utils/productKey';
 
 const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
   (items || [])
@@ -228,12 +228,11 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
                     // the selected store. Increase is inbound (correcting stock upward, often
                     // from zero) so the full active list stays available for that type.
                     if (!formData.storeId || parseInt(formData.type) !== 1) return true;
-                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
-                    return qty > 0;
+                    return quantityForProduct(itemQuantities, item) > 0;
                   })
                   .map(item => {
                     const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
-                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
+                    const qty = quantityForProduct(itemQuantities, item);
                     return (
                       <option key={productOptionValue(item)} value={productOptionValue(item)}>
                         {formData.storeId ? `${label} - ${qty}` : label}

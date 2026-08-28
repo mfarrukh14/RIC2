@@ -23,7 +23,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var grns = await _grnService.GetAllAsync(pageNumber, pageSize, search);
+                var grns = await _grnService.GetAllAsync(pageNumber, pageSize, search, IsAdmin, AllowedStoreIds);
                 return Ok(grns);
             }
             catch (Exception ex)

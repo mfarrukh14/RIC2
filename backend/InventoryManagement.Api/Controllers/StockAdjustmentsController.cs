@@ -26,7 +26,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var stockAdjustments = await _stockAdjustmentService.GetAllAsync(request);
+                if (!IsAdmin && request?.StoreId.HasValue == true && !IsStoreAllowed(request.StoreId))
+                {
+                    return Ok(new PagedResult<StockAdjustmentView> { Items = new List<StockAdjustmentView>(), TotalCount = 0, PageNumber = request.PageNumber, PageSize = request.PageSize });
+                }
+
+                var stockAdjustments = await _stockAdjustmentService.GetAllAsync(request, IsAdmin, AllowedStoreIds);
                 return Ok(stockAdjustments);
             }
             catch (Exception ex)

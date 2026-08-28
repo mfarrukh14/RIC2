@@ -98,4 +98,52 @@ namespace InventoryManagement.API.Models
         public List<LookupItem> ItemTypes { get; set; } = new();
         public List<LookupItem> Vendors { get; set; } = new();
     }
+
+    // Backs the "Return Inventory" modal launched from an Add Inventory row -
+    // processes every checked GRN/Inventory line as one return (one
+    // Inv.ReturnInventory header + one Inv.ReturnInventoryItems row per line),
+    // unlike ReturnInventoryCreateRequest above which is strictly single-line.
+    public class ReturnInventoryBatchLineRequest
+    {
+        [Required]
+        public int InventoryDetailId { get; set; }
+
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
+
+        [Required]
+        [Range(1, int.MaxValue, ErrorMessage = "Return quantity must be at least 1")]
+        public int ReturnQuantity { get; set; }
+    }
+
+    public class ReturnInventoryBatchCreateRequest
+    {
+        [Required(ErrorMessage = "Inventory is required")]
+        public int InventoryId { get; set; }
+
+        [Required(ErrorMessage = "Store is required")]
+        public int StoreId { get; set; }
+
+        public int? VendorId { get; set; }
+        public DateTime? ReturnDate { get; set; }
+        public decimal? AdjustmentAmount { get; set; }
+        public string? AdjustmentRemarks { get; set; }
+
+        [Required]
+        [MinLength(1, ErrorMessage = "At least one line must be selected")]
+        public List<ReturnInventoryBatchLineRequest> Lines { get; set; } = new();
+    }
+
+    // A batch return covers multiple ReturnInventoryItems rows under one
+    // ReturnInventory header, so it can't be represented by the single-item
+    // ReturnInventory model above (which assumes exactly one line per return).
+    public class ReturnInventoryBatchResult
+    {
+        public int Id { get; set; }
+        public string ReturnNumber { get; set; } = string.Empty;
+        public decimal TotalAmount { get; set; }
+        public decimal? AdjustmentAmount { get; set; }
+        public decimal ReturnAmount { get; set; }
+    }
 }

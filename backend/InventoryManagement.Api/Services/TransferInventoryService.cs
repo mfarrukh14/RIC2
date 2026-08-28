@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter = null)
+        public async Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var transfers = new List<TransferInventory>();
@@ -30,6 +30,8 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
                 command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                command.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();

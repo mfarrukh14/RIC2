@@ -4,10 +4,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import inventoryApi from '../services/inventoryApi';
 import InventoryFormPage from '../components/InventoryFormPage';
+import ReturnInventoryModal from '../components/ReturnInventoryModal';
 import Pagination from '../components/Pagination';
 import usePagedList from '../hooks/usePagedList';
 
-const InventoryListPage = ({ onReturnInventory }) => {
+const InventoryListPage = () => {
   const [vendors, setVendors] = useState([]);
   const [stores, setStores] = useState([]);
 
@@ -19,6 +20,7 @@ const InventoryListPage = ({ onReturnInventory }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
+  const [returnModalInventory, setReturnModalInventory] = useState(null);
 
   const fetchPage = useCallback(async (params) => {
     const data = await inventoryApi.getAll(params);
@@ -180,8 +182,7 @@ const InventoryListPage = ({ onReturnInventory }) => {
   };
 
   const handleReturnInventory = (inventory) => {
-    if (!onReturnInventory) return;
-    onReturnInventory({ storeId: inventory.storeId });
+    setReturnModalInventory(inventory);
   };
 
   const handleCancelForm = () => {
@@ -411,6 +412,13 @@ const InventoryListPage = ({ onReturnInventory }) => {
       />
         </>
       )}
+
+      <ReturnInventoryModal
+        isOpen={returnModalInventory !== null}
+        inventory={returnModalInventory}
+        onClose={() => setReturnModalInventory(null)}
+        onSuccess={reloadInventories}
+      />
     </div>
   );
 };

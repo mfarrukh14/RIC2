@@ -1,7 +1,9 @@
 using Microsoft.Data.SqlClient;
 using InventoryManagement.API.Models;
 using InventoryManagement.Api.Models;
+using InventoryManagement.Api.Services;
 using System.Data;
+using System.Linq;
 
 namespace InventoryManagement.API.Services
 {
@@ -9,15 +11,17 @@ namespace InventoryManagement.API.Services
     {
         private readonly string _connectionString;
         private readonly ILogger<ReturnInventoryService> _logger;
+        private readonly IInventoryService _inventoryService;
 
-        public ReturnInventoryService(IConfiguration configuration, ILogger<ReturnInventoryService> logger)
+        public ReturnInventoryService(IConfiguration configuration, ILogger<ReturnInventoryService> logger, IInventoryService inventoryService)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger;
+            _inventoryService = inventoryService;
         }
 
-        public async Task<PagedResult<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter = null)
+        public async Task<PagedResult<ReturnInventory>> GetAllAsync(ReturnInventoryFilterRequest? filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var returns = new List<ReturnInventory>();
@@ -39,6 +43,8 @@ namespace InventoryManagement.API.Services
                 command.Parameters.AddWithValue("@PurchaseOrderNo", (object?)filter?.PurchaseOrderNo ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ItemId", (object?)filter?.ItemId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@InventoryNo", (object?)filter?.InventoryNo ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                command.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 using var reader = await command.ExecuteReaderAsync();
@@ -162,6 +168,130 @@ namespace InventoryManagement.API.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating return inventory");
+                throw;
+            }
+        }
+
+        // Processes every checked GRN/Inventory line as one return: one
+        // Inv.ReturnInventory header (carrying the source Inventory link and the
+        // adjustment fields) plus one Inv.ReturnInventoryItems row per line - unlike
+        // CreateAsync above, which is strictly one header + one item per call.
+        // Re-derives Available Quantity and Unit Buying Price server-side via
+        // InventoryService.GetReturnableItemsAsync rather than trusting the client's
+        // copy of either, the same "don't trust the client's StoreId" principle
+        // applied elsewhere in this pass.
+        public async Task<ReturnInventoryBatchResult> CreateBatchAsync(ReturnInventoryBatchCreateRequest request, int branchId, int createdById)
+        {
+            if (request.Lines == null || request.Lines.Count == 0)
+            {
+                throw new InvalidOperationException("At least one line must be selected.");
+            }
+
+            var returnable = await _inventoryService.GetReturnableItemsAsync(request.InventoryId)
+                ?? throw new InvalidOperationException($"Inventory #{request.InventoryId} was not found.");
+            var returnableByDetailId = returnable.Items.ToDictionary(i => i.InventoryDetailId);
+
+            decimal totalAmount = 0;
+            foreach (var line in request.Lines)
+            {
+                if (!returnableByDetailId.TryGetValue(line.InventoryDetailId, out var lineInfo))
+                {
+                    throw new InvalidOperationException($"Inventory line #{line.InventoryDetailId} does not belong to Inventory #{request.InventoryId}.");
+                }
+
+                if (line.ReturnQuantity > lineInfo.AvailableQuantity)
+                {
+                    throw new InvalidOperationException($"Cannot return {line.ReturnQuantity} of '{lineInfo.ItemName}' - only {lineInfo.AvailableQuantity} available to return.");
+                }
+
+                totalAmount += (decimal)(lineInfo.UnitBuyingPrice ?? 0) * line.ReturnQuantity;
+            }
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+                using var transaction = connection.BeginTransaction();
+
+                try
+                {
+                    foreach (var line in request.Lines)
+                    {
+                        var product = new ProductKey(line.ItemId, line.MedicineId, line.SubServiceId);
+                        var itemName = returnableByDetailId[line.InventoryDetailId].ItemName ?? product.ToString();
+                        await DecrementStoreStockByProductAsync(connection, transaction, product, itemName, request.StoreId, line.ReturnQuantity);
+                    }
+
+                    int newId;
+                    string returnNumber;
+                    using (var headerCommand = new SqlCommand(@"
+DECLARE @NextId INT = ISNULL((SELECT MAX(Id) FROM Inv.ReturnInventory), 0) + 1;
+DECLARE @ReturnNumber NVARCHAR(50) = 'RET-' + RIGHT('00000' + CAST(@NextId AS VARCHAR(5)), 5);
+
+INSERT INTO Inv.ReturnInventory (
+    ReturnNumber, BranchId, StoreId, VendorId, SourceInventoryId,
+    AdjustmentAmount, AdjustmentRemarks, ReturnDate, Status, IsActive, CreatedById, CreatedOn
+)
+VALUES (
+    @ReturnNumber, @BranchId, @StoreId, @VendorId, @InventoryId,
+    @AdjustmentAmount, @AdjustmentRemarks, @ReturnDate, 'Completed', 1, @CreatedById, GETDATE()
+);
+
+SELECT SCOPE_IDENTITY() AS Id, @ReturnNumber AS ReturnNumber;", connection, transaction))
+                    {
+                        headerCommand.Parameters.AddWithValue("@BranchId", branchId);
+                        headerCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
+                        headerCommand.Parameters.AddWithValue("@VendorId", (object?)request.VendorId ?? DBNull.Value);
+                        headerCommand.Parameters.AddWithValue("@InventoryId", request.InventoryId);
+                        headerCommand.Parameters.AddWithValue("@AdjustmentAmount", (object?)request.AdjustmentAmount ?? DBNull.Value);
+                        headerCommand.Parameters.AddWithValue("@AdjustmentRemarks", (object?)request.AdjustmentRemarks ?? DBNull.Value);
+                        headerCommand.Parameters.AddWithValue("@ReturnDate", (object?)request.ReturnDate ?? DateTime.Now);
+                        headerCommand.Parameters.AddWithValue("@CreatedById", createdById);
+
+                        using var reader = await headerCommand.ExecuteReaderAsync();
+                        await reader.ReadAsync();
+                        newId = Convert.ToInt32(reader.GetValue(0));
+                        returnNumber = reader.GetString(1);
+                    }
+
+                    foreach (var line in request.Lines)
+                    {
+                        using var itemCommand = new SqlCommand(@"
+INSERT INTO Inv.ReturnInventoryItems (ItemId, MedicineId, SubServiceId, SourceInventoryDetailId, ReturnInventoryId, Quantity, IsActive, CreatedOn)
+VALUES (@ItemId, @MedicineId, @SubServiceId, @SourceInventoryDetailId, @ReturnInventoryId, @Quantity, 1, GETDATE());", connection, transaction);
+                        itemCommand.Parameters.AddWithValue("@ItemId", (object?)line.ItemId ?? DBNull.Value);
+                        itemCommand.Parameters.AddWithValue("@MedicineId", (object?)line.MedicineId ?? DBNull.Value);
+                        itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)line.SubServiceId ?? DBNull.Value);
+                        itemCommand.Parameters.AddWithValue("@SourceInventoryDetailId", line.InventoryDetailId);
+                        itemCommand.Parameters.AddWithValue("@ReturnInventoryId", newId);
+                        itemCommand.Parameters.AddWithValue("@Quantity", line.ReturnQuantity);
+                        await itemCommand.ExecuteNonQueryAsync();
+                    }
+
+                    await transaction.CommitAsync();
+
+                    return new ReturnInventoryBatchResult
+                    {
+                        Id = newId,
+                        ReturnNumber = returnNumber,
+                        TotalAmount = totalAmount,
+                        AdjustmentAmount = request.AdjustmentAmount,
+                        ReturnAmount = totalAmount + (request.AdjustmentAmount ?? 0)
+                    };
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating batch return inventory");
                 throw;
             }
         }
@@ -314,6 +444,38 @@ namespace InventoryManagement.API.Services
                 "UPDATE Pharmacy.PharmacyMedicinesStocks SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE() WHERE ItemId = @ItemId AND StoreId = @StoreId;",
                 connection, transaction);
             updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+            updateCommand.Parameters.AddWithValue("@StoreId", storeId);
+            updateCommand.Parameters.AddWithValue("@Quantity", quantity);
+            await updateCommand.ExecuteNonQueryAsync();
+        }
+
+        // ProductKey-aware sibling of DecrementStoreStockAsync above, for the batch
+        // return flow - an Inventory/GRN line can be Item, Medicine, or SubService
+        // typed (unlike the single-line flow, which only ever handles Items), so
+        // this matches on whichever of Item/BranchMedicine/BranchSubService is set,
+        // the same pattern StockAdjustmentService.RemoveStockAsync uses.
+        private async Task DecrementStoreStockByProductAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, string productName, int storeId, int quantity)
+        {
+            int available;
+            using (var selectCommand = new SqlCommand(
+                "SELECT ISNULL(TotalItemsInStock, 0) FROM Pharmacy.PharmacyMedicinesStocks WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));",
+                connection, transaction))
+            {
+                product.AddParameters(selectCommand);
+                selectCommand.Parameters.AddWithValue("@StoreId", storeId);
+                var result = await selectCommand.ExecuteScalarAsync();
+                available = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+            }
+
+            if (available < quantity)
+            {
+                throw new InvalidOperationException($"Cannot return {quantity} of '{productName}' - only {available} in stock at this store.");
+            }
+
+            using var updateCommand = new SqlCommand(
+                "UPDATE Pharmacy.PharmacyMedicinesStocks SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE() WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));",
+                connection, transaction);
+            product.AddParameters(updateCommand);
             updateCommand.Parameters.AddWithValue("@StoreId", storeId);
             updateCommand.Parameters.AddWithValue("@Quantity", quantity);
             await updateCommand.ExecuteNonQueryAsync();

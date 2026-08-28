@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<PagedResult<GRN>> GetAllAsync(int pageNumber, int pageSize, string? search)
+        public async Task<PagedResult<GRN>> GetAllAsync(int pageNumber, int pageSize, string? search, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var result = new PagedResult<GRN>
             {
@@ -36,6 +36,8 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@PageNumber", result.PageNumber);
                 command.Parameters.AddWithValue("@PageSize", result.PageSize);
                 command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+                command.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                command.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();

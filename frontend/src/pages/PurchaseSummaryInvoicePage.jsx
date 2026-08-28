@@ -1,9 +1,15 @@
 import React, { useCallback, useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import purchaseSummaryInvoiceApi from '../services/purchaseSummaryInvoiceApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
 import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
+
+// Date filters are date-only inputs (no time-of-day picker) - the end bound of
+// a range needs to be pushed to the last instant of that day, or records from
+// later that same day would be excluded by the backend's "<=" comparison.
+const endOfDay = (dateStr) => (dateStr ? `${dateStr}T23:59:59.999` : null);
 
 const PurchaseSummaryInvoicePage = () => {
   const { session } = useSession();
@@ -14,6 +20,7 @@ const PurchaseSummaryInvoicePage = () => {
     grandTotal: 0
   });
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const [lookupData, setLookupData] = useState({
     branches: [],
@@ -94,22 +101,94 @@ const PurchaseSummaryInvoicePage = () => {
     }));
   };
 
+  const buildFilterParams = () => ({
+    branchId: filters.branchId || null,
+    storeId: filters.storeId || null,
+    inventoryDateStart: filters.inventoryDateStart || null,
+    inventoryDateEnd: endOfDay(filters.inventoryDateEnd),
+    vendorId: filters.vendorId || null,
+    invoiceDateStart: filters.invoiceDateStart || null,
+    invoiceDateEnd: endOfDay(filters.invoiceDateEnd),
+    invoiceNo: filters.invoiceNo || null,
+    reportType: filters.reportType,
+    invoiceType: filters.invoiceType || null
+  });
+
   const handleGenerateReport = () => {
-    const filterParams = {
-      branchId: filters.branchId || null,
-      storeId: filters.storeId || null,
-      inventoryDateStart: filters.inventoryDateStart || null,
-      inventoryDateEnd: filters.inventoryDateEnd || null,
-      vendorId: filters.vendorId || null,
-      invoiceDateStart: filters.invoiceDateStart || null,
-      invoiceDateEnd: filters.invoiceDateEnd || null,
-      invoiceNo: filters.invoiceNo || null,
-      reportType: filters.reportType,
-      invoiceType: filters.invoiceType || null
-    };
+    const filterParams = buildFilterParams();
     setError(null);
     setSubmittedFilters(filterParams);
     runSearch(filterParams);
+  };
+
+  // Exports every record matching the current filters (not just the visible
+  // page) - the search endpoint caps at 200 rows/request (PaginationHelper.
+  // MaxPageSize), so this pages through until it has the full filtered set.
+  const handleExport = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const filterParams = buildFilterParams();
+      const EXPORT_PAGE_SIZE = 200;
+      let pageNumber = 1;
+      let allRecords = [];
+      let expectedTotal = Infinity;
+      let exportTotals = null;
+
+      while (allRecords.length < expectedTotal) {
+        const data = await purchaseSummaryInvoiceApi.getAll({
+          ...filterParams,
+          pageNumber,
+          pageSize: EXPORT_PAGE_SIZE
+        });
+        const records = data.records || [];
+        if (records.length === 0) break;
+        allRecords = allRecords.concat(records);
+        expectedTotal = data.totalCount || 0;
+        exportTotals = data.totals || exportTotals;
+        pageNumber += 1;
+      }
+
+      const rows = allRecords.map((record, index) => ({
+        'Sr.': index + 1,
+        'Invoice No.': record.invoiceNo || '',
+        'Invoice Date': formatDate(record.invoiceDate),
+        'Inventory Date': formatDate(record.inventoryDate),
+        'Vendor': record.vendorName || '',
+        'Store': record.storeName || '',
+        'Branch': record.branchName || '',
+        'Amount': record.amount ?? 0,
+        'Advance Tax': record.advanceTax ?? 0,
+        'Discount': record.discount ?? 0,
+        'Total': record.totalAmount ?? 0
+      }));
+
+      if (exportTotals) {
+        rows.push({
+          'Sr.': '',
+          'Invoice No.': '',
+          'Invoice Date': '',
+          'Inventory Date': '',
+          'Vendor': '',
+          'Store': '',
+          'Branch': 'Totals',
+          'Amount': exportTotals.totalAmount ?? 0,
+          'Advance Tax': exportTotals.totalAdvanceTax ?? 0,
+          'Discount': exportTotals.totalDiscount ?? 0,
+          'Total': exportTotals.grandTotal ?? 0
+        });
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Summary');
+      XLSX.writeFile(workbook, `PurchaseSummaryWrtInvoices_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      console.error('Error exporting purchase summary invoices:', err);
+      setError('Failed to export report. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -178,7 +257,7 @@ const PurchaseSummaryInvoicePage = () => {
             </label>
             <div className="flex items-center gap-2">
               <input
-                type="datetime-local"
+                type="date"
                 name="inventoryDateStart"
                 value={filters.inventoryDateStart}
                 onChange={handleFilterChange}
@@ -186,7 +265,7 @@ const PurchaseSummaryInvoicePage = () => {
               />
               <span className="text-gray-500">-</span>
               <input
-                type="datetime-local"
+                type="date"
                 name="inventoryDateEnd"
                 value={filters.inventoryDateEnd}
                 onChange={handleFilterChange}
@@ -224,7 +303,7 @@ const PurchaseSummaryInvoicePage = () => {
             </label>
             <div className="flex items-center gap-2">
               <input
-                type="datetime-local"
+                type="date"
                 name="invoiceDateStart"
                 value={filters.invoiceDateStart}
                 onChange={handleFilterChange}
@@ -232,7 +311,7 @@ const PurchaseSummaryInvoicePage = () => {
               />
               <span className="text-gray-500">-</span>
               <input
-                type="datetime-local"
+                type="date"
                 name="invoiceDateEnd"
                 value={filters.invoiceDateEnd}
                 onChange={handleFilterChange}
@@ -293,8 +372,15 @@ const PurchaseSummaryInvoicePage = () => {
           </div>
         </div>
 
-        {/* Generate Report Button */}
-        <div className="flex justify-end">
+        {/* Generate Report / Export Buttons */}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {exporting ? 'Exporting...' : 'Export to Excel'}
+          </button>
           <button
             onClick={handleGenerateReport}
             disabled={loading}

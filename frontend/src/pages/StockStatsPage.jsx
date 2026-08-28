@@ -319,10 +319,10 @@ const StockStatsPage = () => {
                 size="1"
               >
                 {items
-                  .filter((item) => !filters.storeId || (itemQuantities[item.id] ?? 0) > 0)
+                  .filter((item) => !filters.storeId || (itemQuantities.items?.[item.id] ?? 0) > 0)
                   .map((item) => (
                     <option key={item.id} value={item.id}>
-                      {filters.storeId ? `${item.name} - ${itemQuantities[item.id] ?? 0}` : item.name}
+                      {filters.storeId ? `${item.name} - ${itemQuantities.items?.[item.id] ?? 0}` : item.name}
                     </option>
                   ))}
               </select>

@@ -18,10 +18,23 @@ namespace InventoryManagement.Api.Controllers
             _logger = logger;
         }
 
+        // Every action here is admin-only, not just hidden from the sidebar: this
+        // table (Inv.StoreAllocationToUser) is the source of truth every store-scoped
+        // endpoint trusts to decide what a non-admin can see (see BaseController.
+        // AllowedStoreIds) - a non-admin who could read or write it could see who's
+        // assigned where, or grant themselves any store's access outright.
+        // Plain 403, not Forbid() - Forbid() requires an authentication scheme to be
+        // registered (there is none; this app authenticates via the X-User-Id header/
+        // session cache, not ASP.NET's auth middleware) and throws without one.
+        private ActionResult? RequireAdmin() =>
+            IsAdmin ? null : StatusCode(403, new { message = "Only administrators can manage store allocations." });
+
         [HttpGet]
         public async Task<ActionResult<PagedResult<StoreAllocationToUser>>> GetAll(
             [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 5, [FromQuery] string? search = null)
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 var allocations = await _service.GetAllAsync(pageNumber, pageSize, search);
@@ -37,6 +50,8 @@ namespace InventoryManagement.Api.Controllers
         [HttpGet("employee-dropdown")]
         public async Task<ActionResult<IEnumerable<DropdownItem>>> GetEmployeeDropdown()
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 var employees = await _service.GetEmployeeDropdownAsync();
@@ -52,6 +67,8 @@ namespace InventoryManagement.Api.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<StoreAllocationToUser>> GetById(int id)
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 var allocation = await _service.GetByIdAsync(id);
@@ -73,6 +90,8 @@ namespace InventoryManagement.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<StoreAllocationToUser>> Create([FromBody] StoreAllocationToUserCreateRequest request)
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 if (!ModelState.IsValid)
@@ -93,6 +112,8 @@ namespace InventoryManagement.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] StoreAllocationToUserUpdateRequest request)
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 if (!ModelState.IsValid)
@@ -124,6 +145,8 @@ namespace InventoryManagement.Api.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (RequireAdmin() is ActionResult forbidden) return forbidden;
+
             try
             {
                 var existing = await _service.GetByIdAsync(id);
