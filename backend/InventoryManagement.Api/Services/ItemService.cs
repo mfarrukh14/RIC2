@@ -17,9 +17,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Item>> GetAllAsync()
+        public async Task<PagedResult<Item>> GetAllAsync(ItemFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var items = new List<Item>();
+            var totalCount = 0;
 
             try
             {
@@ -28,12 +30,18 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     items.Add(MapToItem(reader));
                 }
             }
@@ -43,7 +51,47 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return items;
+            return new PagedResult<Item> { Items = items, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
+        }
+
+        public async Task<IEnumerable<UnifiedItemLookupResult>> GetAllWithMedicinesAsync(string? search)
+        {
+            var results = new List<UnifiedItemLookupResult>();
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand("Item_GetAllWithMedicines", connection)
+                {
+                    CommandType = CommandType.StoredProcedure
+                };
+                command.Parameters.AddWithValue("@Search", (object?)search ?? DBNull.Value);
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    results.Add(new UnifiedItemLookupResult
+                    {
+                        ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                        MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                        SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
+                        SourceType = reader.GetString("SourceType"),
+                        Name = reader.GetString("Name"),
+                        BarCode = reader.IsDBNull("BarCode") ? null : reader.GetString("BarCode"),
+                        Price = reader.IsDBNull("Price") ? null : reader.GetDecimal("Price"),
+                        IsActive = reader.GetBoolean("IsActive")
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving unified item/medicine/disposable lookup");
+                throw;
+            }
+
+            return results;
         }
 
         public async Task<Item?> GetByIdAsync(int id)

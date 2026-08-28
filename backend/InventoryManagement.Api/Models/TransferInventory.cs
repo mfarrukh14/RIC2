@@ -75,6 +75,11 @@ namespace InventoryManagement.Api.Models
         public string? Notes { get; set; }
     }
 
+    public class TransferInventoryFilterRequest : PagedRequest
+    {
+        public string? SearchTerm { get; set; }
+    }
+
     public class TransferInventoryLookupData
     {
         public List<Store> Stores { get; set; } = new();

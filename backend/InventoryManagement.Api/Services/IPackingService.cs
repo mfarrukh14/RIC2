@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IPackingService
     {
-        Task<IEnumerable<Packing>> GetAllPackingsAsync();
+        Task<IEnumerable<Packing>> GetAllPackingsAsync(int branchId);
         Task<Packing?> GetPackingByIdAsync(int id);
         Task<int> CreatePackingAsync(CreatePackingRequest request);
         Task<bool> UpdatePackingAsync(UpdatePackingRequest request);

@@ -72,11 +72,13 @@ LEFT JOIN Users au ON au.UserID = pr.AssignedToId
 LEFT JOIN Employee ae ON ae.EmpID = au.EmpID
 ";
 
-        public async Task<IReadOnlyList<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter)
+        public async Task<PagedResult<PurchaseRequisitionListItem>> GetAllAsync(PurchaseRequisitionFilter filter)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter.PageNumber, filter.PageSize);
             var results = new List<PurchaseRequisitionListItem>();
+            var totalCount = 0;
 
-            string sql = HeaderSelect + @"
+            string sql = ";WITH PRList AS (" + HeaderSelect + @"
 WHERE pr.IsActive = 1
   AND (@BranchId IS NULL OR pr.BranchId = @BranchId)
   AND (@StatusCategory IS NULL OR prs.Category = @StatusCategory)
@@ -87,18 +89,28 @@ WHERE pr.IsActive = 1
         OR ISNULL(v.Name, '') LIKE '%' + @Search + '%'
         OR ISNULL(pr.Subject, '') LIKE '%' + @Search + '%'
       )
-ORDER BY pr.ModifiedOn DESC;";
+)
+SELECT *, COUNT(*) OVER() AS TotalCount
+FROM PRList
+ORDER BY ModifiedOn DESC
+OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@BranchId", (object?)filter.BranchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StatusCategory", (object?)filter.StatusCategory ?? DBNull.Value);
             command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
+            command.Parameters.AddWithValue("@Offset", (pageNumber - 1) * pageSize);
+            command.Parameters.AddWithValue("@Take", pageSize);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (totalCount == 0)
+                {
+                    totalCount = PaginationHelper.ReadTotalCount(reader);
+                }
                 results.Add(new PurchaseRequisitionListItem
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -117,7 +129,7 @@ ORDER BY pr.ModifiedOn DESC;";
                 });
             }
 
-            return results;
+            return new PagedResult<PurchaseRequisitionListItem> { Items = results, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<PurchaseRequisitionDetails?> GetByIdAsync(int id)
@@ -128,7 +140,9 @@ ORDER BY pr.ModifiedOn DESC;";
 SELECT
     pri.Id,
     pri.ItemId,
-    i.Name AS ItemName,
+    pri.MedicineId,
+    pri.SubServiceId,
+    COALESCE(i.Name, med.MedicineFullName, f.Name) AS ItemName,
     pri.Quantity,
     pri.UnitEstimatedCost,
     pri.TotalEstimatedCost,
@@ -139,6 +153,8 @@ SELECT
     pri.Remarks
 FROM Inv.PurchaseRequisitionItems pri
 LEFT JOIN Inv.Items i ON i.Id = pri.ItemId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = pri.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = pri.SubServiceId
 LEFT JOIN Inv.BudgetHeads bh ON bh.Id = pri.BudgetHeadId
 WHERE pri.PurchaseRequisitionId = @Id AND (pri.IsDeleted = 0 OR pri.IsDeleted IS NULL)
 ORDER BY pri.Id;";
@@ -173,6 +189,8 @@ ORDER BY pri.Id;";
                     {
                         Id = itemsReader.GetInt32(itemsReader.GetOrdinal("Id")),
                         ItemId = itemsReader.IsDBNull(itemsReader.GetOrdinal("ItemId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("ItemId")),
+                        MedicineId = itemsReader.IsDBNull(itemsReader.GetOrdinal("MedicineId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("MedicineId")),
+                        SubServiceId = itemsReader.IsDBNull(itemsReader.GetOrdinal("SubServiceId")) ? null : itemsReader.GetInt32(itemsReader.GetOrdinal("SubServiceId")),
                         ItemName = itemsReader.IsDBNull(itemsReader.GetOrdinal("ItemName")) ? null : itemsReader.GetString(itemsReader.GetOrdinal("ItemName")),
                         Quantity = itemsReader.GetInt32(itemsReader.GetOrdinal("Quantity")),
                         UnitEstimatedCost = itemsReader.GetDecimal(itemsReader.GetOrdinal("UnitEstimatedCost")),
@@ -220,9 +238,9 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
             const string insertItemSql = @"
 INSERT INTO Inv.PurchaseRequisitionItems
-(PurchaseRequisitionId, ItemId, Quantity, UnitEstimatedCost, TotalEstimatedCost, BudgetHeadId, AvailableBudget, BudgetRestriction, Remarks, IsActive, CreatedById, CreatedOn)
+(PurchaseRequisitionId, ItemId, MedicineId, SubServiceId, Quantity, UnitEstimatedCost, TotalEstimatedCost, BudgetHeadId, AvailableBudget, BudgetRestriction, Remarks, IsActive, CreatedById, CreatedOn)
 VALUES
-(@PurchaseRequisitionId, @ItemId, @Quantity, @UnitEstimatedCost, @TotalEstimatedCost, @BudgetHeadId, @AvailableBudget, @BudgetRestriction, @Remarks, 1, @CreatedById, GETDATE());";
+(@PurchaseRequisitionId, @ItemId, @MedicineId, @SubServiceId, @Quantity, @UnitEstimatedCost, @TotalEstimatedCost, @BudgetHeadId, @AvailableBudget, @BudgetRestriction, @Remarks, 1, @CreatedById, GETDATE());";
 
             const string updateTotalSql = @"
 UPDATE Inv.PurchaseRequisitions
@@ -280,6 +298,8 @@ WHERE Id = @Id;";
                     using var itemCommand = new SqlCommand(insertItemSql, connection, transaction);
                     itemCommand.Parameters.AddWithValue("@PurchaseRequisitionId", purchaseRequisitionId);
                     itemCommand.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@Quantity", item.Quantity);
                     itemCommand.Parameters.AddWithValue("@UnitEstimatedCost", item.UnitEstimatedCost);
                     itemCommand.Parameters.AddWithValue("@TotalEstimatedCost", item.UnitEstimatedCost * item.Quantity);

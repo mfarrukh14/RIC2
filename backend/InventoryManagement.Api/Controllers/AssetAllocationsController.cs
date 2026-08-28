@@ -19,11 +19,16 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<AssetAllocation>>> GetAll()
+        public async Task<ActionResult<PagedResult<AssetAllocation>>> GetAll([FromQuery] AssetAllocationFilterRequest? filter)
         {
             try
             {
-                var assetAllocations = await _assetAllocationService.GetAllAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var assetAllocations = await _assetAllocationService.GetAllAsync(branchId, filter);
                 return Ok(assetAllocations);
             }
             catch (Exception ex)

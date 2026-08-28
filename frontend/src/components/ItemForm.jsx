@@ -115,8 +115,15 @@ const ItemForm = ({
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
+      // Changing the category invalidates whatever sub-category was picked,
+      // since sub-categories are staggered under a single parent category.
+      ...(name === 'categoryId' ? { subCategoryId: '' } : {}),
     }));
   };
+
+  const availableSubCategories = formData.categoryId
+    ? subCategories.filter((subCat) => String(subCat.categoryId) === String(formData.categoryId))
+    : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -239,10 +246,13 @@ const ItemForm = ({
               name="subCategoryId"
               value={formData.subCategoryId}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!formData.categoryId}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             >
-              <option value="">Select Sub Category</option>
-              {subCategories.map((subCat) => (
+              <option value="">
+                {formData.categoryId ? 'Select Sub Category' : 'Select a category first'}
+              </option>
+              {availableSubCategories.map((subCat) => (
                 <option key={subCat.id} value={subCat.id}>
                   {subCat.name}
                 </option>

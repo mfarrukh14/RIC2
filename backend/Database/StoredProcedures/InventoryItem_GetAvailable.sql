@@ -45,7 +45,7 @@ BEGIN
         WHERE ii.ItemId = i.Id AND ii.IsActive = 1 AND ii.BalanceTotalItems > 0
         ORDER BY ii.CreatedOn DESC
     ) stock
-    LEFT JOIN Inv.Brands b ON i.BrandId = b.Id
+    LEFT JOIN Data.Brands b ON i.BrandId = b.Id
     LEFT JOIN Inv.ItemTypes it ON i.ItemTypeId = it.Id
     LEFT JOIN Inv.ItemUnits iu ON i.UnitId = iu.Id
     LEFT JOIN Inv.Manufacturers m ON stock.ManufacturerId = m.Id

@@ -6,6 +6,7 @@ import { rackRowApi } from '../services/rackRowApi';
 import rackColumnApi from '../services/rackColumnApi';
 import { rackDrawerApi } from '../services/rackDrawerApi';
 import itemApi from '../services/itemApi';
+import Pagination from '../components/Pagination';
 
 const normalizeItems = (items) =>
   (items || [])
@@ -80,7 +81,7 @@ const SpaceAllocationsPage = () => {
 
   const fetchItems = async () => {
     try {
-      const data = await itemApi.getAll();
+      const data = await itemApi.getAllUnpaginated();
       setItems(normalizeItems(data));
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -293,9 +294,6 @@ const SpaceAllocationsPage = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = allocations.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(allocations.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -463,24 +461,7 @@ const SpaceAllocationsPage = () => {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Show</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-gray-300 rounded"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-sm text-gray-600">entries</span>
-          </div>
+        <div className="p-4 border-b flex justify-end items-center">
           <div>
             <input
               type="text"
@@ -576,39 +557,13 @@ const SpaceAllocationsPage = () => {
               </table>
             </div>
 
-            <div className="p-4 border-t flex justify-between items-center">
-              <div className="text-sm text-gray-600">
-                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, allocations.length)} of {allocations.length} entries
-              </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => paginate(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border rounded disabled:opacity-50"
-                >
-                  &lt;
-                </button>
-                {[...Array(Math.min(totalPages, 5))].map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => paginate(i + 1)}
-                    className={`px-3 py-1 border rounded ${
-                      currentPage === i + 1 ? 'bg-blue-600 text-white' : 'bg-white'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                {totalPages > 5 && <span className="px-2">...</span>}
-                <button
-                  onClick={() => paginate(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 border rounded disabled:opacity-50"
-                >
-                  &gt;
-                </button>
-              </div>
-            </div>
+            <Pagination
+              currentPage={currentPage}
+              pageSize={itemsPerPage}
+              totalCount={allocations.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setItemsPerPage}
+            />
           </>
         )}
       </div>

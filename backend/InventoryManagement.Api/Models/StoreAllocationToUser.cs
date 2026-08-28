@@ -8,6 +8,7 @@ namespace InventoryManagement.Api.Models
         public int? UserId { get; set; }
         public string EmployeeName { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
+        public bool IsDeleted { get; set; }
         public int? CreatedById { get; set; }
         public DateTime CreatedOn { get; set; }
         public int? ModifiedById { get; set; }

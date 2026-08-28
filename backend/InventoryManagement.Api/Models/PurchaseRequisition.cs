@@ -6,7 +6,7 @@ namespace InventoryManagement.Api.Models
         public string Name { get; set; } = string.Empty;
     }
 
-    public class PurchaseRequisitionFilter
+    public class PurchaseRequisitionFilter : PagedRequest
     {
         // "Pending", "Processed", or "Closed" - matches Inv.PurchaseRequisitionStatus.Category.
         public string? StatusCategory { get; set; }
@@ -35,6 +35,8 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public string? ItemName { get; set; }
         public int Quantity { get; set; }
         public decimal UnitEstimatedCost { get; set; }
@@ -93,6 +95,8 @@ namespace InventoryManagement.Api.Models
     public class PurchaseRequisitionItemRequest
     {
         public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int Quantity { get; set; }
         public decimal UnitEstimatedCost { get; set; }
         public int? BudgetHeadId { get; set; }

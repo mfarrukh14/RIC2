@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import inventoryApi from '../services/inventoryApi';
+import itemApi from '../services/itemApi';
 import stockAdjustmentApi from '../services/stockAdjustmentApi';
+import stockApi from '../services/stockApi';
+import inventoryApi from '../services/inventoryApi';
+import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
 
 const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
   (items || [])
@@ -18,12 +21,14 @@ const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
     })
     .filter(Boolean);
 
-const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, branches }) => {
+const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, branches, defaultStoreId }) => {
   const [formData, setFormData] = useState({
     storeId: '',
     branchId: '',
     type: 1, // 1 = Less/Decrease, 2 = Issue
     itemId: '',
+    medicineId: '',
+    subServiceId: '',
     stockTypeId: '', // defaults to the real "Regular" stock type once lookup data loads
     quantity: 1,
     saleValue: 0,
@@ -32,12 +37,34 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
 
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
+  const [itemQuantities, setItemQuantities] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     loadLookupData();
   }, []);
+
+  // Per-store on-hand quantities for the item dropdown (e.g. "Syringe 10ml - 8") -
+  // reloads whenever the selected store changes, since quantity is store-specific.
+  useEffect(() => {
+    if (!formData.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(formData.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [formData.storeId]);
 
   useEffect(() => {
     if (adjustment) {
@@ -47,26 +74,31 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
         branchId: adjustment.branchId || '',
         type: adjustment.type || 1,
         itemId: adjustment.details?.[0]?.itemId || '',
+        medicineId: adjustment.details?.[0]?.medicineId || '',
+        subServiceId: adjustment.details?.[0]?.subServiceId || '',
         stockTypeId: adjustment.details?.[0]?.stockTypeId || 1,
         quantity: adjustment.details?.[0]?.quantity || 1,
         saleValue: adjustment.details?.[0]?.saleValue || 0,
         remarks: ''
       });
     } else {
-      // Set default branch (first branch if available)
-      if (branches && branches.length > 0) {
-        setFormData(prev => ({
-          ...prev,
-          branchId: branches[0].id
-        }));
-      }
+      // New adjustment: default the branch (first branch if available) and carry the
+      // last-used store forward so the user isn't asked to re-pick it every time.
+      setFormData(prev => ({
+        ...prev,
+        storeId: defaultStoreId || prev.storeId,
+        branchId: (branches && branches.length > 0) ? branches[0].id : prev.branchId
+      }));
     }
-  }, [adjustment, branches]);
+  }, [adjustment, branches, defaultStoreId]);
 
   const loadLookupData = async () => {
     try {
-      const data = await inventoryApi.getLookupData();
-      setItems(normalizeLookupOptions(data.items, ['id', 'itemId'], ['name', 'itemName'], 'Item'));
+      const [unifiedItems, data] = await Promise.all([
+        itemApi.getAllWithMedicines(),
+        inventoryApi.getLookupData()
+      ]);
+      setItems((unifiedItems || []).filter((row) => row.isActive));
       const loadedStockTypes = normalizeLookupOptions(data.stockTypes, ['id', 'stockTypeId'], ['name', 'stockTypeName'], 'Stock Type');
       setStockTypes(loadedStockTypes);
 
@@ -91,6 +123,10 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
     }));
   };
 
+  const handleItemChange = (e) => {
+    setFormData(prev => ({ ...prev, ...parseProductOptionValue(e.target.value) }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -103,7 +139,9 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
         type: parseInt(formData.type),
         details: [
           {
-            itemId: parseInt(formData.itemId),
+            itemId: formData.itemId || null,
+            medicineId: formData.medicineId || null,
+            subServiceId: formData.subServiceId || null,
             type: parseInt(formData.type),
             stockTypeId: parseInt(formData.stockTypeId),
             quantity: parseFloat(formData.quantity),
@@ -124,10 +162,10 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
         await stockAdjustmentApi.create(payload);
       }
 
-      onSubmit();
+      onSubmit(formData.storeId);
     } catch (err) {
       console.error('Error saving stock adjustment:', err);
-      setError('Failed to save stock adjustment. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save stock adjustment. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -178,17 +216,30 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
               </label>
               <select
                 name="itemId"
-                value={formData.itemId}
-                onChange={handleChange}
+                value={productOptionValue(formData)}
+                onChange={handleItemChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select</option>
-                {items.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
+                {items
+                  .filter((item) => {
+                    // Decrease is an outbound action - only show items actually in stock at
+                    // the selected store. Increase is inbound (correcting stock upward, often
+                    // from zero) so the full active list stays available for that type.
+                    if (!formData.storeId || parseInt(formData.type) !== 1) return true;
+                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
+                    return qty > 0;
+                  })
+                  .map(item => {
+                    const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
+                    const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : 0;
+                    return (
+                      <option key={productOptionValue(item)} value={productOptionValue(item)}>
+                        {formData.storeId ? `${label} - ${qty}` : label}
+                      </option>
+                    );
+                  })}
               </select>
             </div>
 
@@ -205,8 +256,8 @@ const StockAdjustmentModal = ({ isOpen, onClose, onSubmit, adjustment, stores, b
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value={1}>Less/ Decrease/ Issue</option>
-                  <option value={2}>Issue</option>
+                  <option value={1}>Less / Decrease</option>
+                  <option value={2}>Issue (Increase)</option>
                 </select>
               </div>
 

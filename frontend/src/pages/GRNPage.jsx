@@ -5,100 +5,122 @@ import inventoryApi from '../services/inventoryApi';
 
 const GRNPage = () => {
   const [grns, setGRNs] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
   const [lookupData, setLookupData] = useState({
     vendors: [],
     stockTypes: [],
-    manufacturers: []
+    manufacturers: [],
+    purchaseOrders: []
   });
-  
+
   // Form state
   const [showForm, setShowForm] = useState(false);
   const [selectedPO, setSelectedPO] = useState('');
-  const [poSearchOptions, setPOSearchOptions] = useState([]);
+  const [selectedPODetails, setSelectedPODetails] = useState(null);
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState('');
   const [vendorInvoiceDate, setVendorInvoiceDate] = useState('');
-  
+
   // Items from PO
   const [items, setItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
 
   useEffect(() => {
-    fetchData();
+    loadLookups();
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    loadGRNs();
+  }, [currentPage, entriesPerPage, searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entriesPerPage, searchTerm]);
+
+  const loadLookups = async () => {
     try {
-      const [grnsData, lookup, invLookup] = await Promise.all([
-        grnApi.getAll(),
+      const [lookup, invLookup] = await Promise.all([
         grnApi.getLookupData(),
         inventoryApi.getLookupData()
       ]);
-      
-      setGRNs(grnsData);
+
       setLookupData({
         ...lookup,
         items: invLookup.items
       });
-      
-      // Generate PO search options (mock data for now)
-      generatePOOptions();
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('Error fetching lookup data:', err);
     }
   };
 
-  const generatePOOptions = () => {
-    // Mock PO options - in real scenario, fetch from backend
-    const options = [
-      'PO-0401AAA0370 [May 7 2024 8:52AM]',
-      'PO-0401AAA0368 [7016/1-5/24] [May 7 2024 8:46AM]',
-      'PO-0401AAA0367 [7004/1-3/24] [May 7 2024 8:44AM]',
-      'PO-0401AAA0366 [7017/1-3/24] [May 7 2024 8:42AM]',
-      'PO-0401AAA0365 [2922/1-3/24] [May 7 2024 8:39AM]',
-      'PO-0401AAA0364 [2298/1-1/24] [Jan 9 2024 2:38PM]'
-    ];
-    setPOSearchOptions(options);
+  const loadGRNs = async () => {
+    try {
+      const response = await grnApi.getAll({
+        pageNumber: currentPage,
+        pageSize: entriesPerPage,
+        search: searchTerm.trim() || undefined
+      });
+      setGRNs(response.items);
+      setTotalCount(response.totalCount);
+    } catch (err) {
+      console.error('Error fetching GRNs:', err);
+    }
   };
 
-  const handlePOSelect = (e) => {
-    const poNumber = e.target.value;
-    setSelectedPO(poNumber);
-    
-    if (poNumber) {
-      // Mock: Load items for selected PO
-      loadPOItems(poNumber);
+  const handlePOSelect = async (e) => {
+    const poId = e.target.value;
+    setSelectedPO(poId);
+
+    if (poId) {
+      await loadPOItems(poId);
     } else {
+      setSelectedPODetails(null);
       setItems([]);
     }
   };
 
-  const loadPOItems = (poNumber) => {
-    // Mock items from PO
-    const mockItems = [
-      {
-        id: 1,
-        itemName: 'Exhaust Fan 12" SK fan the',
-        manufacturer: '',
-        mfgDate: '',
-        expiryDate: '',
-        registrationNumber: '',
-        lotNo: '',
-        batchNo: '',
-        noOfBoxes: 1,
-        noOfPackets: 1,
-        itemPerPacket: 2,
-        poQuantity: 2,
-        packQuantity: 0,
-        receivedQuantity: 0,
-        remainingQuantity: 2,
-        totalBuyingPrice: 18340.00,
-        unitBuyingPrice: 7870.00,
-        advanceTaxPercent: 0,
-        advanceTaxAmount: 0
-      }
-    ];
-    setItems(mockItems);
-    setSelectedItems([1]); // Pre-select first item
+  // The store credited when this GRN is saved is resolved server-side from this
+  // PO's own StoreId - only items with quantity still remaining to receive are
+  // offered (an item already fully received against this PO won't show up again).
+  const loadPOItems = async (poId) => {
+    try {
+      const po = await grnApi.getPODetails(poId);
+      setSelectedPODetails(po);
+
+      const mappedItems = po.items
+        .filter((item) => item.remainingQuantity > 0)
+        .map((item) => ({
+          id: item.itemId,
+          itemName: item.itemName,
+          manufacturer: '',
+          mfgDate: '',
+          expiryDate: '',
+          registrationNumber: '',
+          lotNo: '',
+          batchNo: '',
+          noOfBoxes: null,
+          noOfPackets: null,
+          itemPerPacket: null,
+          poQuantity: item.orderedQuantity,
+          packQuantity: null,
+          receivedQuantity: item.remainingQuantity,
+          remainingQuantity: 0,
+          totalBuyingPrice: (item.rate || 0) * item.remainingQuantity,
+          unitBuyingPrice: item.rate || 0,
+          advanceTaxPercent: 0,
+          advanceTaxAmount: 0
+        }));
+
+      setItems(mappedItems);
+      setSelectedItems(mappedItems.map((i) => i.id));
+    } catch (err) {
+      console.error('Error loading PO items:', err);
+      alert('Failed to load items for this Purchase Order.');
+      setSelectedPODetails(null);
+      setItems([]);
+    }
   };
 
   const handleItemSelect = (itemId) => {
@@ -126,15 +148,21 @@ const GRNPage = () => {
   };
 
   const handleSave = async () => {
+    if (!selectedPODetails) {
+      alert('Please select a Purchase Order');
+      return;
+    }
+
     try {
       const selectedItemsData = items.filter(item => selectedItems.includes(item.id));
-      
+
       const grnData = {
-        poNumber: selectedPO.split(' ')[0],
-        vendorId: 1, // Get from PO or form
+        purchaseOrderId: selectedPODetails.id,
+        poNumber: selectedPODetails.poNumber,
+        vendorId: selectedPODetails.vendorId,
         vendorInvoiceNo,
         vendorInvoiceDate: vendorInvoiceDate || null,
-        stockTypeId: 1, // From form
+        stockTypeId: lookupData.stockTypes?.[0]?.id || null,
         dateAndTime: new Date().toISOString(),
         items: selectedItemsData.map(item => ({
           itemId: item.id,
@@ -162,11 +190,25 @@ const GRNPage = () => {
       alert('GRN created successfully!');
       setShowForm(false);
       setSelectedPO('');
+      setSelectedPODetails(null);
       setItems([]);
-      fetchData();
+      loadGRNs();
     } catch (err) {
       console.error('Error saving GRN:', err);
-      alert('Failed to save GRN');
+      alert(err.response?.data?.message || 'Failed to save GRN');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this GRN? This will reverse the stock it received.')) {
+      return;
+    }
+    try {
+      await grnApi.delete(id);
+      loadGRNs();
+    } catch (err) {
+      console.error('Error deleting GRN:', err);
+      alert(err.response?.data?.message || 'Failed to delete GRN');
     }
   };
 
@@ -192,9 +234,9 @@ const GRNPage = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
               >
                 <option value="">Select Purchase Order</option>
-                {poSearchOptions.map((po, index) => (
-                  <option key={index} value={po}>
-                    {po}
+                {lookupData.purchaseOrders.map((po) => (
+                  <option key={po.id} value={po.id}>
+                    {po.poNumber}{po.vendorName ? ` - ${po.vendorName}` : ''}
                   </option>
                 ))}
               </select>
@@ -424,6 +466,7 @@ const GRNPage = () => {
             onClick={() => {
               setShowForm(false);
               setSelectedPO('');
+              setSelectedPODetails(null);
               setItems([]);
             }}
             className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
@@ -438,16 +481,23 @@ const GRNPage = () => {
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700">Show</span>
-            <select className="px-3 py-1 border border-gray-300 rounded-md">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
+            <select
+              value={entriesPerPage}
+              onChange={(e) => setEntriesPerPage(Number(e.target.value))}
+              className="px-3 py-1 border border-gray-300 rounded-md"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
             </select>
             <span className="text-sm text-gray-700">entries</span>
           </div>
           <div>
             <input
               type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search:"
               className="px-3 py-2 border border-gray-300 rounded-md"
             />
@@ -469,27 +519,55 @@ const GRNPage = () => {
               {grns.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                    Showing 0 to 0 of 0 entries
+                    No data available in table
                   </td>
                 </tr>
               ) : (
                 grns.map((grn) => (
                   <tr key={grn.id}>
                     <td className="px-6 py-4 text-sm">{grn.invoiceNo || '-'}</td>
-                    <td className="px-6 py-4 text-sm">{grn.poNumber}</td>
+                    <td className="px-6 py-4 text-sm">{grn.poNumber || '-'}</td>
                     <td className="px-6 py-4 text-sm">{grn.stockTypeName || '-'}</td>
                     <td className="px-6 py-4 text-sm">
                       {grn.dateAndTime ? new Date(grn.dateAndTime).toLocaleString() : '-'}
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      <button className="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
-                      <button className="text-red-600 hover:text-red-900">Delete</button>
+                      <button onClick={() => handleDelete(grn.id)} className="text-red-600 hover:text-red-900">Delete</button>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-col gap-3 mt-4 md:flex-row md:items-center md:justify-between">
+          <div className="text-sm text-gray-700">
+            {totalCount === 0
+              ? 'Showing 0 to 0 of 0 entries'
+              : `Showing ${(currentPage - 1) * entriesPerPage + 1} to ${Math.min(currentPage * entriesPerPage, totalCount)} of ${totalCount} entries`}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prev
+            </button>
+            <span className="text-sm text-gray-700">
+              {currentPage} / {Math.max(1, Math.ceil(totalCount / entriesPerPage))}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, Math.max(1, Math.ceil(totalCount / entriesPerPage))))}
+              disabled={currentPage >= Math.ceil(totalCount / entriesPerPage)}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

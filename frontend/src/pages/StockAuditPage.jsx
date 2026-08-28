@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { stockAuditApi } from '../services/stockAuditApi';
 import inventoryApi from '../services/inventoryApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 const normalizeStores = (stores) =>
@@ -26,6 +28,11 @@ const StockAuditPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Past stock audits (history list) - matches the old system's Stock Audit
+  // screen, which was purely a browsable log of previously-submitted audits.
+  const [pastAudits, setPastAudits] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Search filters
   const [filters, setFilters] = useState({
@@ -52,7 +59,8 @@ const StockAuditPage = () => {
   const [itemList, setItemList] = useState([]);
   const [manufacturers, setManufacturers] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
-  
+  const [itemQuantities, setItemQuantities] = useState({});
+
   // Selected items and manufacturers for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState([]);
@@ -61,18 +69,62 @@ const StockAuditPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
 
   useEffect(() => {
     loadLookupData();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, entriesPerPage]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historyPageSize]);
 
   // Stock audits are always scoped to the logged-in user's own branch.
   useEffect(() => {
     if (session?.branchId) {
       setFilters((prev) => ({ ...prev, branchId: session.branchId }));
       setAuditForm((prev) => ({ ...prev, branchId: session.branchId }));
+      loadPastAudits(session.branchId);
     }
   }, [session?.branchId]);
+
+  // Item multi-select narrows to what's actually on hand at the selected
+  // store, with the live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!filters.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(filters.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId]);
+
+  const loadPastAudits = async (branchId) => {
+    setLoadingHistory(true);
+    try {
+      const data = await stockAuditApi.getAll({ branchId });
+      setPastAudits(data);
+    } catch (err) {
+      console.error('Error loading past stock audits:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const loadLookupData = async () => {
     try {
@@ -181,7 +233,8 @@ const StockAuditPage = () => {
 
       await stockAuditApi.createAudit(auditData);
       setSuccessMessage('Stock audit created successfully');
-      
+      loadPastAudits(auditData.branchId);
+
       // Reset form
       setAuditForm({
         storeId: null,
@@ -208,7 +261,8 @@ const StockAuditPage = () => {
   const indexOfLastEntry = currentPage * entriesPerPage;
   const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
   const currentItems = filteredItems.slice(indexOfFirstEntry, indexOfLastEntry);
-  const totalPages = Math.ceil(filteredItems.length / entriesPerPage);
+
+  const pastAuditsPage = pastAudits.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
 
   return (
     <div className="p-6">
@@ -346,16 +400,24 @@ const StockAuditPage = () => {
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              {itemList.map((item, index) => {
-                const itemId = item.id ?? item.itemId ?? '';
-                const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+              {itemList
+                .filter((item) => {
+                  if (!filters.storeId) return true;
+                  const itemId = item.id ?? item.itemId;
+                  if (itemId == null) return true;
+                  return (itemQuantities[itemId] ?? 0) > 0;
+                })
+                .map((item, index) => {
+                  const itemId = item.id ?? item.itemId ?? '';
+                  const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
+                  const qty = filters.storeId && itemId !== '' ? itemQuantities[itemId] ?? 0 : null;
 
-                return (
-                <option key={`audit-item-${itemId || index}`} value={itemId}>
-                  {itemName}
-                </option>
-                );
-              })}
+                  return (
+                  <option key={`audit-item-${itemId || index}`} value={itemId}>
+                    {qty !== null ? `${itemName} - ${qty}` : itemName}
+                  </option>
+                  );
+                })}
             </select>
           </div>
 
@@ -421,24 +483,7 @@ const StockAuditPage = () => {
       {/* Results Table */}
       {items.length > 0 && (
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700">Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span className="text-sm text-gray-700">entries</span>
-            </div>
+          <div className="flex justify-end items-center mb-4">
             <div>
               <input
                 type="text"
@@ -558,40 +603,13 @@ const StockAuditPage = () => {
             </table>
           </div>
 
-          <div className="flex justify-between items-center mt-4">
-            <div className="text-sm text-gray-700">
-              Showing {indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredItems.length)} of {filteredItems.length} entries
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-              >
-                Previous
-              </button>
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1 border rounded-md text-sm ${
-                    currentPage === i + 1
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={entriesPerPage}
+            totalCount={filteredItems.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setEntriesPerPage}
+          />
         </div>
       )}
 
@@ -650,6 +668,70 @@ const StockAuditPage = () => {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Past Stock Audits (history) */}
+      <div className="bg-white shadow rounded-lg p-6 mt-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Past Stock Audits</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Store
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Remarks
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created On
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loadingHistory ? (
+                <tr>
+                  <td colSpan="4" className="px-3 py-4 text-center text-sm text-gray-500">
+                    Loading...
+                  </td>
+                </tr>
+              ) : pastAudits.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="px-3 py-4 text-center text-sm text-gray-500">
+                    No stock audits found
+                  </td>
+                </tr>
+              ) : (
+                pastAuditsPage.map((audit) => (
+                  <tr key={audit.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(audit.auditDate).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {audit.storeName || '-'}
+                    </td>
+                    <td className="px-3 py-3 text-sm text-gray-500">
+                      {audit.remarks || '-'}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(audit.createdOn).toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <Pagination
+          currentPage={historyPage}
+          pageSize={historyPageSize}
+          totalCount={pastAudits.length}
+          onPageChange={setHistoryPage}
+          onPageSizeChange={setHistoryPageSize}
+        />
       </div>
     </div>
   );

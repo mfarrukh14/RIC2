@@ -23,7 +23,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var rackColumns = await _rackColumnService.GetAllRackColumnsAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest(new { message = "Current session has no branch assigned." });
+                }
+
+                var rackColumns = await _rackColumnService.GetAllRackColumnsAsync(branchId);
                 return Ok(rackColumns);
             }
             catch (Exception ex)

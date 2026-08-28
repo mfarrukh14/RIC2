@@ -40,6 +40,11 @@ namespace InventoryManagement.Api.Models
         public DateTime? ModifiedOn { get; set; }
     }
 
+    public class AssetAllocationFilterRequest : PagedRequest
+    {
+        public string? SearchTerm { get; set; }
+    }
+
     public class AssetAllocationCreateRequest
     {
         public string? Remarks { get; set; }

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import contingentBillsApi from '../services/contingentBillsApi';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const ContingentBillsPage = () => {
-  const [bills, setBills] = useState([]);
-  const [filteredBills, setFilteredBills] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
 
@@ -60,35 +58,40 @@ const ContingentBillsPage = () => {
     date: ''
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('Pending');
+  const [submittedFilters, setSubmittedFilters] = useState({
+    budgetSetupId: '',
+    vendorId: '',
+    financialYearId: '',
+    poType: '',
+    status: '',
+    dateStart: '',
+    dateEnd: ''
+  });
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await contingentBillsApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: bills,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error,
+    reload: reloadBills,
+  } = usePagedList(fetchPage, { ...submittedFilters, searchTerm }, { initialPageSize: 10 });
 
   useEffect(() => {
-    if (!showForm) {
-      fetchBills();
-    }
     fetchLookupData();
-  }, [showForm]);
-
-  useEffect(() => {
-    filterBills();
-  }, [bills, searchTerm]);
-
-  const fetchBills = async () => {
-    try {
-      setLoading(true);
-      const data = await contingentBillsApi.getAll(filters);
-      setBills(data);
-      setFilteredBills(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching bills:', err);
-      setError('Failed to fetch contingent bills. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   const fetchLookupData = async () => {
     try {
@@ -97,19 +100,6 @@ const ContingentBillsPage = () => {
     } catch (err) {
       console.error('Error fetching lookup data:', err);
     }
-  };
-
-  const filterBills = () => {
-    let filtered = [...bills];
-
-    if (searchTerm) {
-      filtered = filtered.filter(bill =>
-        bill.billNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        bill.vendorName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredBills(filtered);
   };
 
   const handleFilterChange = (e) => {
@@ -170,10 +160,10 @@ const ContingentBillsPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
-      setLoading(true);
-      
+      setFormLoading(true);
+
       const submitData = {
         financialYearId: parseInt(formData.financialYearId),
         purchaseOrderTypeId: parseInt(formData.poType),
@@ -213,13 +203,13 @@ const ContingentBillsPage = () => {
       }
 
       setShowForm(false);
-      await fetchBills();
-      setError(null);
+      await reloadBills();
+      setFormError(null);
     } catch (err) {
       console.error('Error saving bill:', err);
-      setError('Failed to save contingent bill. Please try again.');
+      setFormError('Failed to save contingent bill. Please try again.');
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   };
 
@@ -229,20 +219,16 @@ const ContingentBillsPage = () => {
     }
 
     try {
-      setLoading(true);
       await contingentBillsApi.delete(id);
-      await fetchBills();
-      setError(null);
+      await reloadBills();
     } catch (err) {
       console.error('Error deleting bill:', err);
-      setError('Failed to delete contingent bill. Please try again.');
-    } finally {
-      setLoading(false);
+      alert('Failed to delete contingent bill. Please try again.');
     }
   };
 
   const handleSearch = () => {
-    fetchBills();
+    setSubmittedFilters({ ...filters });
   };
 
   // If showing form, render the form page
@@ -255,9 +241,9 @@ const ContingentBillsPage = () => {
           </h1>
         </div>
 
-        {error && (
+        {formError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-            {error}
+            {formError}
           </div>
         )}
 
@@ -774,10 +760,10 @@ const ContingentBillsPage = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={formLoading}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
               >
-                {loading ? 'Saving...' : 'Submit'}
+                {formLoading ? 'Saving...' : 'Submit'}
               </button>
             </div>
           </form>
@@ -812,7 +798,7 @@ const ContingentBillsPage = () => {
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-          {error}
+          Failed to fetch contingent bills. Please try again.
         </div>
       )}
 
@@ -975,22 +961,7 @@ const ContingentBillsPage = () => {
       </div>
 
       {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
+      <div className="mb-4 flex justify-end items-center">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-700">Search:</span>
           <input
@@ -1044,14 +1015,14 @@ const ContingentBillsPage = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : filteredBills.length === 0 ? (
+              ) : bills.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="px-6 py-8 text-center">
                     <div className="text-gray-500 mb-2">No data available in table</div>
                   </td>
                 </tr>
               ) : (
-                filteredBills.slice(0, entriesPerPage).map((bill) => (
+                bills.map((bill) => (
                   <tr key={bill.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {bill.billNo || '-'}
@@ -1094,10 +1065,13 @@ const ContingentBillsPage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing {filteredBills.length > 0 ? '0' : '0'} to {filteredBills.length > 0 ? '0' : '0'} of {filteredBills.length > 0 ? '0' : '0'} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

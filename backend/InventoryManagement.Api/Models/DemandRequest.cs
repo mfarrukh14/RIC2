@@ -11,6 +11,16 @@ namespace InventoryManagement.Api.Models
         public int? RequestedStoreId { get; set; }
         public int? StockTypeId { get; set; }
         public string? Search { get; set; }
+
+        // Comma-separated list of DemandRequestStatuses.Name values (e.g. "Approved,Partial Issued").
+        // Lets each Supply Chain tab (Pending/Approved/Receive Stock/Received Stock Status) filter
+        // server-side instead of fetching every demand request and filtering client-side - with
+        // 58,000+ live rows in DemandRequests, doing that filtering after the fetch meant every tab
+        // loaded the entire table on every visit.
+        public string? Statuses { get; set; }
+
+        public int PageNumber { get; set; } = 1;
+        public int PageSize { get; set; } = 5;
     }
 
     public class DemandRequestSummary
@@ -82,8 +92,13 @@ namespace InventoryManagement.Api.Models
         public int? IssuedQuantity { get; set; }
         public int? IssuingQuantity { get; set; }
         public int? RemainingQuantity { get; set; }
-        public int AvailableQuantityInRequestingStore { get; set; }
-        public int AvailableQuantityInRequestedStore { get; set; }
+        // Pharmacy.PharmacyMedicinesStocks.TotalItemsInStock is decimal (some real stock
+        // rows carry fractional quantities), not int - GetInt32 on it threw
+        // InvalidCastException and broke the entire demand flow (place/approve/dispatch/
+        // receive all read through GetByIdAsync). Same class of fix already applied to
+        // Stock.TotalItems.
+        public decimal AvailableQuantityInRequestingStore { get; set; }
+        public decimal AvailableQuantityInRequestedStore { get; set; }
     }
 
     public class DemandRequestCreateRequest
@@ -176,6 +191,8 @@ namespace InventoryManagement.Api.Models
         // Null/0 means this is a new item line being added to the demand.
         public int? Id { get; set; }
         public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int RequestedQuantity { get; set; }
         public int ApprovedQuantity { get; set; }
         public string? Remarks { get; set; }

@@ -79,18 +79,24 @@ ORDER BY Name;";
             return null;
         }
 
-        // Sourced from Inv.Items/Inv.Stocks - the same "Add Items" master and stock ledger
-        // used everywhere else in this app - filtered to active items for the given
-        // branch, with live per-store on-hand quantity. Returns the full active list (no
-        // text filter) since the frontend renders this as a plain dropdown, not a search box.
+        // Sourced from Inv.Items/Pharmacy.PharmacyMedicinesStocks - the same "Add Items"
+        // master and live stock ledger used everywhere else in this app (see
+        // Stock_Procedures.sql header for why it's Pharmacy.PharmacyMedicinesStocks and not
+        // Inv.Stocks) - filtered to active items for the given branch, with live per-store
+        // on-hand quantity. Both callers (RetailPharmacyPage dispense picker,
+        // ItemWiseSalePage report filter) are outbound/consuming contexts, so items with no
+        // stock at this store are excluded rather than just shown at 0 - there is nothing to
+        // dispense/sell from an empty shelf. Returns the full list (no text filter) since the
+        // frontend renders this as a plain dropdown, not a search box.
         public async Task<IReadOnlyList<PharmacyItemSearchResult>> GetActiveItemsAsync(int branchId, int storeId)
         {
             var results = new List<PharmacyItemSearchResult>();
             const string sql = @"
 SELECT i.Id, i.Name, CAST(COALESCE(i.SalePrice, i.RetailPrice, 0) AS DECIMAL(18,2)) AS UnitPrice,
-    CAST(ISNULL((SELECT SUM(s.TotalItems) FROM Inv.Stocks s WHERE s.ItemId = i.Id AND s.StoreId = @StoreId AND s.IsActive = 1), 0) AS DECIMAL(18,2)) AS StoreStockQty
+    CAST(ISNULL((SELECT SUM(s.TotalItemsInStock) FROM Pharmacy.PharmacyMedicinesStocks s WHERE s.ItemId = i.Id AND s.StoreId = @StoreId), 0) AS DECIMAL(18,2)) AS StoreStockQty
 FROM Inv.Items i
 WHERE i.BranchId = @BranchId AND i.IsActive = 1
+    AND ISNULL((SELECT SUM(s.TotalItemsInStock) FROM Pharmacy.PharmacyMedicinesStocks s WHERE s.ItemId = i.Id AND s.StoreId = @StoreId), 0) > 0
 ORDER BY i.Name;";
 
             using var connection = new SqlConnection(_connectionString);
@@ -267,10 +273,10 @@ WHERE ID = @Id;";
         }
 
         // Deducts stock for an ad-hoc "general item" (Inv.Items) dispense against
-        // Inv.Stocks - the same stock ledger Demand Requests/GRN/etc. use, keeping this
-        // number consistent with what the rest of the app shows for that store. This is a
-        // single-row ledger (no per-batch split like PharmacyMedicinesStocks), matching how
-        // Inv.Stocks already works throughout the app.
+        // Pharmacy.PharmacyMedicinesStocks - the same live stock ledger Demand Requests/
+        // GRN/etc. use (see Stock_Procedures.sql header for why it's not Inv.Stocks),
+        // keeping this number consistent with what the rest of the app shows for that
+        // store.
         private static async Task<string> DeductInvStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int quantity)
         {
             string itemName;
@@ -281,7 +287,7 @@ WHERE ID = @Id;";
                 itemName = (await nameCommand.ExecuteScalarAsync()) as string ?? "Unassigned Item";
             }
 
-            const string selectSql = "SELECT ISNULL(TotalItems, 0) FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;";
+            const string selectSql = "SELECT ISNULL(TotalItemsInStock, 0) FROM Pharmacy.PharmacyMedicinesStocks WHERE ItemId = @ItemId AND StoreId = @StoreId;";
             decimal available;
             using (var selectCommand = new SqlCommand(selectSql, connection, transaction))
             {
@@ -297,9 +303,9 @@ WHERE ID = @Id;";
             }
 
             const string updateSql = @"
-UPDATE Inv.Stocks
-SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE()
-WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;";
+UPDATE Pharmacy.PharmacyMedicinesStocks
+SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE()
+WHERE ItemId = @ItemId AND StoreId = @StoreId;";
             using var updateCommand = new SqlCommand(updateSql, connection, transaction);
             updateCommand.Parameters.AddWithValue("@Quantity", quantity);
             updateCommand.Parameters.AddWithValue("@ItemId", itemId);
@@ -379,7 +385,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     if (item.ItemId.HasValue)
                     {
                         // Ad-hoc general item (Add Items / Inv.Items) - TypeBit 15, matches
-                        // the legacy "generic Item" domain, deducted from Inv.Stocks.
+                        // the legacy "generic Item" domain, deducted from the live stock ledger.
                         await DeductInvStockAsync(connection, (SqlTransaction)transaction, item.ItemId.Value, request.StoreId, item.Quantity);
 
                         const string insertItemDetailSql = @"
@@ -918,17 +924,19 @@ ORDER BY d.Id;";
             return results;
         }
 
-        // Credits refunded quantity back to Inv.Stocks - same upsert idiom as
-        // AddStockAsync in DemandRequestService.
+        // Credits refunded quantity back to Pharmacy.PharmacyMedicinesStocks (the live
+        // ledger - see Stock_Procedures.sql header for why it's not Inv.Stocks) - same
+        // upsert idiom as AddStockAsync in DemandRequestService. No BranchId column on this
+        // table; @branchId is accepted for call-site compatibility but not written anywhere.
         private static async Task AddInvStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int quantity)
         {
             const string upsertSql = @"
-IF EXISTS (SELECT 1 FROM Inv.Stocks WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1)
-    UPDATE Inv.Stocks SET TotalItems = TotalItems + @Quantity, ModifiedOn = GETDATE()
-    WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;
+IF EXISTS (SELECT 1 FROM Pharmacy.PharmacyMedicinesStocks WHERE ItemId = @ItemId AND StoreId = @StoreId)
+    UPDATE Pharmacy.PharmacyMedicinesStocks SET TotalItemsInStock = TotalItemsInStock + @Quantity, ModifiedOn = GETDATE()
+    WHERE ItemId = @ItemId AND StoreId = @StoreId;
 ELSE
-    INSERT INTO Inv.Stocks (ItemId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
-    VALUES (@ItemId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());";
+    INSERT INTO Pharmacy.PharmacyMedicinesStocks (ItemId, TotalItemsInStock, MinimumPanicLevel, TotalItemsInTransition, TypeBit, StoreId, CreatedBy, CreatedOn)
+    VALUES (@ItemId, @Quantity, 0, 0, 15, @StoreId, 1, GETDATE());";
             using var command = new SqlCommand(upsertSql, connection, transaction);
             command.Parameters.AddWithValue("@ItemId", itemId);
             command.Parameters.AddWithValue("@StoreId", storeId);
@@ -1413,13 +1421,13 @@ ORDER BY SUM(d.Quantity) DESC;";
             }
 
             const string topStockSql = @"
-SELECT TOP 10 i.Name, SUM(s.TotalItems) AS Quantity
-FROM Inv.Stocks s
+SELECT TOP 10 i.Name, SUM(s.TotalItemsInStock) AS Quantity
+FROM Pharmacy.PharmacyMedicinesStocks s
 INNER JOIN Inv.Items i ON i.Id = s.ItemId
-WHERE i.BranchId = @BranchId AND s.IsActive = 1
+WHERE i.BranchId = @BranchId
   AND (@StoreId IS NULL OR s.StoreId = @StoreId)
 GROUP BY i.Name
-ORDER BY SUM(s.TotalItems) DESC;";
+ORDER BY SUM(s.TotalItemsInStock) DESC;";
             using (var command = new SqlCommand(topStockSql, connection))
             {
                 command.Parameters.AddWithValue("@BranchId", branchId);

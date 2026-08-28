@@ -5,6 +5,7 @@ import demandWiseValueApi from '../services/demandWiseValueApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
@@ -71,7 +72,7 @@ const DemandWiseValuePage = () => {
         const [branches, stores, items] = await Promise.all([
           branchApi.getAll(),
           getAllStores(),
-          itemApi.getAll()
+          itemApi.getAllUnpaginated()
         ]);
 
         const defaultStore = stores.find((store) => store.storeName === 'Academic Affair Store') || stores[0];
@@ -174,10 +175,6 @@ const DemandWiseValuePage = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [entriesPerPage, records]);
-
-  const totalPages = Math.max(1, Math.ceil(records.length / entriesPerPage));
-  const showingFrom = records.length === 0 ? 0 : (currentPage - 1) * entriesPerPage + 1;
-  const showingTo = Math.min(currentPage * entriesPerPage, records.length);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -284,21 +281,7 @@ const DemandWiseValuePage = () => {
         </section>
 
         <section className="rounded-md border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <span>Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(event) => setEntriesPerPage(Number(event.target.value))}
-                className="rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-indigo-400"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>entries</span>
-            </div>
-
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-end">
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <label htmlFor="demand-wise-value-search">Search:</label>
               <input
@@ -376,27 +359,13 @@ const DemandWiseValuePage = () => {
             </table>
           </div>
 
-          <div className="flex items-center justify-between px-5 py-4 text-sm text-slate-600">
-            <div>Showing {showingFrom} to {showingTo} of {records.length} entries</div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-                className="rounded border border-slate-200 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                disabled={currentPage === totalPages}
-                className="rounded border border-slate-200 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                ›
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={entriesPerPage}
+            totalCount={records.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setEntriesPerPage}
+          />
         </section>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import Pagination from './Pagination';
 
 const BrandList = ({ onEdit, onAdd }) => {
   const [brands, setBrands] = useState([]);
@@ -16,7 +17,7 @@ const BrandList = ({ onEdit, onAdd }) => {
   const fetchBrands = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5100/api/brands');
+      const response = await fetch('http://10.10.10.35:5100/api/brands');
       if (!response.ok) {
         throw new Error('Failed to fetch brands');
       }
@@ -31,7 +32,7 @@ const BrandList = ({ onEdit, onAdd }) => {
 
   const deleteBrand = async (id, force) => {
     const response = await fetch(
-      `http://localhost:5100/api/brands/${id}?modifiedById=1&force=${force}`,
+      `http://10.10.10.35:5100/api/brands/${id}?modifiedById=1&force=${force}`,
       { method: 'DELETE' }
     );
 
@@ -70,19 +71,13 @@ const BrandList = ({ onEdit, onAdd }) => {
   );
 
   const totalEntries = filteredBrands.length;
-  const totalPages = Math.ceil(totalEntries / showEntries);
   const startIndex = (currentPage - 1) * showEntries;
   const endIndex = Math.min(startIndex + showEntries, totalEntries);
   const currentBrands = filteredBrands.slice(startIndex, endIndex);
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  const handleEntriesChange = (e) => {
-    setShowEntries(Number(e.target.value));
+  useEffect(() => {
     setCurrentPage(1);
-  };
+  }, [searchTerm, showEntries]);
 
   if (loading) {
     return (
@@ -123,24 +118,7 @@ const BrandList = ({ onEdit, onAdd }) => {
 
       {/* Controls */}
       <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-700">Show</label>
-              <select
-                value={showEntries}
-                onChange={handleEntriesChange}
-                className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <label className="text-sm font-medium text-gray-700">entries</label>
-            </div>
-          </div>
-          
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end space-y-3 sm:space-y-0">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
@@ -217,67 +195,13 @@ const BrandList = ({ onEdit, onAdd }) => {
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="text-sm text-gray-700">
-            Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
-          </div>
-          
-          {totalPages > 1 && (
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              
-              {[...Array(totalPages)].map((_, i) => {
-                const page = i + 1;
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`px-3 py-1 text-sm border rounded ${
-                        currentPage === page
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                } else if (
-                  page === currentPage - 2 ||
-                  page === currentPage + 2
-                ) {
-                  return (
-                    <span key={page} className="px-2 text-gray-500">
-                      ...
-                    </span>
-                  );
-                }
-                return null;
-              })}
-              
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={showEntries}
+        totalCount={totalEntries}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setShowEntries}
+      />
     </div>
   );
 };

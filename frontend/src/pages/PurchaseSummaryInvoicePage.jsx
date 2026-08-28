@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import purchaseSummaryInvoiceApi from '../services/purchaseSummaryInvoiceApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const PurchaseSummaryInvoicePage = () => {
   const { session } = useSession();
-  const [records, setRecords] = useState([]);
-  const [filteredRecords, setFilteredRecords] = useState([]);
   const [totals, setTotals] = useState({
     totalAmount: 0,
     totalAdvanceTax: 0,
     totalDiscount: 0,
     grandTotal: 0
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const [lookupData, setLookupData] = useState({
     branches: [],
     stores: [],
@@ -36,8 +35,27 @@ const PurchaseSummaryInvoicePage = () => {
     invoiceType: ''
   });
 
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  // The filters actually sent to the server - only updated on "Generate Report".
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  // Totals cover the full filtered scope, not just the current page - the
+  // fetcher below stashes them into `totals` as a side effect of each fetch.
+  const fetchPage = useCallback(async (params) => {
+    const data = await purchaseSummaryInvoiceApi.getAll(params);
+    setTotals(data.totals || { totalAmount: 0, totalAdvanceTax: 0, totalDiscount: 0, grandTotal: 0 });
+    return { items: data.records || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: records,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(fetchPage, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     initializePage();
@@ -50,46 +68,22 @@ const PurchaseSummaryInvoicePage = () => {
     }
   }, [session?.branchId]);
 
-  useEffect(() => {
-    filterRecords();
-  }, [records, searchTerm]);
-
   const initializePage = async () => {
     try {
-      setLoading(true);
-      const today = new Date();
-      const start = new Date(today.setHours(0, 0, 0, 0));
-      const end = new Date(today.setHours(23, 59, 59, 999));
-      
-      setFilters(prev => ({
-        ...prev,
-        inventoryDateStart: start.toISOString().slice(0, 16),
-        inventoryDateEnd: end.toISOString().slice(0, 16)
-      }));
+      // Inventory Date Range is left blank by default (matches Invoice Date
+      // Range) - it filters on the linked Purchase Order's CreatedOn, and a
+      // GRN with no linked PO has no CreatedOn to compare at all, so
+      // defaulting this to "today" hid virtually all real data (any GRN not
+      // literally dated today, plus every migrated row with no PO link)
+      // behind an empty-looking report the moment Generate was clicked.
 
       // Fetch lookup data
       const lookup = await purchaseSummaryInvoiceApi.getLookupData();
       setLookupData(lookup);
-      
-      setLoading(false);
     } catch (err) {
       console.error('Error initializing page:', err);
       setError('Failed to initialize page. Please try again.');
-      setLoading(false);
     }
-  };
-
-  const filterRecords = () => {
-    let filtered = [...records];
-
-    if (searchTerm) {
-      filtered = filtered.filter(record =>
-        record.invoiceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.vendorName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredRecords(filtered);
   };
 
   const handleFilterChange = (e) => {
@@ -100,40 +94,22 @@ const PurchaseSummaryInvoicePage = () => {
     }));
   };
 
-  const handleGenerateReport = async () => {
-    try {
-      setLoading(true);
-      
-      // Build filter object
-      const filterParams = {
-        branchId: filters.branchId || null,
-        storeId: filters.storeId || null,
-        inventoryDateStart: filters.inventoryDateStart || null,
-        inventoryDateEnd: filters.inventoryDateEnd || null,
-        vendorId: filters.vendorId || null,
-        invoiceDateStart: filters.invoiceDateStart || null,
-        invoiceDateEnd: filters.invoiceDateEnd || null,
-        invoiceNo: filters.invoiceNo || null,
-        reportType: filters.reportType,
-        invoiceType: filters.invoiceType || null
-      };
-
-      const data = await purchaseSummaryInvoiceApi.getAll(filterParams);
-      setRecords(data.records || []);
-      setFilteredRecords(data.records || []);
-      setTotals(data.totals || {
-        totalAmount: 0,
-        totalAdvanceTax: 0,
-        totalDiscount: 0,
-        grandTotal: 0
-      });
-      setError(null);
-    } catch (err) {
-      console.error('Error generating report:', err);
-      setError('Failed to generate report. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleGenerateReport = () => {
+    const filterParams = {
+      branchId: filters.branchId || null,
+      storeId: filters.storeId || null,
+      inventoryDateStart: filters.inventoryDateStart || null,
+      inventoryDateEnd: filters.inventoryDateEnd || null,
+      vendorId: filters.vendorId || null,
+      invoiceDateStart: filters.invoiceDateStart || null,
+      invoiceDateEnd: filters.invoiceDateEnd || null,
+      invoiceNo: filters.invoiceNo || null,
+      reportType: filters.reportType,
+      invoiceType: filters.invoiceType || null
+    };
+    setError(null);
+    setSubmittedFilters(filterParams);
+    runSearch(filterParams);
   };
 
   const formatDate = (dateString) => {
@@ -184,7 +160,7 @@ const PurchaseSummaryInvoicePage = () => {
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">ED OPD Store</option>
+              <option value="">All Stores</option>
               {lookupData.stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -294,8 +270,8 @@ const PurchaseSummaryInvoicePage = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="Both">Both</option>
-              <option value="Purchase">Purchase</option>
-              <option value="Return">Return</option>
+              <option value="PurchaseOrder">On Purchase Order</option>
+              <option value="Inventory">On Inventory</option>
             </select>
           </div>
 
@@ -329,34 +305,6 @@ const PurchaseSummaryInvoicePage = () => {
         </div>
       </div>
 
-      {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Search:</span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -375,16 +323,16 @@ const PurchaseSummaryInvoicePage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredRecords.length === 0 ? (
+              {records.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                filteredRecords.slice(0, entriesPerPage).map((record, index) => (
+                records.map((record, index) => (
                   <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{(currentPage - 1) * entriesPerPage + index + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(record.invoiceDate)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.invoiceNo}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(record.invoiceDate)}</td>
@@ -398,7 +346,7 @@ const PurchaseSummaryInvoicePage = () => {
               )}
             </tbody>
             {/* Totals Footer */}
-            {filteredRecords.length > 0 && (
+            {records.length > 0 && (
               <tfoot className="bg-gray-100">
                 <tr className="font-semibold">
                   <td className="px-6 py-3 text-sm text-gray-900" colSpan="2">Sr.</td>
@@ -416,10 +364,13 @@ const PurchaseSummaryInvoicePage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing {filteredRecords.length > 0 ? 1 : 0} to {Math.min(entriesPerPage, filteredRecords.length)} of {filteredRecords.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

@@ -4,14 +4,19 @@ import {
   EyeIcon,
   InformationCircleIcon,
   PlusIcon,
+  PrinterIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import demandRequestApi from '../services/demandRequestApi';
 import { getAllStores } from '../services/storeApi';
 import stockTypesApi from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
+import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
 
 const createDefaultDateRange = () => {
   const now = new Date();
@@ -65,6 +70,8 @@ function statusClasses(status) {
       return 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200';
     case 'issued':
       return 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200';
+    case 'rejected':
+      return 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200';
     default:
       return 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200';
   }
@@ -74,6 +81,7 @@ const emptyForm = () => {
   const defaults = createDefaultDateRange();
   return {
     branchId: '',
+    requestingStoreId: '',
     requestedStoreId: '',
     stockTypeId: '',
     dateFrom: defaults.dateFrom,
@@ -94,9 +102,12 @@ const PlaceDemandPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [formError, setFormError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -108,10 +119,39 @@ const PlaceDemandPage = () => {
   });
   const [filters, setFilters] = useState(createDefaultDateRange());
   const [formData, setFormData] = useState(emptyForm());
+  const [itemQuantities, setItemQuantities] = useState({});
 
   useEffect(() => {
     loadLookups();
   }, []);
+
+  // Refresh the item picker's "in stock at Requested Store" quantities whenever the
+  // create form's Requested Store changes, so the dropdown always reflects that store.
+  useEffect(() => {
+    if (!showCreateModal || !formData.requestedStoreId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+
+    stockApi.getQuantitiesByStore(formData.requestedStoreId)
+      .then((quantities) => {
+        if (!cancelled) {
+          setItemQuantities(quantities);
+        }
+      })
+      .catch((quantitiesError) => {
+        console.error('Error loading item quantities for store:', quantitiesError);
+        if (!cancelled) {
+          setItemQuantities({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showCreateModal, formData.requestedStoreId]);
 
   // "Branch Request By" (filter) and "Branch Request To" (create form) are both
   // always scoped to the logged-in user's own branch, same as everywhere else in
@@ -126,18 +166,18 @@ const PlaceDemandPage = () => {
 
   useEffect(() => {
     loadRequests();
-  }, [filters.dateFrom, filters.dateTo, filters.branchId, filters.requestedStoreId, filters.stockTypeId]);
+  }, [filters.dateFrom, filters.dateTo, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm, entriesPerPage, currentPage]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, entriesPerPage, requests]);
+  }, [searchTerm, entriesPerPage, filters.dateFrom, filters.dateTo, filters.branchId, filters.requestingStoreId, filters.stockTypeId]);
 
   const loadLookups = async () => {
     try {
       const [stores, stockTypes, items] = await Promise.all([
         getAllStores(),
         stockTypesApi.getAllStockTypes(),
-        itemApi.getAll()
+        itemApi.getAllWithMedicines()
       ]);
 
       setLookups({
@@ -156,14 +196,18 @@ const PlaceDemandPage = () => {
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll({
+      const response = await demandRequestApi.getAll({
         dateFrom: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : undefined,
         dateTo: filters.dateTo ? new Date(filters.dateTo).toISOString() : undefined,
         branchId: filters.branchId || undefined,
-        requestedStoreId: filters.requestedStoreId || undefined,
-        stockTypeId: filters.stockTypeId || undefined
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: currentPage,
+        pageSize: entriesPerPage
       });
-      setRequests(data);
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading demand requests:', requestError);
       setError('Failed to load demand requests.');
@@ -172,25 +216,9 @@ const PlaceDemandPage = () => {
     }
   };
 
-  const filteredRequests = requests.filter((request) => {
-    if (!searchTerm.trim()) {
-      return true;
-    }
-
-    const search = searchTerm.trim().toLowerCase();
-    return [
-      request.drNo,
-      request.indentNo,
-      request.requestingBranchName,
-      request.requestedStoreName,
-      request.stockTypeName,
-      request.status
-    ].some((value) => (value || '').toLowerCase().includes(search));
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pagedRequests = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pagedRequests = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -213,7 +241,7 @@ const PlaceDemandPage = () => {
       const nextItems = [...current.items];
       nextItems[index] = {
         ...nextItems[index],
-        [field]: value
+        ...(field === 'itemId' ? parseProductOptionValue(value) : { [field]: value })
       };
 
       return {
@@ -223,18 +251,21 @@ const PlaceDemandPage = () => {
     });
   };
 
-  const resetForm = () => {
-    setFormData({ ...emptyForm(), branchId: session?.branchId || '' });
-  };
-
+  // Only the item picker and quantity are per-demand; the store/stock type picked for one
+  // demand carries over to the next so the user isn't asked to re-select them every time.
   const openCreateModal = () => {
-    resetForm();
+    setFormData((current) => ({
+      ...current,
+      remarks: '',
+      items: [{ itemId: '', medicineId: '', subServiceId: '', requestedQuantity: '' }]
+    }));
     setShowCreateModal(true);
   };
 
   const closeCreateModal = () => {
     setShowCreateModal(false);
     setSubmitting(false);
+    setFormError('');
   };
 
   const openDetailsModal = async (requestId) => {
@@ -258,13 +289,140 @@ const PlaceDemandPage = () => {
     setSelectedRequest(null);
   };
 
+  // "Print" - the full "Demand Request" report: RIC letterhead, header grid, items
+  // table with Requested/Approved/Issued/Remaining quantities, notes, and signature block.
+  const handlePrintDemandRequest = async (request) => {
+    let details;
+    try {
+      details = await demandRequestApi.getById(request.demandRequestId);
+    } catch (printError) {
+      console.error('Error loading demand details for print:', printError);
+      setError('Failed to load demand details for printing.');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Ph: 051928111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Demand Request', pageWidth / 2, 36, { align: 'center' });
+
+    const dateOnly = (value) => (value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-');
+
+    const headerRows = [
+      ['DR-Number', details.drNo || '-', 'Stock Type', details.stockTypeName || 'All'],
+      ['Requested Date', dateOnly(details.createdOn), 'Requested By', details.requestedByName || '-'],
+      ['Request Status', details.status || '-', 'From Store', details.requestingStoreName || '-'],
+      ['To Store', details.requestedStoreName || '-', 'Approved Date', dateOnly(details.approvedDate)],
+      ['Issued Date', dateOnly(details.issuedDate), '', '']
+    ];
+
+    autoTable(doc, {
+      startY: 42,
+      body: headerRows,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    const itemsBody = details.items.map((item, index) => [
+      index + 1,
+      item.itemName || 'Unassigned Item',
+      item.requestedQuantity ?? 0,
+      item.approvedQuantity ?? '-',
+      item.issuedQuantity ?? '-',
+      item.remainingQuantity ?? '-'
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Items', 'Requested Qty', 'Approved Qty', 'Issued Qty', 'Remaining Qty']],
+      body: itemsBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' }
+      }
+    });
+
+    let y = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Demand Notes:', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(details.remarks || '-', 40, y);
+
+    y += 12;
+    autoTable(doc, {
+      startY: y,
+      head: [['Sign/Stamp', 'Name', 'Designation', 'Department', 'Date']],
+      body: [['', '', '', '', '']],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 6, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' }
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('This is a computer generated document, therefore signatures are not required.', pageWidth / 2, y, { align: 'center' });
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dateStr}   ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+
+    doc.save(`DemandRequest_${details.drNo}.pdf`);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const validItems = formData.items.filter((item) => item.itemId && Number(item.requestedQuantity) > 0);
+    const validItems = formData.items.filter((item) => (item.itemId || item.medicineId || item.subServiceId) && Number(item.requestedQuantity) > 0);
 
-    if (!formData.branchId || !formData.requestedStoreId || !formData.dateFrom || !formData.dateTo) {
+    if (!formData.branchId || !formData.requestingStoreId || !formData.requestedStoreId || !formData.dateFrom || !formData.dateTo) {
       alert('Please complete the required request fields.');
+      return;
+    }
+
+    if (formData.requestingStoreId === formData.requestedStoreId) {
+      alert('Requesting Store and Requested Store must be different.');
       return;
     }
 
@@ -274,33 +432,58 @@ const PlaceDemandPage = () => {
     }
 
     setSubmitting(true);
+    setSuccessMessage('');
+    setFormError('');
 
     try {
-      await demandRequestApi.create({
+      const created = await demandRequestApi.create({
         branchId: Number(formData.branchId),
+        requestingStoreId: Number(formData.requestingStoreId),
         requestedStoreId: Number(formData.requestedStoreId),
         stockTypeId: formData.stockTypeId ? Number(formData.stockTypeId) : null,
         dateFrom: new Date(formData.dateFrom).toISOString(),
         dateTo: new Date(formData.dateTo).toISOString(),
         remarks: formData.remarks || null,
         items: validItems.map((item) => ({
-          itemId: Number(item.itemId),
+          itemId: item.itemId ? Number(item.itemId) : null,
+          medicineId: item.medicineId ? Number(item.medicineId) : null,
+          subServiceId: item.subServiceId ? Number(item.subServiceId) : null,
           requestedQuantity: Number(item.requestedQuantity),
           stockTypeId: formData.stockTypeId ? Number(formData.stockTypeId) : null
         }))
       });
 
+      setSuccessMessage(`Demand request ${created.drNo} created successfully. It may not appear below if it doesn't match the current filters.`);
       closeCreateModal();
       await loadRequests();
     } catch (submitError) {
       console.error('Error creating demand request:', submitError);
-      alert(submitError.response?.data?.message || 'Failed to create demand request.');
+      setFormError(submitError.response?.data?.message || 'Failed to create demand request.');
       setSubmitting(false);
     }
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        dateFrom: filters.dateFrom ? new Date(filters.dateFrom).toISOString() : undefined,
+        dateTo: filters.dateTo ? new Date(filters.dateTo).toISOString() : undefined,
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting demand requests:', exportError);
+      setError('Failed to export demand requests.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       request.drNo,
       request.indentNo || '',
       request.stockTypeName || '',
@@ -327,8 +510,8 @@ const PlaceDemandPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -368,8 +551,8 @@ const PlaceDemandPage = () => {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Store Request By</label>
               <select
-                name="requestedStoreId"
-                value={filters.requestedStoreId || ''}
+                name="requestingStoreId"
+                value={filters.requestingStoreId || ''}
                 onChange={handleFilterChange}
                 className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
               >
@@ -400,6 +583,12 @@ const PlaceDemandPage = () => {
             </div>
           </div>
         </section>
+
+        {successMessage && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        )}
 
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -435,7 +624,7 @@ const PlaceDemandPage = () => {
                 onChange={(event) => setEntriesPerPage(Number(event.target.value))}
                 className="rounded-md border border-slate-200 px-2 py-1 text-sm"
               >
-                {[10, 25, 50].map((size) => (
+                {[5, 10, 25, 50].map((size) => (
                   <option key={size} value={size}>
                     {size}
                   </option>
@@ -490,7 +679,7 @@ const PlaceDemandPage = () => {
                             <div className="text-xs text-slate-500">{request.indentNo || '-'}</div>
                           </td>
                           <td className="border-b border-slate-100 px-4 py-4 align-top">{request.stockTypeName || 'All'}</td>
-                          <td className="border-b border-slate-100 px-4 py-4 align-top">{request.requestingBranchName}</td>
+                          <td className="border-b border-slate-100 px-4 py-4 align-top">{request.requestingStoreName}</td>
                           <td className="border-b border-slate-100 px-4 py-4 align-top">{request.requestedStoreName}</td>
                           <td className="border-b border-slate-100 px-4 py-4 align-top">
                             <div>{request.itemsCount} item{request.itemsCount === 1 ? '' : 's'}</div>
@@ -506,14 +695,25 @@ const PlaceDemandPage = () => {
                             </span>
                           </td>
                           <td className="border-b border-slate-100 px-4 py-4 align-top">
-                            <button
-                              type="button"
-                              onClick={() => openDetailsModal(request.demandRequestId)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                              <EyeIcon className="h-4 w-4" />
-                              View
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openDetailsModal(request.demandRequestId)}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                              >
+                                <EyeIcon className="h-4 w-4" />
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePrintDemandRequest(request)}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
+                                title="Print"
+                              >
+                                <PrinterIcon className="h-4 w-4" />
+                                Print
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -524,7 +724,7 @@ const PlaceDemandPage = () => {
 
               <div className="flex flex-col gap-3 px-6 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
                 <div>
-                  Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries
+                  Showing {showingFrom} to {showingTo} of {totalCount} entries
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -561,8 +761,34 @@ const PlaceDemandPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="px-4 py-5 sm:px-6">
+              {formError && (
+                <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {formError}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-x-4 gap-y-6 lg:grid-cols-2">
                 <BranchField label="Branch Request To" />
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Requesting Store<span className="text-rose-500">*</span></label>
+                  <select
+                    name="requestingStoreId"
+                    value={formData.requestingStoreId}
+                    onChange={handleFormChange}
+                    className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
+                    required
+                  >
+                    <option value="">Select store</option>
+                    {lookups.stores
+                      .filter((store) => String(store.storeId) !== String(formData.requestedStoreId))
+                      .map((store) => (
+                        <option key={store.storeId} value={store.storeId}>
+                          {store.storeName}
+                        </option>
+                      ))}
+                  </select>
+                </div>
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Store Request To<span className="text-rose-500">*</span></label>
@@ -574,11 +800,13 @@ const PlaceDemandPage = () => {
                     required
                   >
                     <option value="">Select store</option>
-                    {lookups.stores.map((store) => (
-                      <option key={store.storeId} value={store.storeId}>
-                        {store.storeName}
-                      </option>
-                    ))}
+                    {lookups.stores
+                      .filter((store) => String(store.storeId) !== String(formData.requestingStoreId))
+                      .map((store) => (
+                        <option key={store.storeId} value={store.storeId}>
+                          {store.storeName}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -603,15 +831,21 @@ const PlaceDemandPage = () => {
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Item<span className="text-rose-500">*</span></label>
                   <select
-                    value={formData.items[0]?.itemId || ''}
+                    value={productOptionValue(formData.items[0] || {})}
                     onChange={(event) => handleItemChange(0, 'itemId', event.target.value)}
                     className="w-full rounded-md border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400"
                     required
                   >
                     <option value="">Search Item</option>
-                    {lookups.items.map((lookupItem) => (
-                      <option key={lookupItem.id} value={lookupItem.id}>
-                        {lookupItem.name}
+                    {lookups.items
+                      .filter((lookupItem) => {
+                        if (!formData.requestedStoreId || lookupItem.itemId == null) return true;
+                        return (itemQuantities[lookupItem.itemId] ?? 0) > 0;
+                      })
+                      .map((lookupItem) => (
+                      <option key={productOptionValue(lookupItem)} value={productOptionValue(lookupItem)}>
+                        {lookupItem.sourceType === 'Item' ? lookupItem.name : `${lookupItem.name} (${lookupItem.sourceType})`}
+                        {lookupItem.itemId != null ? ` - ${itemQuantities[lookupItem.itemId] ?? 0}` : ''}
                       </option>
                     ))}
                   </select>
@@ -682,7 +916,7 @@ const PlaceDemandPage = () => {
                     </div>
                     <div className="rounded-lg bg-slate-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">Requesting Store</div>
-                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.requestingBranchName}</div>
+                      <div className="mt-1 font-semibold text-slate-900">{selectedRequest.requestingStoreName}</div>
                     </div>
                     <div className="rounded-lg bg-slate-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">Requested Store</div>

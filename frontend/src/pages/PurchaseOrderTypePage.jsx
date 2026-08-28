@@ -9,6 +9,7 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import purchaseOrderTypeApi from '../services/purchaseOrderTypeApi';
+import Pagination from '../components/Pagination';
 
 function emptyForm() {
   return {
@@ -65,11 +66,8 @@ const PurchaseOrderTypePage = () => {
     setCurrentPage(1);
   }, [entriesPerPage, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredTypes.length / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
   const pageItems = filteredTypes.slice(startIndex, startIndex + entriesPerPage);
-  const showingFrom = filteredTypes.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredTypes.length);
 
   const handleOpenCreate = () => {
     setEditingType(null);
@@ -189,21 +187,7 @@ const PurchaseOrderTypePage = () => {
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <span>Show</span>
-                <select
-                  value={entriesPerPage}
-                  onChange={(event) => setEntriesPerPage(Number(event.target.value))}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-sm"
-                >
-                  {[10, 25, 50].map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
-                <span>entries</span>
-              </div>
-
+            <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-end">
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <span>Search:</span>
                 <input
@@ -285,28 +269,13 @@ const PurchaseOrderTypePage = () => {
                   </table>
                 </div>
 
-                <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                  <div>Showing {showingFrom} to {showingTo} of {filteredTypes.length} entries</div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      ‹
-                    </button>
-                    <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  pageSize={entriesPerPage}
+                  totalCount={filteredTypes.length}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setEntriesPerPage}
+                />
               </>
             )}
           </section>

@@ -22,7 +22,12 @@ namespace InventoryManagement.Api.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<VendorDto>>> GetVendors()
         {
-            var vendors = await _vendorService.GetAllVendorsAsync();
+            if (BranchId is not int branchId)
+            {
+                return BadRequest("Current session has no branch assigned.");
+            }
+
+            var vendors = await _vendorService.GetAllVendorsAsync(branchId);
             return Ok(vendors);
         }
 
@@ -50,7 +55,7 @@ namespace InventoryManagement.Api.Controllers
 
             try
             {
-                var vendor = await _vendorService.CreateVendorAsync(createVendorDto);
+                var vendor = await _vendorService.CreateVendorAsync(createVendorDto, BranchId);
                 return CreatedAtAction(nameof(GetVendor), new { id = vendor.Id }, vendor);
             }
             catch (InvalidOperationException ex)
@@ -74,7 +79,7 @@ namespace InventoryManagement.Api.Controllers
 
             try
             {
-                var vendor = await _vendorService.UpdateVendorAsync(id, updateVendorDto);
+                var vendor = await _vendorService.UpdateVendorAsync(id, updateVendorDto, BranchId);
                 if (vendor == null)
                     return NotFound($"Vendor with ID {id} not found");
 

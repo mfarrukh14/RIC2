@@ -8,6 +8,8 @@ import {
   Squares2X2Icon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import demandRequestApi from '../services/demandRequestApi';
 import { branchApi } from '../services/branchApi';
 import { getAllStores } from '../services/storeApi';
@@ -41,29 +43,19 @@ function statusClasses(status) {
   }
 }
 
-function itemEnteredBy(item) {
-  if (item.modifiedById) {
-    return `User #${item.modifiedById}`;
-  }
-
-  if (item.createdById) {
-    return `User #${item.createdById}`;
-  }
-
-  return 'System';
-}
-
 const ReceivedStockStatusPage = () => {
   const { session } = useSession();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [historyEntriesPerPage, setHistoryEntriesPerPage] = useState(10);
   const [historyPage, setHistoryPage] = useState(1);
@@ -86,7 +78,6 @@ const ReceivedStockStatusPage = () => {
 
   useEffect(() => {
     loadLookups();
-    loadRequests();
   }, []);
 
   // Branch filter is always scoped to the logged-in user's own branch.
@@ -116,8 +107,17 @@ const ReceivedStockStatusPage = () => {
     setError('');
 
     try {
-      const data = await demandRequestApi.getAll();
-      setRequests(data);
+      const response = await demandRequestApi.getAll({
+        statuses: 'Received',
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: currentPage,
+        pageSize: entriesPerPage
+      });
+      setRequests(response.items);
+      setTotalCount(response.totalCount);
     } catch (requestError) {
       console.error('Error loading received stock records:', requestError);
       setError('Failed to load received stock records.');
@@ -126,32 +126,17 @@ const ReceivedStockStatusPage = () => {
     }
   };
 
-  const filteredRequests = useMemo(() => {
-    const receivedOnly = requests.filter((request) => (request.status || '').toLowerCase() === 'received');
-
-    return receivedOnly.filter((request) => {
-      const matchesBranch = !filters.branchId || String(request.branchId) === String(filters.branchId);
-      const matchesStore = !filters.requestingStoreId || String(request.requestingStoreId) === String(filters.requestingStoreId);
-      const matchesStockType = !filters.stockTypeId || String(request.stockTypeId) === String(filters.stockTypeId);
-      const matchesSearch = !searchTerm.trim() || [
-        request.drNo,
-        request.indentNo,
-        request.requestedStoreName,
-        request.itemSummary,
-        request.status
-      ].some((value) => (value || '').toLowerCase().includes(searchTerm.trim().toLowerCase()));
-
-      return matchesBranch && matchesStore && matchesStockType && matchesSearch;
-    });
-  }, [filters.branchId, filters.requestingStoreId, filters.stockTypeId, requests, searchTerm]);
+  useEffect(() => {
+    loadRequests();
+  }, [entriesPerPage, currentPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [entriesPerPage, filters.branchId, filters.requestingStoreId, filters.stockTypeId, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / entriesPerPage));
+  const pageItems = requests;
+  const totalPages = Math.max(1, Math.ceil(totalCount / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredRequests.slice(startIndex, startIndex + entriesPerPage);
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -161,8 +146,26 @@ const ReceivedStockStatusPage = () => {
     }));
   };
 
-  const exportCsv = () => {
-    const rows = filteredRequests.map((request) => [
+  const exportCsv = async () => {
+    let allRequests;
+    try {
+      const response = await demandRequestApi.getAll({
+        statuses: 'Received',
+        branchId: filters.branchId || undefined,
+        requestingStoreId: filters.requestingStoreId || undefined,
+        stockTypeId: filters.stockTypeId || undefined,
+        search: searchTerm.trim() || undefined,
+        pageNumber: 1,
+        pageSize: Math.max(totalCount, 1)
+      });
+      allRequests = response.items;
+    } catch (exportError) {
+      console.error('Error exporting received stock records:', exportError);
+      setError('Failed to export received stock records.');
+      return;
+    }
+
+    const rows = allRequests.map((request) => [
       request.drNo,
       request.stockTypeName || '',
       request.requestedStoreName || '',
@@ -187,27 +190,135 @@ const ReceivedStockStatusPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  // "Print" - the same "Demand Request" report layout used across the demand
+  // lifecycle pages (RIC letterhead, header grid, items table, notes, signature
+  // block) instead of a raw browser full-page print of the on-screen table.
+  const handlePrintDemandRequest = async (request) => {
+    let details;
+    try {
+      details = await demandRequestApi.getById(request.demandRequestId);
+    } catch (printError) {
+      console.error('Error loading demand details for print:', printError);
+      setError('Failed to load demand details for printing.');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Ph: 051928111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Received Stock', pageWidth / 2, 36, { align: 'center' });
+
+    const dateOnly = (value) => (value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '-');
+
+    const headerRows = [
+      ['DR-Number', details.drNo || '-', 'Stock Type', details.stockTypeName || 'All'],
+      ['Requested Date', dateOnly(details.createdOn), 'Requested By', details.requestedByName || '-'],
+      ['Request Status', details.status || '-', 'From Store', details.requestingStoreName || '-'],
+      ['To Store', details.requestedStoreName || '-', 'Approved Date', dateOnly(details.approvedDate)],
+      ['Issued Date', dateOnly(details.issuedDate), 'Received Date', dateOnly(details.receivedDate)]
+    ];
+
+    autoTable(doc, {
+      startY: 42,
+      body: headerRows,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    const itemsBody = details.items.map((item, index) => [
+      index + 1,
+      item.itemName || 'Unassigned Item',
+      item.requestedQuantity ?? 0,
+      item.approvedQuantity ?? '-',
+      item.issuedQuantity ?? '-',
+      item.remainingQuantity ?? '-'
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Items', 'Requested Qty', 'Approved Qty', 'Issued Qty', 'Remaining Qty']],
+      body: itemsBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' }
+      }
+    });
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dateStr}   ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+
+    doc.save(`ReceivedStock_${details.drNo}.pdf`);
+  };
+
   const openHistoryModal = async (requestId) => {
     setShowHistoryModal(true);
-    setDetailsLoading(true);
+    setHistoryLoading(true);
     setHistorySearchTerm('');
     setHistoryPage(1);
 
     try {
-      const details = await demandRequestApi.getById(requestId);
+      const [details, logEntries] = await Promise.all([
+        demandRequestApi.getById(requestId),
+        demandRequestApi.getItemLogs(requestId)
+      ]);
       setSelectedRequest(details);
+      setHistoryEntries(logEntries);
     } catch (detailsError) {
       console.error('Error loading received stock detail history:', detailsError);
       setSelectedRequest(null);
+      setHistoryEntries([]);
       setError('Failed to load received stock history.');
     } finally {
-      setDetailsLoading(false);
+      setHistoryLoading(false);
     }
   };
 
   const closeHistoryModal = () => {
     setShowHistoryModal(false);
     setSelectedRequest(null);
+    setHistoryEntries([]);
     setHistorySearchTerm('');
     setHistoryPage(1);
   };
@@ -238,26 +349,21 @@ const ReceivedStockStatusPage = () => {
   };
 
   const filteredHistoryItems = useMemo(() => {
-    if (!selectedRequest) {
-      return [];
-    }
-
     const normalizedSearch = historySearchTerm.trim().toLowerCase();
     if (!normalizedSearch) {
-      return selectedRequest.items;
+      return historyEntries;
     }
 
-    return selectedRequest.items.filter((item) => [
-      item.itemName,
-      item.remarks,
-      itemEnteredBy(item),
-      String(item.requestedQuantity ?? ''),
-      String(item.approvedQuantity ?? ''),
-      String(item.issuedQuantity ?? ''),
-      String(item.issuingQuantity ?? ''),
-      String(item.remainingQuantity ?? '')
+    return historyEntries.filter((entry) => [
+      entry.itemName,
+      entry.actionType,
+      entry.actionBy,
+      String(entry.quantity ?? ''),
+      String(entry.issuedQuantity ?? ''),
+      String(entry.receivedQuantity ?? ''),
+      String(entry.remainingQuantity ?? '')
     ].some((value) => (value || '').toLowerCase().includes(normalizedSearch)));
-  }, [historySearchTerm, selectedRequest]);
+  }, [historySearchTerm, historyEntries]);
 
   useEffect(() => {
     setHistoryPage(1);
@@ -289,8 +395,8 @@ const ReceivedStockStatusPage = () => {
   const currentLifeCycleEntries = filteredLifeCycleEntries.slice(lifeCycleStartIndex, lifeCycleStartIndex + lifeCycleEntriesPerPage);
   const lifeCycleShowingFrom = filteredLifeCycleEntries.length === 0 ? 0 : lifeCycleStartIndex + 1;
   const lifeCycleShowingTo = Math.min(lifeCycleStartIndex + lifeCycleEntriesPerPage, filteredLifeCycleEntries.length);
-  const showingFrom = filteredRequests.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredRequests.length);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + entriesPerPage, totalCount);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -362,7 +468,7 @@ const ReceivedStockStatusPage = () => {
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <span>Show</span>
               <select value={entriesPerPage} onChange={(event) => setEntriesPerPage(Number(event.target.value))} className="rounded-md border border-slate-200 px-2 py-1 text-sm">
-                {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+                {[5, 10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
               </select>
               <span>entries</span>
             </div>
@@ -420,7 +526,7 @@ const ReceivedStockStatusPage = () => {
                           <td className={`border-b border-slate-200 px-6 py-8 align-middle ${statusClasses(request.status)}`}>{request.status}</td>
                           <td className="border-b border-slate-200 px-6 py-8 align-middle">
                             <div className="flex flex-col items-center gap-2">
-                              <button type="button" onClick={() => window.print()} className="text-emerald-600 transition hover:text-emerald-700" title="Print">
+                              <button type="button" onClick={() => handlePrintDemandRequest(request)} className="text-emerald-600 transition hover:text-emerald-700" title="Print">
                                 <PrinterIcon className="h-5 w-5" />
                               </button>
                               <button type="button" onClick={() => openLifeCycleModal(request)} className="text-indigo-500 transition hover:text-indigo-700" title="Demand Life Cycle">
@@ -450,7 +556,7 @@ const ReceivedStockStatusPage = () => {
               </div>
 
               <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {showingFrom} to {showingTo} of {filteredRequests.length} entries</div>
+                <div>Showing {showingFrom} to {showingTo} of {totalCount} entries</div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))} disabled={currentPage === 1} className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50">‹</button>
                   <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>
@@ -481,7 +587,7 @@ const ReceivedStockStatusPage = () => {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <button type="button" onClick={() => window.print()} className="text-emerald-600 transition hover:text-emerald-700" title="Print">
+                  <button type="button" onClick={() => selectedRequest && handlePrintDemandRequest(selectedRequest)} className="text-emerald-600 transition hover:text-emerald-700" title="Print">
                     <PrinterIcon className="h-5 w-5" />
                   </button>
                   <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -496,31 +602,31 @@ const ReceivedStockStatusPage = () => {
                   <thead>
                     <tr className="bg-white text-slate-900">
                       <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Date Time</th>
-                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Items, Brand ( Model )</th>
-                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Requested Quantity</th>
-                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Approved Quantity</th>
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Item</th>
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Action</th>
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Quantity</th>
                       <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Issued Quantity</th>
-                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Issuing Quantity</th>
+                      <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Received Quantity</th>
                       <th className="border-b border-r border-slate-200 px-6 py-4 text-center font-semibold">Remaining Quantity</th>
                       <th className="border-b border-slate-200 px-6 py-4 text-center font-semibold">Entered By</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {detailsLoading ? (
+                    {historyLoading ? (
                       <tr><td colSpan="8" className="px-6 py-10 text-center text-slate-500">Loading received stock item history...</td></tr>
                     ) : currentHistoryItems.length === 0 ? (
                       <tr><td colSpan="8" className="px-6 py-10 text-center text-slate-500">No data available in table</td></tr>
                     ) : (
-                      currentHistoryItems.map((item) => (
-                        <tr key={item.id} className="odd:bg-slate-50/60">
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{formatDateTime(item.modifiedOn || item.createdOn)}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4">{item.itemName || 'Unassigned Item'}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{item.requestedQuantity}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{item.approvedQuantity ?? item.requestedQuantity}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{item.issuedQuantity ?? 0}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{item.issuingQuantity ?? 0}</td>
-                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{item.remainingQuantity ?? 0}</td>
-                          <td className="border-b border-slate-200 px-6 py-4 text-center">{itemEnteredBy(item)}</td>
+                      currentHistoryItems.map((entry) => (
+                        <tr key={entry.id} className="odd:bg-slate-50/60">
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{formatDateTime(entry.createdOn)}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4">{entry.itemName || 'Unassigned Item'}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{entry.actionType}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{entry.quantity}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{entry.issuedQuantity ?? 0}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{entry.receivedQuantity ?? 0}</td>
+                          <td className="border-b border-r border-slate-200 px-6 py-4 text-center">{entry.remainingQuantity ?? 0}</td>
+                          <td className="border-b border-slate-200 px-6 py-4 text-center">{entry.actionBy || 'System'}</td>
                         </tr>
                       ))
                     )}

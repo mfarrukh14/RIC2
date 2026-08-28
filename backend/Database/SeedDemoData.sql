@@ -109,13 +109,35 @@ DECLARE @CatDisposablesId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name 
 DECLARE @CatMedicinesId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name = 'Medicines' ORDER BY Id);
 DECLARE @CatLabId INT = (SELECT TOP 1 Id FROM Inv.Categories WHERE Name = 'Laboratory Supplies' ORDER BY Id);
 
-IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Syringes' AND CategoryId = @CatDisposablesId)
+-- Drop any sub-category rows left over from a previous run whose parent Category
+-- row no longer exists (e.g. Categories got deleted/recreated with new IDs) so
+-- orphans/duplicates can't accumulate across repeated runs.
+DELETE sc FROM Inv.SubCategories sc
+    LEFT JOIN Inv.Categories c ON c.Id = sc.CategoryId
+    WHERE sc.Name IN ('Syringes', 'IV Cannulas', 'Vaccines', 'Lab Consumables')
+      AND c.Id IS NULL;
+
+-- De-dupe/repoint by Name alone: these four demo sub-categories are meant to be
+-- singletons, so if one already exists under a stale CategoryId, retarget it
+-- instead of inserting a duplicate.
+IF EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Syringes')
+    UPDATE Inv.SubCategories SET CategoryId = @CatDisposablesId WHERE Name = 'Syringes';
+ELSE
     INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Syringes', 'Syringes of various sizes', @CatDisposablesId, 1);
-IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'IV Cannulas' AND CategoryId = @CatDisposablesId)
+
+IF EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'IV Cannulas')
+    UPDATE Inv.SubCategories SET CategoryId = @CatDisposablesId WHERE Name = 'IV Cannulas';
+ELSE
     INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('IV Cannulas', 'IV access devices', @CatDisposablesId, 1);
-IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Vaccines' AND CategoryId = @CatMedicinesId)
+
+IF EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Vaccines')
+    UPDATE Inv.SubCategories SET CategoryId = @CatMedicinesId WHERE Name = 'Vaccines';
+ELSE
     INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Vaccines', 'Injectable vaccines', @CatMedicinesId, 1);
-IF NOT EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Lab Consumables' AND CategoryId = @CatLabId)
+
+IF EXISTS (SELECT 1 FROM Inv.SubCategories WHERE Name = 'Lab Consumables')
+    UPDATE Inv.SubCategories SET CategoryId = @CatLabId WHERE Name = 'Lab Consumables';
+ELSE
     INSERT INTO Inv.SubCategories (Name, Description, CategoryId, IsActive) VALUES ('Lab Consumables', 'Test tubes, slides, reagents', @CatLabId, 1);
 
 -- ItemUnits
@@ -155,13 +177,13 @@ IF NOT EXISTS (SELECT 1 FROM Inv.Vendors WHERE Name = 'National Pharma Distribut
     INSERT INTO Inv.Vendors (Name, Description, Email, CNo, Address, CountryId, StateOrProvinceId, CityId, BranchId, IsActive, CreatedById, CreatedOn)
     VALUES ('National Pharma Distributors', 'Vaccine and medicine distributor', 'info@natpharma.com', '03331112233', 'F-8 Markaz, Islamabad', @CountryId, @StateOrProvinceId, @CityId, @BranchId, 1, @CreatedById, GETDATE());
 
--- Brands (Inv.Brands is this app's own table -- backs Items.BrandId FK)
-IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'MediLine')
-    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('MediLine', 'General medical disposables brand', @BranchId, 1, @CreatedById, GETDATE());
-IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'CardioCare')
-    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('CardioCare', 'Cardiology consumables brand', @BranchId, 1, @CreatedById, GETDATE());
-IF NOT EXISTS (SELECT 1 FROM Inv.Brands WHERE Name = 'LabPro')
-    INSERT INTO Inv.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('LabPro', 'Laboratory supplies brand', @BranchId, 1, @CreatedById, GETDATE());
+-- Brands (Data.Brands is this app's own table -- backs Items.BrandId FK)
+IF NOT EXISTS (SELECT 1 FROM Data.Brands WHERE Name = 'MediLine')
+    INSERT INTO Data.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('MediLine', 'General medical disposables brand', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Data.Brands WHERE Name = 'CardioCare')
+    INSERT INTO Data.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('CardioCare', 'Cardiology consumables brand', @BranchId, 1, @CreatedById, GETDATE());
+IF NOT EXISTS (SELECT 1 FROM Data.Brands WHERE Name = 'LabPro')
+    INSERT INTO Data.Brands (Name, Description, BranchId, IsActive, CreatedById, CreatedOn) VALUES ('LabPro', 'Laboratory supplies brand', @BranchId, 1, @CreatedById, GETDATE());
 
 -- StockTypes
 IF NOT EXISTS (SELECT 1 FROM Inv.StockTypes WHERE Name = 'Regular')
@@ -260,10 +282,12 @@ GO
 -- Allocation, Transfer/Return Inventory, Stock Adjustments, Purchase
 -- Summaries, Contingent Bills, Store Allocation To User, Asset Allocations,
 -- Demand Requests.
--- (Adapted from Database/HMS/HMS_TestDataSeed.sql; fixed Brand1Id/Brand2Id
--- to source from Inv.Brands -- this app's own Brands table that Items.BrandId
--- actually has an FK to -- instead of Inv.DataBrands, which is a synonym for
--- the unrelated legacy Data.Brands table and was left empty on HMS_Jun26.)
+-- (Adapted from Database/HMS/HMS_TestDataSeed.sql; Brand1Id/Brand2Id source
+-- from Data.Brands -- the live table Items.BrandId actually has an FK to on
+-- HMSMAIN_TF (confirmed live: 64 real rows). An earlier version of this
+-- script assumed a separate "Inv.Brands" table existed and was the correct
+-- target instead - it does not exist on this database at all ("Invalid
+-- object name 'Inv.Brands'" at runtime); Data.Brands was always the real one.)
 -- =============================================
 SET NOCOUNT ON;
 
@@ -288,8 +312,8 @@ DECLARE @Vendor1Id INT = (SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 OR
 DECLARE @Vendor2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Vendors WHERE IsActive = 1 AND Id <> @Vendor1Id ORDER BY Id), @Vendor1Id);
 DECLARE @Manufacturer1Id INT = (SELECT TOP 1 Id FROM Inv.PharmacyManufacturers ORDER BY Id);
 DECLARE @Manufacturer2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.PharmacyManufacturers WHERE Id <> @Manufacturer1Id ORDER BY Id), @Manufacturer1Id);
-DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 ORDER BY Id);
-DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.Brands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
+DECLARE @Brand1Id INT = (SELECT TOP 1 Id FROM Data.Brands WHERE IsActive = 1 ORDER BY Id);
+DECLARE @Brand2Id INT = COALESCE((SELECT TOP 1 Id FROM Data.Brands WHERE IsActive = 1 AND Id <> @Brand1Id ORDER BY Id), @Brand1Id);
 DECLARE @ItemType1Id INT = (SELECT TOP 1 Id FROM Inv.ItemTypes ORDER BY Id);
 DECLARE @ItemType2Id INT = COALESCE((SELECT TOP 1 Id FROM Inv.ItemTypes WHERE Id <> @ItemType1Id ORDER BY Id), @ItemType1Id);
 DECLARE @UnitId INT = (SELECT TOP 1 Id FROM Inv.ItemUnits ORDER BY Id);

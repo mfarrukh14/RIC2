@@ -112,6 +112,7 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'purchase-order', title: 'Purchase Order', icon: ClipboardDocumentListIcon },
         { id: 'purchase-order-type', title: 'Purchase Order Type', icon: ClipboardDocumentListIcon },
         { id: 'purchase-order-status', title: 'Purchase Order Status', icon: ClipboardDocumentListIcon },
+        { id: 'purchase-requisition', title: 'Purchase Requisition', icon: ClipboardDocumentListIcon },
         { id: 'place-demand', title: 'Place Demand', icon: DocumentTextIcon },
         { id: 'pending-demands', title: 'Pending Demands', icon: ClipboardDocumentListIcon },
         { id: 'approved-demands', title: 'Approved Demands', icon: ClipboardDocumentListIcon },
@@ -120,10 +121,27 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'demand-request-status', title: 'Demand Request Status', icon: ClipboardDocumentListIcon },
         { id: 'stock-transitions', title: 'Stock Transitions', icon: ClipboardDocumentListIcon }
       ]
+    },
+    {
+      id: 'pharmacy',
+      title: 'Pharmacy',
+      icon: BeakerIcon,
+      hasSubmenu: true,
+      submenu: [
+        { id: 'pharmacy-dashboard', title: 'Pharmacy Dashboard', icon: ChartBarIcon },
+        { id: 'pharmacy-online-order', title: 'Pharmacy Online Order', icon: DocumentTextIcon },
+        { id: 'pharmacy-department-store', title: 'Pharmacy Department Store', icon: BuildingOfficeIcon },
+        { id: 'pharmacy-queue', title: 'Pharmacy Queue', icon: ClockIcon },
+        { id: 'pharmacy-retail', title: 'Retail Pharmacy', icon: ShoppingCartIcon },
+        { id: 'refund-medicine', title: 'Refund Medicine', icon: ArrowUpTrayIcon },
+        { id: 'pharmacy-daily-sale', title: 'Daily Sale', icon: CalendarIcon },
+        { id: 'item-wise-sale', title: 'Item Wise Sale', icon: CurrencyDollarIcon },
+        { id: 'immunization', title: 'Immunization', icon: ClipboardDocumentListIcon }
+      ]
     }
   ];
 
-  const [expandedMenus, setExpandedMenus] = useState({ inventory: true, stores: false, 'supply-chain': true });
+  const [expandedMenus, setExpandedMenus] = useState({ inventory: true, stores: false, 'supply-chain': true, pharmacy: false });
 
   const toggleSubmenu = (menuId) => {
     if (collapsed) return;

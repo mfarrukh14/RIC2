@@ -1,11 +1,21 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5100/api';
+const API_BASE_URL = 'http://10.10.10.35:5100/api';
 
 const inventoryApi = {
   // Inventory header operations
-  getAll: async () => {
-    const response = await axios.get(`${API_BASE_URL}/inventories`);
+  getAll: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.searchTerm) params.append('searchTerm', filters.searchTerm);
+    if (filters.vendorId) params.append('vendorId', filters.vendorId);
+    if (filters.storeId) params.append('storeId', filters.storeId);
+    if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params.append('dateTo', filters.dateTo);
+    if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);
+    if (filters.pageSize) params.append('pageSize', filters.pageSize);
+
+    const queryString = params.toString();
+    const response = await axios.get(`${API_BASE_URL}/inventories${queryString ? `?${queryString}` : ''}`);
     return response.data;
   },
 

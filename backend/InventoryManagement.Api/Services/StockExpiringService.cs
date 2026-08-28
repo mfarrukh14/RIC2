@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockExpiringItem>> GetExpiringStockAsync(StockExpiringRequest request)
+        public async Task<PagedResult<StockExpiringItem>> GetExpiringStockAsync(StockExpiringRequest request)
         {
             var items = new List<StockExpiringItem>();
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var totalCount = 0;
 
             try
             {
@@ -32,12 +34,19 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StartDate", (object?)request.StartDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", (object?)request.EndDate ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ItemIds", (object?)request.ItemIds ?? DBNull.Value);
+                command.Parameters.AddWithValue("@SearchTerm", string.IsNullOrEmpty(request.SearchTerm) ? (object)DBNull.Value : request.SearchTerm);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     items.Add(new StockExpiringItem
                     {
                         Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -70,7 +79,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return items;
+            return new PagedResult<StockExpiringItem> { Items = items, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
     }
 }

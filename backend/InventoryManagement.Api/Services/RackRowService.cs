@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<RackRow>> GetAllRackRowsAsync()
+        public async Task<IEnumerable<RackRow>> GetAllRackRowsAsync(int branchId)
         {
             try
             {
@@ -29,6 +29,7 @@ namespace InventoryManagement.Api.Services
                     using (var command = new SqlCommand("RackRow_GetAll", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
+                        command.Parameters.AddWithValue("@BranchId", branchId);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {

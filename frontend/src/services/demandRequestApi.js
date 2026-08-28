@@ -18,6 +18,11 @@ const demandRequestApi = {
     return response.data;
   },
 
+  getItemLogs: async (id) => {
+    const response = await api.get(`${DEMAND_REQUESTS_BASE_URL}/${id}/itemlogs`);
+    return response.data;
+  },
+
   create: async (payload) => {
     const response = await api.post(DEMAND_REQUESTS_BASE_URL, payload);
     return response.data;
@@ -25,6 +30,26 @@ const demandRequestApi = {
 
   receive: async (id, payload) => {
     const response = await api.post(`${DEMAND_REQUESTS_BASE_URL}/${id}/receive`, payload);
+    return response.data;
+  },
+
+  update: async (id, payload) => {
+    const response = await api.put(`${DEMAND_REQUESTS_BASE_URL}/${id}`, payload);
+    return response.data;
+  },
+
+  approve: async (id, payload) => {
+    const response = await api.post(`${DEMAND_REQUESTS_BASE_URL}/${id}/approve`, payload);
+    return response.data;
+  },
+
+  dispatch: async (id, payload) => {
+    const response = await api.post(`${DEMAND_REQUESTS_BASE_URL}/${id}/dispatch`, payload);
+    return response.data;
+  },
+
+  reject: async (id, payload) => {
+    const response = await api.post(`${DEMAND_REQUESTS_BASE_URL}/${id}/reject`, payload);
     return response.data;
   }
 };

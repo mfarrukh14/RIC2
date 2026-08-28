@@ -19,11 +19,11 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Inventory>>> GetAll()
+        public async Task<ActionResult<PagedResult<Inventory>>> GetAll([FromQuery] InventoryFilterRequest? filter)
         {
             try
             {
-                var inventories = await _inventoryService.GetAllAsync();
+                var inventories = await _inventoryService.GetAllAsync(filter);
                 return Ok(inventories);
             }
             catch (Exception ex)

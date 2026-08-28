@@ -1,78 +1,64 @@
 -- =============================================
 -- Create Stock Consumption Tables
+-- Idempotent: only creates the tables if missing. Must never unconditionally
+-- drop/recreate these - on a live database that destroys real consumption
+-- data on every app restart. Int-typed to match the Inv schema convention
+-- (Inv.StockConsumptions/StockConsumptionDetails on the reference database).
 -- =============================================
 
-USE InventoryManagementDB_SP;
-GO
-
--- Drop existing tables if they exist
-IF EXISTS (SELECT * FROM sys.tables WHERE name = 'StockConsumptionDetails' AND schema_id = SCHEMA_ID('dbo'))
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'StockConsumptions' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
-    DROP TABLE dbo.StockConsumptionDetails;
-    PRINT 'Dropped existing table dbo.StockConsumptionDetails.';
+    CREATE TABLE dbo.StockConsumptions (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        StoreId INT NOT NULL,
+        Type INT NOT NULL,
+        BranchId INT NOT NULL,
+        VoucherId INT NULL,
+        IsActive BIT NOT NULL DEFAULT 1,
+        CreatedById INT NULL,
+        CreatedOn DATETIME NOT NULL DEFAULT GETUTCDATE(),
+        ModifiedById INT NULL,
+        ModifiedOn DATETIME NULL,
+        IsDeleted BIT NOT NULL DEFAULT 0,
+        Remarks NVARCHAR(MAX) NULL
+    );
+
+    PRINT 'Table dbo.StockConsumptions created successfully.';
 END
 GO
 
-IF EXISTS (SELECT * FROM sys.tables WHERE name = 'StockConsumptions' AND schema_id = SCHEMA_ID('dbo'))
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'StockConsumptionDetails' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
-    DROP TABLE dbo.StockConsumptions;
-    PRINT 'Dropped existing table dbo.StockConsumptions.';
+    CREATE TABLE dbo.StockConsumptionDetails (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        StoreId INT NOT NULL,
+        MedicineId INT NULL,
+        SubServiceId INT NULL,
+        ItemId INT NOT NULL,
+        Type INT NOT NULL,
+        StockTypeId INT NOT NULL,
+        Quantity DECIMAL(18,2) NOT NULL,
+        BranchId INT NOT NULL,
+        InventoryItemId INT NULL,
+        SysBatchNo NVARCHAR(MAX) NULL,
+        BatchNo NVARCHAR(MAX) NULL,
+        IsActive BIT NOT NULL DEFAULT 1,
+        CreatedById INT NULL,
+        CreatedOn DATETIME NOT NULL DEFAULT GETUTCDATE(),
+        ModifiedById INT NULL,
+        ModifiedOn DATETIME NULL,
+        IsDeleted BIT NOT NULL DEFAULT 0,
+        StockConsumptionId INT NULL
+    );
+
+    CREATE INDEX IX_StockConsumptionDetails_StockConsumptionId
+        ON dbo.StockConsumptionDetails(StockConsumptionId);
+
+    CREATE INDEX IX_StockConsumptionDetails_ItemId
+        ON dbo.StockConsumptionDetails(ItemId);
+
+    PRINT 'Table dbo.StockConsumptionDetails created successfully.';
 END
-GO
-
--- Create StockConsumptions table
-CREATE TABLE dbo.StockConsumptions (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    StoreId UNIQUEIDENTIFIER NOT NULL,
-    Type INT NOT NULL,
-    BranchId UNIQUEIDENTIFIER NOT NULL,
-    VoucherId UNIQUEIDENTIFIER NULL,
-    IsActive BIT NOT NULL DEFAULT 1,
-    CreatedById UNIQUEIDENTIFIER NULL,
-    CreatedOn DATETIME NOT NULL DEFAULT GETUTCDATE(),
-    ModifiedById UNIQUEIDENTIFIER NULL,
-    ModifiedOn DATETIME NULL,
-    IsDeleted BIT NOT NULL DEFAULT 0,
-    Remarks NVARCHAR(MAX) NULL
-);
-
-PRINT 'Table dbo.StockConsumptions created successfully.';
-GO
-
--- Create StockConsumptionDetails table
-CREATE TABLE dbo.StockConsumptionDetails (
-    Id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    StoreId UNIQUEIDENTIFIER NOT NULL,
-    MedicineId UNIQUEIDENTIFIER NULL,
-    SubServiceId UNIQUEIDENTIFIER NULL,
-    ItemId INT NOT NULL,
-    Type INT NOT NULL,
-    StockTypeId INT NOT NULL,
-    Quantity DECIMAL(18,2) NOT NULL,
-    BranchId UNIQUEIDENTIFIER NOT NULL,
-    InventoryItemId UNIQUEIDENTIFIER NULL,
-    SysBatchNo NVARCHAR(MAX) NULL,
-    BatchNo NVARCHAR(MAX) NULL,
-    IsActive BIT NOT NULL DEFAULT 1,
-    CreatedById UNIQUEIDENTIFIER NULL,
-    CreatedOn DATETIME NOT NULL DEFAULT GETUTCDATE(),
-    ModifiedById UNIQUEIDENTIFIER NULL,
-    ModifiedOn DATETIME NULL,
-    IsDeleted BIT NOT NULL DEFAULT 0,
-    StockConsumptionId UNIQUEIDENTIFIER NULL,
-    CONSTRAINT FK_StockConsumptionDetails_StockConsumptions 
-        FOREIGN KEY (StockConsumptionId) 
-        REFERENCES dbo.StockConsumptions(Id)
-);
-
--- Create indexes for better performance
-CREATE INDEX IX_StockConsumptionDetails_StockConsumptionId 
-    ON dbo.StockConsumptionDetails(StockConsumptionId);
-
-CREATE INDEX IX_StockConsumptionDetails_ItemId 
-    ON dbo.StockConsumptionDetails(ItemId);
-
-PRINT 'Table dbo.StockConsumptionDetails created successfully.';
 GO
 
 PRINT 'Stock Consumption tables setup completed.';

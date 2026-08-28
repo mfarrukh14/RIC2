@@ -4,6 +4,6 @@ namespace InventoryManagement.Api.Services
 {
     public interface IExpiredStockService
     {
-        Task<IEnumerable<ExpiredStock>> GetExpiredStockAsync(ExpiredStockSearchRequest request);
+        Task<PagedResult<ExpiredStock>> GetExpiredStockAsync(ExpiredStockSearchRequest request);
     }
 }

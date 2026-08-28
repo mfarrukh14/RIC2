@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { getSaleSummary, getSaleSummarySummary } from '../services/saleSummaryDailyApi';
 import { getAllStores } from '../services/storeApi';
+import Pagination from '../components/Pagination';
 
 const SaleSummaryDailyPage = () => {
   const [stores, setStores] = useState([]);
   const [selectedStore, setSelectedStore] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  // No default date pre-fill - defaulting to "today" guarantees zero results against
+  // historical data (the exact bug already fixed this session on the Purchase Summary and
+  // Sale Summary Wrt Stock WO Discount pages). Blank means the backend applies no date
+  // filter until the user picks one.
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedType, setSelectedType] = useState('Daily');
   const [summaries, setSummaries] = useState([]);
   const [totals, setTotals] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchStores();
@@ -23,9 +29,6 @@ const SaleSummaryDailyPage = () => {
     try {
       const response = await getAllStores();
       setStores(response);
-      if (response.length > 0) {
-        setSelectedStore(response[0].storeName || '');
-      }
     } catch (error) {
       console.error('Error fetching stores:', error);
     }
@@ -89,10 +92,12 @@ const SaleSummaryDailyPage = () => {
   };
 
   // Pagination
+  const filteredSummaries = summaries.filter((summary) =>
+    formatDate(summary.date).toLowerCase().includes(searchTerm.toLowerCase())
+  );
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = summaries.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(summaries.length / itemsPerPage);
+  const currentItems = filteredSummaries.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -104,7 +109,7 @@ const SaleSummaryDailyPage = () => {
             onClick={handleSearch}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            Export
+            Generate Report
           </button>
         </div>
 
@@ -183,26 +188,17 @@ const SaleSummaryDailyPage = () => {
         </div>
 
         {/* Table Header Info */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Show</span>
-            <select
-              value={itemsPerPage}
+        <div className="flex items-center justify-end mb-4">
+          <div className="text-sm">
+            Search: <input
+              type="text"
+              value={searchTerm}
               onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
+                setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
               className="px-2 py-1 border border-gray-300 rounded"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-sm">entries</span>
-          </div>
-          <div className="text-sm">
-            Search: <input type="text" className="px-2 py-1 border border-gray-300 rounded" />
+            />
           </div>
         </div>
 
@@ -272,41 +268,13 @@ const SaleSummaryDailyPage = () => {
           </table>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, summaries.length)} of {summaries.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 border rounded ${
-                  currentPage === i + 1
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={filteredSummaries.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { stockStatsApi } from '../services/stockStatsApi';
 import inventoryApi from '../services/inventoryApi';
 import { itemTypeApi } from '../services/itemTypeApi';
+import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
 
 // Default to the last 30 days up to now, instead of a hardcoded stale range,
@@ -45,7 +47,8 @@ const StockStatsPage = () => {
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
-  
+  const [itemQuantities, setItemQuantities] = useState({});
+
   // Selected items for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
 
@@ -58,12 +61,37 @@ const StockStatsPage = () => {
     loadLookupData();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, entriesPerPage]);
+
   // Stock stats are always scoped to the logged-in user's own branch.
   useEffect(() => {
     if (session?.branchId) {
       setFilters((prev) => ({ ...prev, branchId: session.branchId }));
     }
   }, [session?.branchId]);
+
+  // Item multi-select narrows to what's actually on hand at the selected
+  // store, with the live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!filters.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(filters.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [filters.storeId]);
 
   const loadLookupData = async () => {
     try {
@@ -145,7 +173,6 @@ const StockStatsPage = () => {
   const indexOfLastEntry = currentPage * entriesPerPage;
   const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
   const currentStats = filteredStats.slice(indexOfFirstEntry, indexOfLastEntry);
-  const totalPages = Math.ceil(filteredStats.length / entriesPerPage);
 
   return (
     <div className="p-6">
@@ -291,11 +318,13 @@ const StockStatsPage = () => {
                 className="w-full border-0 focus:ring-0 text-sm"
                 size="1"
               >
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
+                {items
+                  .filter((item) => !filters.storeId || (itemQuantities[item.id] ?? 0) > 0)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {filters.storeId ? `${item.name} - ${itemQuantities[item.id] ?? 0}` : item.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -378,24 +407,7 @@ const StockStatsPage = () => {
 
       {/* Results Table */}
       <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700">Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-sm text-gray-700">entries</span>
-          </div>
+        <div className="flex justify-end items-center mb-4">
           <div>
             <input
               type="text"
@@ -472,43 +484,13 @@ const StockStatsPage = () => {
           </table>
         </div>
 
-        <div className="flex justify-between items-center mt-4">
-          <div className="text-sm text-gray-700">
-            Showing {filteredStats.length === 0 ? 0 : indexOfFirstEntry + 1} to {Math.min(indexOfLastEntry, filteredStats.length)} of {filteredStats.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-              const pageNum = i + 1;
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 border rounded-md text-sm ${
-                    currentPage === pageNum
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={entriesPerPage}
+          totalCount={filteredStats.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setEntriesPerPage}
+        />
       </div>
     </div>
   );

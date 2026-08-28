@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "InventoryManagement.Api": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "http://10.10.10.35:5100"
+    }
+  }
+}

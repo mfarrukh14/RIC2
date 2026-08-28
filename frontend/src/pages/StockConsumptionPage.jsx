@@ -1,4 +1,4 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import {
   getAllStockConsumptions,
@@ -9,28 +9,50 @@ import {
 } from '../services/stockConsumptionApi';
 import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
+import stockApi from '../services/stockApi';
 import { stockTypesApi } from '../services/stockTypesApi';
-import { itemTypeApi } from '../services/itemTypeApi';
+import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const StockConsumptionPage = () => {
-  const [consumptions, setConsumptions] = useState([]);
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
-  const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await getAllStockConsumptions(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: consumptions,
+    totalCount,
+    currentPage,
+    pageSize,
+    setPageSize,
+    goToPage,
+    loading,
+    reload: loadConsumptions,
+  } = usePagedList(fetchPage, { searchTerm }, { initialPageSize: 10 });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [itemQuantities, setItemQuantities] = useState({});
 
   const [formData, setFormData] = useState({
     storeId: '',
-    type: '',
     branchId: 1,
     remarks: '',
     details: [
       {
         itemId: '',
+        medicineId: '',
+        subServiceId: '',
         stockTypeId: '',
         quantity: '',
         storeId: ''
@@ -39,40 +61,56 @@ const StockConsumptionPage = () => {
   });
 
   useEffect(() => {
-    loadData();
+    loadLookups();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  // Consumption is an outbound action (using up stock) - the item dropdown
+  // should only offer items actually on hand at the selected store, with
+  // their live quantity shown inline (e.g. "Syringe 10ml - 8").
+  useEffect(() => {
+    if (!formData.storeId) {
+      setItemQuantities({});
+      return;
+    }
+
+    let cancelled = false;
+    stockApi.getQuantitiesByStore(formData.storeId)
+      .then((data) => {
+        if (!cancelled) setItemQuantities(data || {});
+      })
+      .catch((err) => {
+        console.error('Error loading item quantities for store:', err);
+        if (!cancelled) setItemQuantities({});
+      });
+
+    return () => { cancelled = true; };
+  }, [formData.storeId]);
+
+  const loadLookups = async () => {
     try {
-      const [consumptionsData, storesData, itemsData, stockTypesData, itemTypesData] = await Promise.all([
-        getAllStockConsumptions(),
+      const [storesData, itemsData, stockTypesData] = await Promise.all([
         getAllStores(),
-        itemApi.getAll(),
-        stockTypesApi.getAllStockTypes(),
-        itemTypeApi.getAll()
+        itemApi.getAllWithMedicines(),
+        stockTypesApi.getAllStockTypes()
       ]);
-      setConsumptions(consumptionsData);
       setStores(storesData);
       setItems(itemsData);
       setStockTypes(stockTypesData);
-      setItemTypes((itemTypesData || []).filter((it) => it.isActive));
     } catch (err) {
       setError('Failed to load data: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
   const resetForm = () => {
     setFormData({
       storeId: '',
-      type: '',
       branchId: 1,
       remarks: '',
       details: [
         {
           itemId: '',
+          medicineId: '',
+          subServiceId: '',
           stockTypeId: '',
           quantity: '',
           storeId: ''
@@ -87,26 +125,26 @@ const StockConsumptionPage = () => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value,
-      // Previously picked items may not belong to the newly selected type, so clear
-      // them rather than silently submitting an item that no longer matches.
-      ...(name === 'type'
-        ? { details: prev.details.map(d => ({ ...d, itemId: '' })) }
-        : {})
+      [name]: value
     }));
   };
 
-  // Only active items, and only those belonging to the selected item type (if any).
-  const filteredItems = items.filter(item =>
-    item.isActive && (!formData.type || item.itemTypeId === parseInt(formData.type))
-  );
+  const filteredItems = items.filter(item => {
+    if (!item.isActive) return false;
+    if (!formData.storeId || item.itemId == null) return true;
+    return (itemQuantities[item.itemId] ?? 0) > 0;
+  });
 
   const handleDetailChange = (index, field, value) => {
     const newDetails = [...formData.details];
-    newDetails[index] = {
-      ...newDetails[index],
-      [field]: field === 'itemId' || field === 'stockTypeId' ? parseInt(value) : value
-    };
+    if (field === 'itemId') {
+      newDetails[index] = { ...newDetails[index], ...parseProductOptionValue(value) };
+    } else {
+      newDetails[index] = {
+        ...newDetails[index],
+        [field]: field === 'stockTypeId' ? parseInt(value) : value
+      };
+    }
     setFormData(prev => ({
       ...prev,
       details: newDetails
@@ -120,6 +158,8 @@ const StockConsumptionPage = () => {
         ...prev.details,
         {
           itemId: '',
+          medicineId: '',
+          subServiceId: '',
           stockTypeId: '',
           quantity: '',
           storeId: formData.storeId
@@ -140,20 +180,26 @@ const StockConsumptionPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     setError(null);
 
     try {
       const payload = {
         storeId: parseInt(formData.storeId),
         branchId: parseInt(formData.branchId),
-        type: parseInt(formData.type),
+        // TODO: this used to be derived from the picked item's itemTypeId, but
+        // itemApi.getAllWithMedicines() doesn't return that field (it wasn't
+        // meaningful for Medicine/Disposable rows anyway) - confirm with backend
+        // whether Type still needs real per-item classification here.
+        type: 0,
         remarks: formData.remarks,
         details: formData.details.map(detail => ({
-          itemId: parseInt(detail.itemId),
+          itemId: detail.itemId || null,
+          medicineId: detail.medicineId || null,
+          subServiceId: detail.subServiceId || null,
           stockTypeId: parseInt(detail.stockTypeId),
           quantity: parseFloat(detail.quantity),
-          type: parseInt(formData.type)
+          type: 0
         }))
       };
 
@@ -163,12 +209,12 @@ const StockConsumptionPage = () => {
         await createStockConsumption(payload);
       }
 
-      await loadData();
+      await loadConsumptions();
       resetForm();
     } catch (err) {
       setError('Failed to save: ' + (err.response?.data?.message || err.message));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -177,11 +223,12 @@ const StockConsumptionPage = () => {
       const data = await getStockConsumptionById(id);
       setFormData({
         storeId: data.storeId,
-        type: data.type,
         branchId: data.branchId,
         remarks: data.remarks || '',
         details: data.details.map(d => ({
           itemId: d.itemId,
+          medicineId: d.medicineId,
+          subServiceId: d.subServiceId,
           stockTypeId: d.stockTypeId,
           quantity: d.quantity,
           storeId: d.storeId
@@ -198,7 +245,7 @@ const StockConsumptionPage = () => {
     if (window.confirm('Are you sure you want to delete this stock consumption?')) {
       try {
         await deleteStockConsumption(id);
-        await loadData();
+        await loadConsumptions();
       } catch (err) {
         setError('Failed to delete: ' + err.message);
       }
@@ -262,26 +309,6 @@ const StockConsumptionPage = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Type</option>
-                  {itemTypes.map(itemType => (
-                    <option key={itemType.id} value={itemType.id}>
-                      {itemType.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Remarks
@@ -324,17 +351,21 @@ const StockConsumptionPage = () => {
                       <tr key={index}>
                         <td className="px-4 py-3">
                           <select
-                            value={detail.itemId}
+                            value={productOptionValue(detail)}
                             onChange={(e) => handleDetailChange(index, 'itemId', e.target.value)}
                             required
                             className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="">Select Item</option>
-                            {filteredItems.map(item => (
-                              <option key={item.id} value={item.id}>
-                                {item.name}
-                              </option>
-                            ))}
+                            {filteredItems.map(item => {
+                              const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
+                              const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : null;
+                              return (
+                                <option key={productOptionValue(item)} value={productOptionValue(item)}>
+                                  {formData.storeId && qty !== null ? `${label} - ${qty}` : label}
+                                </option>
+                              );
+                            })}
                           </select>
                         </td>
                         <td className="px-4 py-3">
@@ -391,10 +422,10 @@ const StockConsumptionPage = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={submitting}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
               >
-                {loading ? 'Saving...' : editingId ? 'Update' : 'Save'}
+                {submitting ? 'Saving...' : editingId ? 'Update' : 'Save'}
               </button>
             </div>
           </form>
@@ -403,6 +434,15 @@ const StockConsumptionPage = () => {
 
       {!showForm && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="flex justify-end px-4 py-3 border-b border-gray-200">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -490,6 +530,13 @@ const StockConsumptionPage = () => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PencilIcon, TrashIcon, PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import stockTypesApi from '../services/stockTypesApi';
+import Pagination from './Pagination';
 
 const StockTypeList = ({ onEdit, onAdd }) => {
   const [stockTypes, setStockTypes] = useState([]);
@@ -76,76 +77,10 @@ const StockTypeList = ({ onEdit, onAdd }) => {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleItemsPerPageChange = (e) => {
-    setItemsPerPage(parseInt(e.target.value));
-    setCurrentPage(1);
-  };
-
   // Pagination calculations
-  const totalPages = Math.ceil(filteredStockTypes.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentStockTypes = filteredStockTypes.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  const renderPaginationButtons = () => {
-    const buttons = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    // Previous button
-    if (currentPage > 1) {
-      buttons.push(
-        <button
-          key="prev"
-          onClick={() => handlePageChange(currentPage - 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50"
-        >
-          Previous
-        </button>
-      );
-    }
-
-    // Page numbers
-    for (let i = startPage; i <= endPage; i++) {
-      buttons.push(
-        <button
-          key={i}
-          onClick={() => handlePageChange(i)}
-          className={`px-3 py-2 text-sm font-medium border ${
-            i === currentPage
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
-          }`}
-        >
-          {i}
-        </button>
-      );
-    }
-
-    // Next button
-    if (currentPage < totalPages) {
-      buttons.push(
-        <button
-          key="next"
-          onClick={() => handlePageChange(currentPage + 1)}
-          className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50"
-        >
-          Next
-        </button>
-      );
-    }
-
-    return buttons;
-  };
 
   if (loading) {
     return (
@@ -195,20 +130,6 @@ const StockTypeList = ({ onEdit, onAdd }) => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-700">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={handleItemsPerPageChange}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm text-gray-700">entries</label>
           </div>
         </div>
       </div>
@@ -281,18 +202,13 @@ const StockTypeList = ({ onEdit, onAdd }) => {
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredStockTypes.length)} of {filteredStockTypes.length} entries
-            {searchTerm && ` (filtered from ${stockTypes.length} total entries)`}
-          </div>
-          <div className="flex gap-1">
-            {renderPaginationButtons()}
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        pageSize={itemsPerPage}
+        totalCount={filteredStockTypes.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setItemsPerPage}
+      />
     </div>
   );
 };

@@ -54,7 +54,9 @@ namespace InventoryManagement.Api.Models
     {
         public int Id { get; set; }
         public int InventoryId { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public string? ItemName { get; set; }
         public int? ManufacturerId { get; set; }
         public string? ManufacturerName { get; set; }
@@ -82,6 +84,15 @@ namespace InventoryManagement.Api.Models
     }
 
     // Request models
+    public class InventoryFilterRequest : PagedRequest
+    {
+        public string? SearchTerm { get; set; }
+        public int? VendorId { get; set; }
+        public int? StoreId { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+    }
+
     public class InventoryCreateRequest
     {
         public int VendorId { get; set; }
@@ -119,7 +130,9 @@ namespace InventoryManagement.Api.Models
     public class InventoryDetailCreateRequest
     {
         public int InventoryId { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int? ManufacturerId { get; set; }
         public DateTime? MfgDate { get; set; }
         public DateTime? ExpiryDate { get; set; }
@@ -175,7 +188,11 @@ namespace InventoryManagement.Api.Models
         public string? StoreName { get; set; }
         public int StockTypes { get; set; }
         public string? StockTypeName { get; set; }
-        public int PatientTypes { get; set; }
+        // Nullable: rows seeded directly via StoreId/StockTypeId (see
+        // SeedDemoData.sql) never set PatientTypes - there is no canonical
+        // "PatientTypeId" twin column to fall back to, unlike PharmacyStoreId/
+        // StockTypes which fall back to StoreId/StockTypeId.
+        public int? PatientTypes { get; set; }
         public DateTime CreatedOn { get; set; }
     }
 
@@ -199,12 +216,13 @@ namespace InventoryManagement.Api.Models
         public string? StoreName { get; set; }
     }
 
-    public class StockExpiringRequest
+    public class StockExpiringRequest : PagedRequest
     {
         public int? StoreId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string? ItemIds { get; set; } // Comma-separated list
+        public string? SearchTerm { get; set; }
     }
 
     public class InventoryLookupData
@@ -255,13 +273,20 @@ namespace InventoryManagement.Api.Models
     public class Stock
     {
         public int Id { get; set; }
-        public int ItemId { get; set; }
+        // Nullable: Pharmacy.PharmacyMedicinesStocks rows for Medicine/Fee stock
+        // (TypeBit 4/5) have no ItemId - only real "Item" rows (TypeBit 15) do.
+        public int? ItemId { get; set; }
         public string ItemName { get; set; } = string.Empty;
         public string? StockType { get; set; }
-        public int? TotalItems { get; set; }
+        // Decimal: Pharmacy.PharmacyMedicinesStocks.TotalItemsInStock is a real
+        // decimal quantity (partial units are a real, intentional case there) -
+        // truncating to int would silently lose data.
+        public decimal? TotalItems { get; set; }
         public int? MinimumPanicLevel { get; set; }
         public int StoreId { get; set; }
-        public int BranchId { get; set; }
+        // Nullable: derived via a join to Pharmacy.PharmacyStores (no BranchId
+        // column exists directly on the stock table itself).
+        public int? BranchId { get; set; }
         public bool IsActive { get; set; }
         public DateTime? ModifiedOn { get; set; }
         public int? ItemTypeId { get; set; }
@@ -277,7 +302,7 @@ namespace InventoryManagement.Api.Models
         public int MinimumPanicLevel { get; set; }
     }
 
-    public class StockSearchRequest
+    public class StockSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }

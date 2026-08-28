@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Update existing item type
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemType_Update]
+CREATE OR ALTER PROCEDURE [dbo].[ItemType_Update]
     @Id INT,
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,

@@ -19,17 +19,32 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Item>>> GetAll()
+        public async Task<ActionResult<PagedResult<Item>>> GetAll([FromQuery] ItemFilterRequest? filter)
         {
             try
             {
-                var items = await _itemService.GetAllAsync();
+                var items = await _itemService.GetAllAsync(filter);
                 return Ok(items);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving items");
                 return StatusCode(500, new { message = "An error occurred while retrieving items" });
+            }
+        }
+
+        [HttpGet("with-medicines")]
+        public async Task<ActionResult<IEnumerable<UnifiedItemLookupResult>>> GetAllWithMedicines([FromQuery] string? search)
+        {
+            try
+            {
+                var results = await _itemService.GetAllWithMedicinesAsync(search);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving unified item/medicine/disposable lookup");
+                return StatusCode(500, new { message = "An error occurred while retrieving items and medicines" });
             }
         }
 

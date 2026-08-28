@@ -1,55 +1,77 @@
-import React,{ useState, useEffect } from 'react';
+import React,{ useCallback, useState, useEffect } from 'react';
 import { stockValueItemsApi } from '../services/stockValueItemsApi';
 import { getAllStores } from '../services/storeApi';
+import { itemTypeApi } from '../services/itemTypeApi';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
+import { useSession } from '../context/SessionContext';
 
 const StockValueWRTItemsPage = () => {
+  const { session } = useSession();
   const [dateRangeEnabled, setDateRangeEnabled] = useState(false);
   const [startDate, setStartDate] = useState('2025-10-29');
   const [endDate, setEndDate] = useState('2025-10-29');
   const [selectedStore, setSelectedStore] = useState('');
-  const [selectedItemType, setSelectedItemType] = useState('all');
+  const [selectedItemType, setSelectedItemType] = useState('');
   const [stores, setStores] = useState([]);
-  const [stockValueItems, setStockValueItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemTypes, setItemTypes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const buildParams = (overrideSearchTerm) => {
+    const params = {
+      store: selectedStore || undefined,
+      itemType: selectedItemType || undefined,
+      searchTerm: (overrideSearchTerm !== undefined ? overrideSearchTerm : searchTerm) || undefined
+    };
+
+    if (dateRangeEnabled && startDate && endDate) {
+      params.startDate = new Date(startDate).toISOString();
+      params.endDate = new Date(endDate).toISOString();
+    }
+
+    return params;
+  };
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await stockValueItemsApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: stockValueItems,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(fetchPage, buildParams(), { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     fetchStores();
-    fetchData();
+    fetchItemTypes();
+    runSearch(buildParams());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStores = async () => {
     try {
       const data = await getAllStores();
-      setStores(data);
+      setStores(data.filter(store => store.isActive));
     } catch (error) {
       console.error('Error fetching stores:', error);
     }
   };
 
-  const fetchData = async () => {
+  const fetchItemTypes = async () => {
     try {
-      setLoading(true);
-      const params = {
-        store: selectedStore || undefined,
-        itemType: selectedItemType === 'all' ? undefined : selectedItemType
-      };
-
-      if (dateRangeEnabled && startDate && endDate) {
-        params.startDate = new Date(startDate).toISOString();
-        params.endDate = new Date(endDate).toISOString();
-      }
-
-      const data = await stockValueItemsApi.getAll(params);
-      setStockValueItems(data);
+      const data = await itemTypeApi.getAll();
+      setItemTypes(data.filter(itemType => itemType.isActive));
     } catch (error) {
-      console.error('Error fetching stock value items:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching item types:', error);
     }
   };
 
@@ -96,7 +118,7 @@ const StockValueWRTItemsPage = () => {
       ['Vendor Email:', report.vendorEmail || '', 'Vendor Contact No:', report.vendorContactNo || '']
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 48,
       body: headerData,
       theme: 'plain',
@@ -138,7 +160,7 @@ const StockValueWRTItemsPage = () => {
       item.total?.toFixed(2) || '0.00'
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: doc.lastAutoTable.finalY + 5,
       head: [[
         'Sr',
@@ -200,21 +222,118 @@ const StockValueWRTItemsPage = () => {
   };
 
   const handleGenerate = () => {
-    fetchData();
+    runSearch(buildParams());
   };
 
-  const filteredItems = stockValueItems.filter(item =>
-    item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.batchNo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSearchTermChange = (value) => {
+    setSearchTerm(value);
+    runSearch(buildParams(value));
+  };
 
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredItems.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  // "Item Wise Stock Report" export - RIC letterhead, User line, Filters line, then
+  // the same Store/Name/Batch/Qty/Rate columns as the on-screen table, matching the
+  // old system's export against the currently applied filters. Exports only the
+  // currently-loaded page, not the whole filtered result set - results are now
+  // paged server-side, same tradeoff as StockPage's export.
+  const handleExport = async () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
 
-  // Calculate totals
-  const totals = filteredItems.reduce((acc, item) => ({
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (err) {
+      console.error('Logo load error:', err);
+    }
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road Rawalpindi, Punjab, Pakistan', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Phone: 0519281111-9', pageWidth / 2, 27, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 33,
+      body: [['Item Wise Stock Report']],
+      theme: 'plain',
+      styles: { fontSize: 11, fontStyle: 'bold', halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const userLabel = session?.user?.UserName || session?.branchName || 'User';
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      body: [[`User: ${userLabel}`]],
+      theme: 'plain',
+      styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const storeLabel = selectedStore || 'All';
+    const typeLabel = selectedItemType || 'All';
+    const dateFilterLabel = dateRangeEnabled ? 'Yes' : 'No';
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      body: [[`Filters:  Store: ${storeLabel}   Type: ${typeLabel}   Is Date Range Filter Applied: ${dateFilterLabel}`]],
+      theme: 'plain',
+      styles: { fontSize: 9, lineColor: [0, 0, 0], lineWidth: 0.2, cellPadding: 2 }
+    });
+
+    const body = stockValueItems.map((item) => [
+      item.storeName || 'N/A',
+      item.name,
+      item.batchNo || '-',
+      Number(item.totalItems).toFixed(4),
+      parseFloat(item.unitPurchaseRate).toFixed(2),
+      parseFloat(item.totalPurchaseRate).toFixed(2),
+      parseFloat(item.unitSaleRate).toFixed(2),
+      parseFloat(item.totalSaleRate).toFixed(2)
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY,
+      head: [['Store Name', 'Name', 'Batch No.', 'Total Items', 'Unit Purchase Rate', 'Total Purchase Rate', 'Unit Sale Rate', 'Total Sale Rate']],
+      body,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'right' }
+      },
+      didDrawPage: () => {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${dateStr} ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+      }
+    });
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+    }
+
+    doc.save(`ItemWiseStockReport_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.pdf`);
+  };
+
+  // Totals reflect only the current page now that results are paged server-side
+  // (search/filtering also happens server-side - see buildParams/runSearch).
+  const totals = stockValueItems.reduce((acc, item) => ({
     totalItems: acc.totalItems + item.totalItems,
     unitPurchaseRate: acc.unitPurchaseRate + parseFloat(item.unitPurchaseRate),
     totalPurchaseRate: acc.totalPurchaseRate + parseFloat(item.totalPurchaseRate),
@@ -230,11 +349,21 @@ const StockValueWRTItemsPage = () => {
 
   return (
     <div className="p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-          <span className="text-white text-lg">📊</span>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
+            <span className="text-white text-lg">📊</span>
+          </div>
+          <h1 className="text-2xl font-semibold">Stock Value Wrt Items</h1>
         </div>
-        <h1 className="text-2xl font-semibold">Stock Value Wrt Items</h1>
+        <button
+          onClick={handleExport}
+          disabled={stockValueItems.length === 0}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span>⬇</span>
+          Export
+        </button>
       </div>
 
       {/* Filters */}
@@ -288,56 +417,27 @@ const StockValueWRTItemsPage = () => {
 
           <div>
             <label className="block text-sm font-medium mb-1">Item Type</label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="all"
-                  checked={selectedItemType === 'all'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">All</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="medicine"
-                  checked={selectedItemType === 'medicine'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Medicine</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="disposable"
-                  checked={selectedItemType === 'disposable'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Disposable</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="item"
-                  checked={selectedItemType === 'item'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Item</span>
-              </label>
-            </div>
+            <select
+              value={selectedItemType}
+              onChange={(e) => setSelectedItemType(e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+            >
+              <option value="">All Types</option>
+              {itemTypes.map(itemType => (
+                <option key={itemType.id} value={itemType.name}>
+                  {itemType.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-end">
             <button
               onClick={handleGenerate}
-              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+              disabled={loading}
+              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-blue-300"
             >
-              Generate
+              {loading ? 'Generating...' : 'Generate'}
             </button>
           </div>
         </div>
@@ -345,27 +445,13 @@ const StockValueWRTItemsPage = () => {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm">entries</label>
-          </div>
+        <div className="p-4 border-b flex justify-end items-center">
           <div className="flex items-center gap-2">
             <label className="text-sm">Search:</label>
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchTermChange(e.target.value)}
               className="border rounded px-3 py-1 text-sm"
             />
           </div>
@@ -386,7 +472,7 @@ const StockValueWRTItemsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {currentItems.map((item, index) => (
+              {stockValueItems.map((item, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">{item.storeName || 'N/A'}</td>
                   <td className="px-4 py-3 text-sm">{item.name}</td>
@@ -405,10 +491,10 @@ const StockValueWRTItemsPage = () => {
                   <td className="px-4 py-3 text-sm">{parseFloat(item.totalSaleRate).toFixed(2)}</td>
                 </tr>
               ))}
-              {/* Totals Row */}
-              {filteredItems.length > 0 && (
+              {/* Totals Row - current page only, now that results are paged server-side */}
+              {stockValueItems.length > 0 && (
                 <tr className="bg-gray-100 font-semibold">
-                  <td className="px-4 py-3 text-sm" colSpan="3">Store Name</td>
+                  <td className="px-4 py-3 text-sm" colSpan="3">Page Totals</td>
                   <td className="px-4 py-3 text-sm">Total Items:{totals.totalItems.toFixed(2)}</td>
                   <td className="px-4 py-3 text-sm">Unit Purchase Rate: {totals.unitPurchaseRate.toFixed(2)}</td>
                   <td className="px-4 py-3 text-sm">Total Purchase Rate: {totals.totalPurchaseRate.toFixed(2)}</td>
@@ -420,38 +506,13 @@ const StockValueWRTItemsPage = () => {
           </table>
         </div>
 
-        <div className="p-4 border-t flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredItems.length)} of {filteredItems.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i + 1}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 border rounded text-sm ${
-                  currentPage === i + 1 ? 'bg-blue-600 text-white' : ''
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );

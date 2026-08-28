@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Inventory>> GetAllAsync()
+        public async Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var inventories = new List<Inventory>();
+            var totalCount = 0;
 
             try
             {
@@ -27,12 +29,22 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                command.Parameters.AddWithValue("@VendorId", (object?)filter?.VendorId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StoreId", (object?)filter?.StoreId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@DateFrom", (object?)filter?.DateFrom ?? DBNull.Value);
+                command.Parameters.AddWithValue("@DateTo", (object?)filter?.DateTo ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     inventories.Add(MapToInventory(reader));
                 }
             }
@@ -42,7 +54,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return inventories;
+            return new PagedResult<Inventory> { Items = inventories, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<Inventory?> GetByIdAsync(int id)
@@ -385,7 +397,9 @@ namespace InventoryManagement.Api.Services
             {
                 command.Parameters.AddWithValue("@InventoryId", request.InventoryId);
             }
-            command.Parameters.AddWithValue("@ItemId", request.ItemId);
+            command.Parameters.AddWithValue("@ItemId", (object?)request.ItemId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@MedicineId", (object?)request.MedicineId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@SubServiceId", (object?)request.SubServiceId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ManufacturerId", (object?)request.ManufacturerId ?? DBNull.Value);
             command.Parameters.AddWithValue("@MfgDate", (object?)request.MfgDate ?? DBNull.Value);
             command.Parameters.AddWithValue("@ExpiryDate", (object?)request.ExpiryDate ?? DBNull.Value);
@@ -465,7 +479,9 @@ namespace InventoryManagement.Api.Services
             {
                 Id = reader.GetInt32("Id"),
                 InventoryId = reader.GetInt32("InventoryId"),
-                ItemId = reader.GetInt32("ItemId"),
+                ItemId = reader.IsDBNull("ItemId") ? null : reader.GetInt32("ItemId"),
+                MedicineId = reader.IsDBNull("MedicineId") ? null : reader.GetInt32("MedicineId"),
+                SubServiceId = reader.IsDBNull("SubServiceId") ? null : reader.GetInt32("SubServiceId"),
                 ItemName = reader.IsDBNull("ItemName") ? null : reader.GetString("ItemName"),
                 ManufacturerId = reader.IsDBNull("ManufacturerId") ? null : reader.GetInt32("ManufacturerId"),
                 ManufacturerName = reader.IsDBNull("ManufacturerName") ? null : reader.GetString("ManufacturerName"),

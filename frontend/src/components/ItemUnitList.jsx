@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { itemUnitApi } from "../services/itemUnitApi";
+import Pagination from "./Pagination";
 
 const ItemUnitList = ({ onAdd, onEdit }) => {
   const [itemUnits, setItemUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     fetchItemUnits();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, pageSize]);
 
   const fetchItemUnits = async () => {
     try {
@@ -47,6 +54,8 @@ const ItemUnitList = ({ onAdd, onEdit }) => {
     itemUnit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (itemUnit.description && itemUnit.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const pagedItemUnits = filteredItemUnits.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   if (loading) {
     return (
@@ -126,7 +135,7 @@ const ItemUnitList = ({ onAdd, onEdit }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredItemUnits.map((itemUnit) => (
+                {pagedItemUnits.map((itemUnit) => (
                   <tr key={itemUnit.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
@@ -181,14 +190,13 @@ const ItemUnitList = ({ onAdd, onEdit }) => {
             )}
           </div>
 
-          {/* Pagination */}
-          <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Showing {filteredItemUnits.length} of {itemUnits.length} entries
-              </div>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={filteredItemUnits.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       </div>
     </div>

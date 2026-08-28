@@ -15,7 +15,7 @@ namespace InventoryManagement.Api.Services
                 ?? throw new ArgumentNullException(nameof(configuration));
         }
 
-        public async Task<IEnumerable<ItemUnit>> GetAllItemUnitsAsync()
+        public async Task<IEnumerable<ItemUnit>> GetAllItemUnitsAsync(int branchId)
         {
             var itemUnits = new List<ItemUnit>();
 
@@ -24,6 +24,7 @@ namespace InventoryManagement.Api.Services
             {
                 CommandType = CommandType.StoredProcedure
             };
+            command.Parameters.AddWithValue("@BranchId", branchId);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
@@ -59,7 +60,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<int> CreateItemUnitAsync(CreateItemUnitRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: null);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: null);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemUnit_Insert", connection)
@@ -76,7 +77,7 @@ namespace InventoryManagement.Api.Services
 
         public async Task<bool> UpdateItemUnitAsync(UpdateItemUnitRequest request)
         {
-            await EnsureNameNotDuplicateAsync(request.Name, excludeId: request.Id);
+            await EnsureNameNotDuplicateAsync(request.Name, request.BranchId, excludeId: request.Id);
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("ItemUnit_Update", connection)
@@ -114,10 +115,15 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        private async Task EnsureNameNotDuplicateAsync(string name, int? excludeId)
+        private async Task EnsureNameNotDuplicateAsync(string name, int? branchId, int? excludeId)
         {
+            if (branchId == null)
+            {
+                return;
+            }
+
             var normalizedName = name?.Trim() ?? string.Empty;
-            var itemUnits = await GetAllItemUnitsAsync();
+            var itemUnits = await GetAllItemUnitsAsync(branchId.Value);
 
             var isDuplicate = itemUnits.Any(u =>
                 (!excludeId.HasValue || u.Id != excludeId.Value) &&
@@ -138,7 +144,7 @@ namespace InventoryManagement.Api.Services
                 Description = reader.IsDBNull("Description") ? null : reader.GetString("Description"),
                 BranchId = reader.IsDBNull("BranchId") ? null : reader.GetInt32("BranchId"),
                 IsActive = reader.GetBoolean("IsActive"),
-                CreatedById = reader.GetInt32("CreatedById"),
+                CreatedById = reader.IsDBNull("CreatedById") ? 0 : reader.GetInt32("CreatedById"),
                 CreatedOn = reader.GetDateTime("CreatedOn"),
                 ModifiedById = reader.IsDBNull("ModifiedById") ? null : reader.GetInt32("ModifiedById"),
                 ModifiedOn = reader.IsDBNull("ModifiedOn") ? null : reader.GetDateTime("ModifiedOn"),

@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Delete item type (soft delete)
 -- =============================================
-CREATE PROCEDURE [dbo].[ItemType_Delete]
+CREATE OR ALTER PROCEDURE [dbo].[ItemType_Delete]
     @Id INT,
     @ModifiedById INT
 AS

@@ -20,7 +20,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Store>>> GetAll()
+        public async Task<ActionResult<IEnumerable<PharmacyStoreViewModel>>> GetAll()
         {
             try
             {

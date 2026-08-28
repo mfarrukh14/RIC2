@@ -1,84 +1,64 @@
-import React, { useState, useEffect } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch } from 'react-icons/fi';
+import React, { useCallback, useState, useEffect } from 'react';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiPrinter, FiCornerUpLeft } from 'react-icons/fi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import inventoryApi from '../services/inventoryApi';
 import InventoryFormPage from '../components/InventoryFormPage';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
-const InventoryListPage = () => {
-  const [inventories, setInventories] = useState([]);
-  const [filteredInventories, setFilteredInventories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const InventoryListPage = ({ onReturnInventory }) => {
   const [vendors, setVendors] = useState([]);
-  
+  const [stores, setStores] = useState([]);
+
   // Filters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
+  const [selectedStore, setSelectedStore] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [showForm, setShowForm] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
 
-  useEffect(() => {
-    fetchData();
+  const fetchPage = useCallback(async (params) => {
+    const data = await inventoryApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
   }, []);
 
+  const {
+    items: inventories,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error,
+    reload: reloadInventories,
+  } = usePagedList(
+    fetchPage,
+    {
+      searchTerm,
+      vendorId: selectedVendor || null,
+      storeId: selectedStore || null,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+    },
+    { initialPageSize: 10 }
+  );
+
   useEffect(() => {
-    filterInventories();
-  }, [inventories, dateFrom, dateTo, selectedVendor, searchTerm]);
+    fetchLookupData();
+  }, []);
 
-  const fetchData = async () => {
+  const fetchLookupData = async () => {
     try {
-      setLoading(true);
-      const [inventoriesData, lookupData] = await Promise.all([
-        inventoryApi.getAll(),
-        inventoryApi.getLookupData()
-      ]);
-      
-      setInventories(inventoriesData);
-      setFilteredInventories(inventoriesData);
+      const lookupData = await inventoryApi.getLookupData();
       setVendors(lookupData.vendors);
-      setError(null);
+      setStores(lookupData.stores);
     } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to fetch inventories. Please try again.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching lookup data:', err);
     }
-  };
-
-  const filterInventories = () => {
-    let filtered = [...inventories];
-
-    // Date range filter
-    if (dateFrom) {
-      filtered = filtered.filter(inv => {
-        const invDate = new Date(inv.createdOn);
-        return invDate >= new Date(dateFrom);
-      });
-    }
-    if (dateTo) {
-      filtered = filtered.filter(inv => {
-        const invDate = new Date(inv.createdOn);
-        return invDate <= new Date(dateTo);
-      });
-    }
-
-    // Vendor filter
-    if (selectedVendor) {
-      filtered = filtered.filter(inv => inv.vendorId === parseInt(selectedVendor));
-    }
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(inv =>
-        inv.vendorInvoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.vendorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.stockTypeName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredInventories(filtered);
   };
 
   const handleAddNew = () => {
@@ -98,11 +78,110 @@ const InventoryListPage = () => {
 
     try {
       await inventoryApi.delete(id);
-      await fetchData();
+      await reloadInventories();
     } catch (err) {
       console.error('Error deleting inventory:', err);
       alert('Failed to delete inventory. Please try again.');
     }
+  };
+
+  // Prints this Add Inventory record - RIC letterhead, header fields, and an item
+  // table pulled from the record's full detail lines.
+  const handlePrint = async (inventory) => {
+    let full;
+    try {
+      full = await inventoryApi.getById(inventory.id);
+    } catch (err) {
+      console.error('Error loading inventory for print:', err);
+      alert('Failed to load this inventory record for printing.');
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gov.pk, Ph: 051928111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Add Inventory', pageWidth / 2, 36, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 42,
+      body: [
+        ['Vendor Invoice No', full.vendorInvoiceNumber || '-', 'Vendor', full.vendorName || '-'],
+        ['Store', full.storeName || '-', 'Stock Type', full.stockTypeName || '-'],
+        ['Date & Time', formatDate(full.createdOn), '', '']
+      ],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    const itemsBody = (full.details || []).map((detail, index) => [
+      index + 1,
+      detail.itemName || 'Unassigned Item',
+      detail.totalItems ?? 0,
+      detail.unitBuyingPrice ?? 0,
+      detail.unitSellingPrice ?? 0,
+      detail.expiryDate ? formatDate(detail.expiryDate) : '-'
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Item', 'Total Items', 'Unit Buying Price', 'Unit Selling Price', 'Expiry Date']],
+      body: itemsBody,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' }
+      }
+    });
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dateStr}   ${timeStr}`, 14, doc.internal.pageSize.height - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, doc.internal.pageSize.height - 10, { align: 'right' });
+
+    doc.save(`AddInventory_${full.vendorInvoiceNumber || full.id}.pdf`);
+  };
+
+  const handleReturnInventory = (inventory) => {
+    if (!onReturnInventory) return;
+    onReturnInventory({ storeId: inventory.storeId });
   };
 
   const handleCancelForm = () => {
@@ -113,7 +192,7 @@ const InventoryListPage = () => {
   const handleSaveForm = async () => {
     setShowForm(false);
     setSelectedInventory(null);
-    await fetchData();
+    await reloadInventories();
   };
 
   const formatDate = (dateString) => {
@@ -121,14 +200,6 @@ const InventoryListPage = () => {
     const date = new Date(dateString);
     return date.toLocaleString();
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-6">
@@ -154,7 +225,7 @@ const InventoryListPage = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date Range
@@ -196,6 +267,24 @@ const InventoryListPage = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Store
+            </label>
+            <select
+              value={selectedStore}
+              onChange={(e) => setSelectedStore(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Store</option>
+              {stores.map((store) => (
+                <option key={store.storeId} value={store.storeId}>
+                  {store.storeName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Search
             </label>
             <div className="relative">
@@ -214,27 +303,9 @@ const InventoryListPage = () => {
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-          {error}
+          Failed to fetch inventories. Please try again.
         </div>
       )}
-
-      {/* Table Controls */}
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Show</span>
-          <select
-            value={entriesPerPage}
-            onChange={(e) => setEntriesPerPage(parseInt(e.target.value))}
-            className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-700">entries</span>
-        </div>
-      </div>
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -266,14 +337,14 @@ const InventoryListPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredInventories.length === 0 ? (
+              {inventories.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                filteredInventories.slice(0, entriesPerPage).map((inventory) => (
+                inventories.map((inventory) => (
                   <tr key={inventory.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {inventory.vendorInvoiceNumber || '-'}
@@ -302,6 +373,20 @@ const InventoryListPage = () => {
                         <FiEdit2 className="h-5 w-5" />
                       </button>
                       <button
+                        onClick={() => handlePrint(inventory)}
+                        className="text-emerald-600 hover:text-emerald-900 mr-4"
+                        title="Print"
+                      >
+                        <FiPrinter className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleReturnInventory(inventory)}
+                        className="text-amber-600 hover:text-amber-900 mr-4"
+                        title="Return Inventory"
+                      >
+                        <FiCornerUpLeft className="h-5 w-5" />
+                      </button>
+                      <button
                         onClick={() => handleDelete(inventory.id)}
                         className="text-red-600 hover:text-red-900"
                         title="Delete"
@@ -317,10 +402,13 @@ const InventoryListPage = () => {
         </div>
       </div>
 
-      {/* Pagination info */}
-      <div className="mt-4 text-sm text-gray-700">
-        Showing 0 to {Math.min(entriesPerPage, filteredInventories.length)} of {filteredInventories.length} entries
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={totalCount}
+        onPageChange={goToPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
         </>
       )}
     </div>

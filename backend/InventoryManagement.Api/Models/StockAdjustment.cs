@@ -31,7 +31,7 @@ namespace InventoryManagement.Api.Models
         public string? MedicineName { get; set; }
         public int? SubServiceId { get; set; }
         public string? SubServiceName { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
         public string? ItemName { get; set; }
         public int Type { get; set; } // 1 = Less/Decrease, 2 = Issue
         public string? TypeName { get; set; }
@@ -65,7 +65,9 @@ namespace InventoryManagement.Api.Models
 
     public class StockAdjustmentDetailCreateRequest
     {
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int Type { get; set; }
         public int StockTypeId { get; set; }
         public decimal Quantity { get; set; }
@@ -86,7 +88,9 @@ namespace InventoryManagement.Api.Models
     public class StockAdjustmentDetailUpdateRequest
     {
         public int? Id { get; set; }
-        public int ItemId { get; set; }
+        public int? ItemId { get; set; }
+        public int? MedicineId { get; set; }
+        public int? SubServiceId { get; set; }
         public int Type { get; set; }
         public int StockTypeId { get; set; }
         public decimal Quantity { get; set; }
@@ -94,12 +98,13 @@ namespace InventoryManagement.Api.Models
         public string? Remarks { get; set; }
     }
 
-    public class StockAdjustmentSearchRequest
+    public class StockAdjustmentSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
+        public string? SearchTerm { get; set; }
     }
 
     // View model for list display

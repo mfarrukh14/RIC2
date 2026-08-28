@@ -12,12 +12,13 @@ namespace InventoryManagement.Api.Models
         public decimal TotalSaleRate { get; set; }
     }
 
-    public class StockValueSearchRequest
+    public class StockValueSearchRequest : PagedRequest
     {
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string? Store { get; set; }
         public string? ItemType { get; set; }
+        public string? SearchTerm { get; set; }
     }
 
     public class StockValueDetailRequest

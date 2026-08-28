@@ -10,29 +10,54 @@ CREATE OR ALTER PROCEDURE StockFlow_GetReport
     @InventoryNo NVARCHAR(100) = NULL,
     @ChallanNo NVARCHAR(100) = NULL,
     @InvoiceNo NVARCHAR(100) = NULL,
-    @DemandRequestNo NVARCHAR(100) = NULL
+    @DemandRequestNo NVARCHAR(100) = NULL,
+    @PageNumber INT = 1,
+    @PageSize INT = 10
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DECLARE @StoreId INT = TRY_CAST(@Store AS INT);
+    DECLARE @Offset INT = (CASE WHEN @PageNumber < 1 THEN 0 ELSE @PageNumber - 1 END) * (CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END);
+    DECLARE @Take INT = CASE WHEN @PageSize < 1 THEN 10 ELSE @PageSize END;
 
     -- This is a composite report that shows stock movements from multiple sources
 
-    SELECT
-        CreatedOn AS DateTime,
-        TransactionType,
-        RefNumber,
-        ItemName,
-        DemandRequestedStore,
-        StockType,
-        OpeningQuantity,
-        ReceivedQuantity,
-        IssuedQuantity,
-        BalanceQuantity,
-        BatchNo,
-        ActionBy
-    FROM (
+    ;WITH StockMovements AS (
+        -- Add Inventory Records (Received) - this app's other stock-receiving path
+        -- alongside GRN below. Confirmed against the old system: its equivalent
+        -- (Inventories/InventoryItems) was the PRIMARY receiving mechanism, always
+        -- funneled through SP_Stock_UpdateStockBalance (which both updated the real
+        -- balance and wrote a StockTransactions ledger row - see
+        -- InventoryDetail_StockEffect_Live.sql for the matching fix on our side, since
+        -- neither this table nor GRN previously touched the live stock ledger at all here).
+        SELECT
+            inv.CreatedOn,
+            'Inventory' AS TransactionType,
+            CAST(inv.Id AS NVARCHAR(50)) AS RefNumber,
+            i.Name AS ItemName,
+            '' AS DemandRequestedStore,
+            st.Name AS StockType,
+            0.00 AS OpeningQuantity,
+            ISNULL(d.TotalItems, 0) AS ReceivedQuantity,
+            0.00 AS IssuedQuantity,
+            ISNULL(d.TotalItems, 0) AS BalanceQuantity,
+            NULL AS BatchNo,
+            ISNULL(e.FullName, '') AS ActionBy
+        FROM Inv.Inventories inv
+        INNER JOIN Inv.InventoryDetails d ON d.InventoryId = inv.Id
+        LEFT JOIN Inv.Items i ON d.ItemId = i.Id
+        LEFT JOIN Pharmacy.StockTypes st ON inv.StockTypeId = st.Id
+        LEFT JOIN Users u ON inv.CreatedById = u.UserID
+        LEFT JOIN Employee e ON e.EmpID = u.EmpID
+        WHERE inv.IsActive = 1
+            AND (@StartDate IS NULL OR inv.CreatedOn >= @StartDate)
+            AND (@EndDate IS NULL OR inv.CreatedOn <= @EndDate)
+            AND (@Item IS NULL OR i.Name LIKE '%' + @Item + '%')
+            AND (@StoreId IS NULL OR inv.StoreId = @StoreId)
+
+        UNION ALL
+
         -- GRN Records (Received) - GRNs have no StoreId of their own in this schema,
         -- so @Store doesn't filter this branch.
         SELECT
@@ -54,7 +79,7 @@ BEGIN
         LEFT JOIN Pharmacy.StockTypes st ON grn.StockTypeId = st.Id
         LEFT JOIN Users u ON grn.CreatedById = u.UserID
         LEFT JOIN Employee e ON e.EmpID = u.EmpID
-        WHERE 1 = 1
+        WHERE grn.IsActive = 1
             AND (@StartDate IS NULL OR grn.CreatedOn >= @StartDate)
             AND (@EndDate IS NULL OR grn.CreatedOn <= @EndDate)
             AND (@Item IS NULL OR i.Name LIKE '%' + @Item + '%')
@@ -158,11 +183,16 @@ BEGIN
         -- Demand Requests (Issued from the fulfilling store, Received at the requesting
         -- store) - this is the only transaction source @DemandRequestNo can ever match
         -- against, so it needs its own branch for that filter to mean anything at all.
-        -- IMPORTANT: DemandRequests.RequestingStoreId/RequestedToStoreId are keyed into
-        -- Inv.Stores, a completely different store table than Inv.PharmacyStores (which
-        -- backs the @Store filter and every other branch here) - the two share numeric
-        -- IDs that refer to different physical stores. So @Store deliberately does NOT
-        -- filter this branch; it would silently match the wrong store.
+        -- DemandRequests.RequestingStoreId/RequestedToStoreId are keyed into
+        -- Inv.PharmacyStores - the same table that backs @Store everywhere else in this
+        -- report (confirmed against DemandRequestService.cs, which resolves both store
+        -- columns via Inv.PharmacyStores for the HMS schema). Inv.Stores is an unrelated,
+        -- near-empty legacy table (Main Warehouse/OT Store/ER Store) whose IDs happen to
+        -- overlap - joining against it produced blank or wrong store names. @Store only
+        -- matches the requesting side here (not RequestedToStoreId) so the
+        -- DemandRequestedStore column always shows the filtered store itself when a
+        -- filter is active - rows where the store only fulfilled someone else's request
+        -- are intentionally excluded rather than shown under a different store's name.
         SELECT
             dr.CreatedOn,
             'DemandRequest' AS TransactionType,
@@ -179,7 +209,7 @@ BEGIN
         FROM Inv.DemandRequests dr
         INNER JOIN Inv.DemandRequestItems dri ON dri.DemandRequestId = dr.Id
         LEFT JOIN Inv.Items i ON dri.ItemId = i.Id
-        LEFT JOIN Inv.Stores sReq ON dr.RequestingStoreId = sReq.StoreId
+        LEFT JOIN Inv.PharmacyStores sReq ON dr.RequestingStoreId = sReq.StoreId
         LEFT JOIN Pharmacy.StockTypes st ON dr.StockTypeId = st.Id
         LEFT JOIN Users u ON dr.CreatedById = u.UserID
         LEFT JOIN Employee e ON e.EmpID = u.EmpID
@@ -188,8 +218,54 @@ BEGIN
             AND (@EndDate IS NULL OR dr.CreatedOn <= @EndDate)
             AND (@Item IS NULL OR i.Name LIKE '%' + @Item + '%')
             AND (@DemandRequestNo IS NULL OR dr.DemandRequestNumber LIKE '%' + @DemandRequestNo + '%')
-    ) AS StockMovements
-    ORDER BY DateTime DESC;
+            AND (@StoreId IS NULL OR dr.RequestingStoreId = @StoreId)
+
+        UNION ALL
+
+        -- Asset Allocations (Issued to a room/department) - matches the old system's
+        -- "Asset Allocation" transaction source type in its stock ledger. Inv.AssetAllocations
+        -- has no StoreId column in this schema (allocations are tracked by
+        -- room/department, not by store), so - same as Demand Requests above - @Store
+        -- does not filter this branch.
+        SELECT
+            aa.CreatedOn,
+            'AssetAllocation' AS TransactionType,
+            ISNULL(aa.AllocationNumber, CAST(aa.Id AS NVARCHAR(50))) AS RefNumber,
+            i.Name AS ItemName,
+            '' AS DemandRequestedStore,
+            CAST(NULL AS NVARCHAR(100)) AS StockType,
+            0.00 AS OpeningQuantity,
+            0.00 AS ReceivedQuantity,
+            aa.Quantity AS IssuedQuantity,
+            0.00 AS BalanceQuantity,
+            NULL AS BatchNo,
+            ISNULL(e.FullName, '') AS ActionBy
+        FROM Inv.AssetAllocations aa
+        LEFT JOIN Inv.Items i ON aa.ItemId = i.Id
+        LEFT JOIN Users u ON aa.CreatedById = u.UserID
+        LEFT JOIN Employee e ON e.EmpID = u.EmpID
+        WHERE aa.IsActive = 1
+            AND (@StartDate IS NULL OR aa.CreatedOn >= @StartDate)
+            AND (@EndDate IS NULL OR aa.CreatedOn <= @EndDate)
+            AND (@Item IS NULL OR i.Name LIKE '%' + @Item + '%')
+    )
+    SELECT
+        CreatedOn AS DateTime,
+        TransactionType,
+        RefNumber,
+        ItemName,
+        DemandRequestedStore,
+        StockType,
+        OpeningQuantity,
+        ReceivedQuantity,
+        IssuedQuantity,
+        BalanceQuantity,
+        BatchNo,
+        ActionBy,
+        COUNT(*) OVER() AS TotalCount
+    FROM StockMovements
+    ORDER BY DateTime DESC
+    OFFSET @Offset ROWS FETCH NEXT @Take ROWS ONLY;
 END
 GO
 

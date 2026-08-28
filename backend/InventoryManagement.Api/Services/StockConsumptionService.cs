@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockConsumptionView>> GetAllAsync(StockConsumptionSearchRequest? request = null)
+        public async Task<PagedResult<StockConsumptionView>> GetAllAsync(StockConsumptionSearchRequest? request = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request?.PageNumber ?? 1, request?.PageSize ?? PaginationHelper.DefaultPageSize);
             var stockConsumptions = new List<StockConsumptionView>();
+            var totalCount = 0;
 
             try
             {
@@ -28,23 +30,22 @@ namespace InventoryManagement.Api.Services
                     CommandType = CommandType.StoredProcedure
                 };
 
-                if (request != null)
-                {
-                    if (request.BranchId.HasValue)
-                        command.Parameters.AddWithValue("@BranchId", request.BranchId.Value);
-                    if (request.StoreId.HasValue)
-                        command.Parameters.AddWithValue("@StoreId", request.StoreId.Value);
-                    if (request.StartDate.HasValue)
-                        command.Parameters.AddWithValue("@StartDate", request.StartDate.Value);
-                    if (request.EndDate.HasValue)
-                        command.Parameters.AddWithValue("@EndDate", request.EndDate.Value);
-                }
+                command.Parameters.AddWithValue("@BranchId", (object?)request?.BranchId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StoreId", (object?)request?.StoreId ?? DBNull.Value);
+                command.Parameters.AddWithValue("@StartDate", (object?)request?.StartDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@EndDate", (object?)request?.EndDate ?? DBNull.Value);
+                command.Parameters.AddWithValue("@SearchTerm", (object?)request?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     stockConsumptions.Add(new StockConsumptionView
                     {
                         Id = reader.GetInt32(reader.GetOrdinal("Id")),
@@ -64,7 +65,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return stockConsumptions;
+            return new PagedResult<StockConsumptionView> { Items = stockConsumptions, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<StockConsumption?> GetByIdAsync(int id)
@@ -143,7 +144,9 @@ namespace InventoryManagement.Api.Services
                         detailCommand.CommandType = CommandType.StoredProcedure;
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", stockConsumptionId);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                        detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                         detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                         detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -212,7 +215,9 @@ namespace InventoryManagement.Api.Services
                         detailCommand.CommandType = CommandType.StoredProcedure;
                         detailCommand.Parameters.AddWithValue("@StockConsumptionId", request.Id);
                         detailCommand.Parameters.AddWithValue("@StoreId", request.StoreId);
-                        detailCommand.Parameters.AddWithValue("@ItemId", detail.ItemId);
+                        detailCommand.Parameters.AddWithValue("@ItemId", (object?)detail.ItemId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@MedicineId", (object?)detail.MedicineId ?? DBNull.Value);
+                        detailCommand.Parameters.AddWithValue("@SubServiceId", (object?)detail.SubServiceId ?? DBNull.Value);
                         detailCommand.Parameters.AddWithValue("@Type", detail.Type);
                         detailCommand.Parameters.AddWithValue("@StockTypeId", detail.StockTypeId);
                         detailCommand.Parameters.AddWithValue("@Quantity", detail.Quantity);
@@ -310,8 +315,12 @@ namespace InventoryManagement.Api.Services
                 StockConsumptionId = reader.IsDBNull(reader.GetOrdinal("StockConsumptionId")) ? null : reader.GetInt32(reader.GetOrdinal("StockConsumptionId")),
                 StoreId = reader.GetInt32(reader.GetOrdinal("StoreId")),
                 StoreName = reader.IsDBNull(reader.GetOrdinal("StoreName")) ? null : reader.GetString(reader.GetOrdinal("StoreName")),
-                ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
+                ItemId = reader.IsDBNull(reader.GetOrdinal("ItemId")) ? null : reader.GetInt32(reader.GetOrdinal("ItemId")),
                 ItemName = reader.IsDBNull(reader.GetOrdinal("ItemName")) ? null : reader.GetString(reader.GetOrdinal("ItemName")),
+                MedicineId = reader.IsDBNull(reader.GetOrdinal("MedicineId")) ? null : reader.GetInt32(reader.GetOrdinal("MedicineId")),
+                MedicineName = reader.IsDBNull(reader.GetOrdinal("MedicineName")) ? null : reader.GetString(reader.GetOrdinal("MedicineName")),
+                SubServiceId = reader.IsDBNull(reader.GetOrdinal("SubServiceId")) ? null : reader.GetInt32(reader.GetOrdinal("SubServiceId")),
+                SubServiceName = reader.IsDBNull(reader.GetOrdinal("SubServiceName")) ? null : reader.GetString(reader.GetOrdinal("SubServiceName")),
                 Type = reader.GetInt32(reader.GetOrdinal("Type")),
                 StockTypeId = reader.GetInt32(reader.GetOrdinal("StockTypeId")),
                 StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName")) ? null : reader.GetString(reader.GetOrdinal("StockTypeName")),

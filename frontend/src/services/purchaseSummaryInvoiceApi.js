@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5100/api';
+const API_BASE_URL = 'http://10.10.10.35:5100/api';
 
 const purchaseSummaryInvoiceApi = {
   // Get all purchase summary invoice records with filters
@@ -17,7 +17,9 @@ const purchaseSummaryInvoiceApi = {
     if (filters.invoiceNo) params.append('invoiceNo', filters.invoiceNo);
     if (filters.reportType) params.append('reportType', filters.reportType);
     if (filters.invoiceType) params.append('invoiceType', filters.invoiceType);
-    
+    if (filters.pageNumber) params.append('pageNumber', filters.pageNumber);
+    if (filters.pageSize) params.append('pageSize', filters.pageSize);
+
     const queryString = params.toString();
     const url = `${API_BASE_URL}/purchasesummaryinvoice${queryString ? `?${queryString}` : ''}`;
     

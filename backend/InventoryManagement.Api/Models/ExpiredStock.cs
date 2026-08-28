@@ -10,11 +10,12 @@ namespace InventoryManagement.Api.Models
         public int TotalItems { get; set; }
     }
 
-    public class ExpiredStockSearchRequest
+    public class ExpiredStockSearchRequest : PagedRequest
     {
         public string? StoreName { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string? Item { get; set; }
+        public string? SearchTerm { get; set; }
     }
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { FiEdit2, FiTrash2 } from 'react-icons/fi';
 
-const ItemList = ({ items, onEdit, onDelete }) => {
+const ItemList = ({ items, onEdit, onDelete, loading }) => {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
@@ -44,7 +44,7 @@ const ItemList = ({ items, onEdit, onDelete }) => {
             {items.length === 0 ? (
               <tr>
                 <td colSpan="10" className="px-6 py-4 text-center text-sm text-gray-500">
-                  No items found
+                  {loading ? 'Loading...' : 'No items found'}
                 </td>
               </tr>
             ) : (

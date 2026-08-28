@@ -7,6 +7,7 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import transferInventoryApi from '../services/transferInventoryApi';
+import Pagination from '../components/Pagination';
 
 function formatDateTime(value) {
   if (!value) {
@@ -64,7 +65,7 @@ const StockTransitionsPage = () => {
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [entriesPerPage, setEntriesPerPage] = useState(5);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -77,13 +78,31 @@ const StockTransitionsPage = () => {
     loadTransitions();
   }, []);
 
+  // The store+item+stockType grouping below needs every transfer record, not
+  // just one page of them, so this pulls every page from the (now paginated)
+  // API back-to-back into one array before grouping/re-paginating client-side.
   const loadTransitions = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const data = await transferInventoryApi.getAll();
-      setTransitions(normalizeTransitionRecords(data));
+      const pageSize = 200;
+      let page = 1;
+      let all = [];
+      let totalCount = Infinity;
+
+      while (all.length < totalCount) {
+        const data = await transferInventoryApi.getAll({ pageNumber: page, pageSize });
+        const items = data.items || [];
+        totalCount = data.totalCount || 0;
+        all = all.concat(items);
+        if (items.length === 0) {
+          break;
+        }
+        page += 1;
+      }
+
+      setTransitions(normalizeTransitionRecords(all));
     } catch (requestError) {
       console.error('Error loading stock transitions:', requestError);
       setError('Failed to load stock transitions.');
@@ -111,11 +130,8 @@ const StockTransitionsPage = () => {
     setCurrentPage(1);
   }, [entriesPerPage, searchTerm]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredTransitions.length / entriesPerPage));
   const startIndex = (currentPage - 1) * entriesPerPage;
   const pageItems = filteredTransitions.slice(startIndex, startIndex + entriesPerPage);
-  const showingFrom = filteredTransitions.length === 0 ? 0 : startIndex + 1;
-  const showingTo = Math.min(startIndex + entriesPerPage, filteredTransitions.length);
 
   const exportCsv = () => {
     const csv = [
@@ -178,11 +194,8 @@ const StockTransitionsPage = () => {
     setModalCurrentPage(1);
   }, [modalEntriesPerPage, modalSearchTerm, selectedGroup]);
 
-  const modalTotalPages = Math.max(1, Math.ceil(filteredModalRecords.length / modalEntriesPerPage));
   const modalStartIndex = (modalCurrentPage - 1) * modalEntriesPerPage;
   const modalPageItems = filteredModalRecords.slice(modalStartIndex, modalStartIndex + modalEntriesPerPage);
-  const modalShowingFrom = filteredModalRecords.length === 0 ? 0 : modalStartIndex + 1;
-  const modalShowingTo = Math.min(modalStartIndex + modalEntriesPerPage, filteredModalRecords.length);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -205,21 +218,7 @@ const StockTransitionsPage = () => {
             </button>
           </div>
 
-          <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(event) => setEntriesPerPage(Number(event.target.value))}
-                className="rounded-md border border-slate-200 px-2 py-1 text-sm"
-              >
-                {[10, 25, 50].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-              <span>entries</span>
-            </div>
-
+          <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-end">
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <span>Search:</span>
               <input
@@ -290,28 +289,13 @@ const StockTransitionsPage = () => {
                 </table>
               </div>
 
-              <div className="flex flex-col gap-3 px-4 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {showingFrom} to {showingTo} of {filteredTransitions.length} entries</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    ‹
-                  </button>
-                  <span className="rounded-md bg-indigo-600 px-3 py-2 text-white">{currentPage}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="rounded-md border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                currentPage={currentPage}
+                pageSize={entriesPerPage}
+                totalCount={filteredTransitions.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setEntriesPerPage}
+              />
             </>
           )}
         </section>
@@ -330,21 +314,7 @@ const StockTransitionsPage = () => {
             </div>
 
             <div className="max-h-[calc(90vh-72px)] overflow-y-auto px-6 py-5">
-              <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2 text-sm text-slate-700">
-                  <span>Show</span>
-                  <select
-                    value={modalEntriesPerPage}
-                    onChange={(event) => setModalEntriesPerPage(Number(event.target.value))}
-                    className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none"
-                  >
-                    {[10, 25, 50].map((size) => (
-                      <option key={size} value={size}>{size}</option>
-                    ))}
-                  </select>
-                  <span>entries</span>
-                </div>
-
+              <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <span>Search:</span>
                   <input
@@ -389,28 +359,13 @@ const StockTransitionsPage = () => {
                 </table>
               </div>
 
-              <div className="mt-5 flex flex-col gap-3 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
-                <div>Showing {modalShowingFrom} to {modalShowingTo} of {filteredModalRecords.length} entries</div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setModalCurrentPage((page) => Math.max(page - 1, 1))}
-                    disabled={modalCurrentPage === 1}
-                    className="rounded bg-slate-100 px-3 py-2 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    ‹
-                  </button>
-                  <span className="rounded bg-indigo-500 px-3 py-2 text-white">{modalCurrentPage}</span>
-                  <button
-                    type="button"
-                    onClick={() => setModalCurrentPage((page) => Math.min(page + 1, modalTotalPages))}
-                    disabled={modalCurrentPage === modalTotalPages}
-                    className="rounded bg-slate-100 px-3 py-2 text-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
+              <Pagination
+                currentPage={modalCurrentPage}
+                pageSize={modalEntriesPerPage}
+                totalCount={filteredModalRecords.length}
+                onPageChange={setModalCurrentPage}
+                onPageSizeChange={setModalEntriesPerPage}
+              />
             </div>
           </div>
         </div>

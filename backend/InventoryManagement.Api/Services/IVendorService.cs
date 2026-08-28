@@ -4,10 +4,10 @@ namespace InventoryManagement.Api.Services
 {
     public interface IVendorService
     {
-        Task<IEnumerable<VendorDto>> GetAllVendorsAsync();
+        Task<IEnumerable<VendorDto>> GetAllVendorsAsync(int branchId);
         Task<VendorDto?> GetVendorByIdAsync(int id);
-        Task<VendorDto> CreateVendorAsync(CreateVendorDto createVendorDto);
-        Task<VendorDto?> UpdateVendorAsync(int id, UpdateVendorDto updateVendorDto);
+        Task<VendorDto> CreateVendorAsync(CreateVendorDto createVendorDto, int? branchId);
+        Task<VendorDto?> UpdateVendorAsync(int id, UpdateVendorDto updateVendorDto, int? branchId);
         Task<bool> DeleteVendorAsync(int id);
     }
 }

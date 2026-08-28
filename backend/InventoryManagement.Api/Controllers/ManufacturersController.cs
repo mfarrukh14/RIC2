@@ -21,7 +21,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var manufacturers = await _manufacturerService.GetAllManufacturersAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var manufacturers = await _manufacturerService.GetAllManufacturersAsync(branchId);
                 return Ok(manufacturers);
             }
             catch (Exception ex)
@@ -58,6 +63,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Manufacturer name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var manufacturerId = await _manufacturerService.CreateManufacturerAsync(request);
                 return CreatedAtAction(nameof(GetManufacturer), new { id = manufacturerId }, manufacturerId);
             }
@@ -86,6 +92,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Manufacturer name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var success = await _manufacturerService.UpdateManufacturerAsync(request);
                 if (!success)
                 {

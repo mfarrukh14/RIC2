@@ -3,7 +3,7 @@
 -- Create date: 2025-09-30
 -- Description: Insert new vendor
 -- =============================================
-CREATE PROCEDURE [dbo].[Vendor_Insert]
+CREATE OR ALTER PROCEDURE [dbo].[Vendor_Insert]
     @Name NVARCHAR(MAX),
     @Description NVARCHAR(MAX) = NULL,
     @Email NVARCHAR(MAX) = NULL,

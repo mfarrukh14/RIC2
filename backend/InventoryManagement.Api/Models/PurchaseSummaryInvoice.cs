@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using InventoryManagement.Api.Models;
 
 namespace InventoryManagement.API.Models
 {
@@ -85,7 +86,7 @@ namespace InventoryManagement.API.Models
         public string? InvoiceType { get; set; }
     }
 
-    public class PurchaseSummaryInvoiceFilterRequest
+    public class PurchaseSummaryInvoiceFilterRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
@@ -107,10 +108,17 @@ namespace InventoryManagement.API.Models
         public decimal GrandTotal { get; set; }
     }
 
+    // Totals always cover the full filtered scope (not just the current page) -
+    // Records is just the current page, so TotalCount/PageNumber/PageSize
+    // travel alongside it rather than wrapping this whole response in
+    // PagedResult<T>.
     public class PurchaseSummaryInvoiceResponse
     {
         public List<PurchaseSummaryInvoice> Records { get; set; } = new();
         public PurchaseSummaryInvoiceTotals Totals { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int PageNumber { get; set; }
+        public int PageSize { get; set; }
     }
 
     public class PurchaseSummaryInvoiceLookupData

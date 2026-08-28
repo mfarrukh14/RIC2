@@ -21,7 +21,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var itemTypes = await _itemTypeService.GetAllItemTypesAsync();
+                if (BranchId is not int branchId)
+                {
+                    return BadRequest("Current session has no branch assigned.");
+                }
+
+                var itemTypes = await _itemTypeService.GetAllItemTypesAsync(branchId);
                 return Ok(itemTypes);
             }
             catch (Exception ex)
@@ -58,6 +63,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Item type name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var itemTypeId = await _itemTypeService.CreateItemTypeAsync(request);
                 return CreatedAtAction(nameof(GetItemType), new { id = itemTypeId }, itemTypeId);
             }
@@ -86,6 +92,7 @@ namespace InventoryManagement.Api.Controllers
                     return BadRequest("Item type name is required.");
                 }
 
+                request.BranchId = BranchId;
                 var success = await _itemTypeService.UpdateItemTypeAsync(request);
                 if (!success)
                 {

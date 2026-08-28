@@ -16,10 +16,16 @@ namespace InventoryManagement.Api.Services
         // (i.e. almost every real store) made GetByIdAsync's INNER JOIN return nothing,
         // surfacing as "created but could not be retrieved" right after a successful insert.
         private readonly string _storesTable;
-        // Same rationale as _storesTable: Inv.Stocks is the app's canonical on-hand
-        // balance table on HMS, keyed by the same PharmacyStores id space - dbo.Stocks
-        // (legacy schema) isn't wired up anywhere else in this file, but the fallback
-        // keeps the dbo code path internally consistent.
+        // Pharmacy.PharmacyMedicinesStocks is the live, actively-maintained stock ledger
+        // (the real HMS pharmacy operations update it) - NOT Inv.Stocks, which turned out
+        // to be a one-time migrated snapshot this app's own features had been reading/
+        // writing in isolation ever since, and had already diverged significantly (44% of
+        // overlapping rows disagreed on quantity - see Stock_Procedures.sql header for the
+        // full investigation). Unlike Inv.Stocks it has no BranchId/IsActive columns, and
+        // its product-key columns are ItemId/BranchMedicineId/BranchSubServiceId (not
+        // ItemId/MedicineId/SubServiceId) - see the SQL blocks below for how each is
+        // adapted. dbo.Stocks (legacy schema) isn't wired up anywhere else in this file,
+        // but the fallback keeps the dbo code path internally consistent.
         private readonly string _stocksTable;
 
         public DemandRequestService(IConfiguration configuration, ILogger<DemandRequestService> logger)
@@ -30,16 +36,106 @@ namespace InventoryManagement.Api.Services
             var builder = new SqlConnectionStringBuilder(_connectionString);
             _schemaPrefix = builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
             _storesTable = _schemaPrefix == "Inv" ? "Inv.PharmacyStores" : "dbo.Stores";
-            _stocksTable = _schemaPrefix == "Inv" ? "Inv.Stocks" : "dbo.Stocks";
+            _stocksTable = _schemaPrefix == "Inv" ? "Pharmacy.PharmacyMedicinesStocks" : "dbo.Stocks";
         }
 
         private string NormalizeSql(string sql) => sql.Replace("dbo.", $"{_schemaPrefix}.");
 
-        public async Task<IReadOnlyList<DemandRequestSummary>> GetAllAsync(DemandRequestFilter filter)
+        public async Task<PagedResult<DemandRequestSummary>> GetAllAsync(DemandRequestFilter filter)
         {
-            var results = new List<DemandRequestSummary>();
+            var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+            var pageSize = filter.PageSize < 1 ? 5 : Math.Min(filter.PageSize, 100);
+            var offset = (pageNumber - 1) * pageSize;
 
-            string sql = $@"
+            // Filtering/joins shared by both the count and the page-of-ids query. Deliberately
+            // does NOT touch DemandRequestItems/Items - those are only joined afterwards, and
+            // only for the (at most pageSize) rows that make it onto the current page, so the
+            // heavy per-item GROUP BY/STRING_AGG never runs over the full 58,000+ row table.
+            string filteredIdsCte = $@"
+    SELECT dr.Id, dr.CreatedOn
+    FROM dbo.DemandRequests dr
+    INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
+    LEFT JOIN {_storesTable} rs ON rs.StoreId = dr.RequestingStoreId
+    LEFT JOIN {_storesTable} s ON s.StoreId = dr.RequestedToStoreId
+    LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
+    LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
+    WHERE dr.IsActive = 1
+      AND (@BranchId IS NULL OR dr.BranchId = @BranchId)
+      AND (@RequestingStoreId IS NULL OR dr.RequestingStoreId = @RequestingStoreId)
+      AND (@RequestedStoreId IS NULL OR dr.RequestedToStoreId = @RequestedStoreId)
+      AND (@StockTypeId IS NULL OR dr.StockTypeId = @StockTypeId)
+      AND (@DateFrom IS NULL OR COALESCE(dr.ModifiedOn, dr.CreatedOn) >= @DateFrom)
+      AND (@DateTo IS NULL OR dr.CreatedOn <= @DateTo)
+      AND (@Statuses IS NULL OR drs.Name IN (SELECT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@Statuses, ',')))
+      AND (
+            @Search IS NULL
+            OR dr.DemandRequestNumber LIKE '%' + @Search + '%'
+            OR ISNULL(dr.IndentNumber, '') LIKE '%' + @Search + '%'
+            OR b.Name LIKE '%' + @Search + '%'
+            OR ISNULL(rs.StoreName, '') LIKE '%' + @Search + '%'
+            OR s.StoreName LIKE '%' + @Search + '%'
+            OR ISNULL(st.Name, '') LIKE '%' + @Search + '%'
+            OR drs.Name LIKE '%' + @Search + '%'
+          )";
+
+            string countSql = NormalizeSql($"SELECT COUNT(*) FROM ({filteredIdsCte}) AS FilteredRequests;");
+
+            string pageIdsSql = NormalizeSql($@"
+SELECT Id FROM ({filteredIdsCte}) AS FilteredRequests
+ORDER BY CreatedOn DESC, Id DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;");
+
+            var result = new PagedResult<DemandRequestSummary>
+            {
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
+
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                void AddFilterParameters(SqlCommand cmd)
+                {
+                    cmd.Parameters.AddWithValue("@BranchId", (object?)filter.BranchId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@RequestingStoreId", (object?)filter.RequestingStoreId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@RequestedStoreId", (object?)filter.RequestedStoreId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@StockTypeId", (object?)filter.StockTypeId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@DateFrom", (object?)filter.DateFrom ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@DateTo", (object?)filter.DateTo ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@Statuses", string.IsNullOrWhiteSpace(filter.Statuses) ? DBNull.Value : filter.Statuses.Trim());
+                    cmd.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
+                }
+
+                using (var countCommand = new SqlCommand(countSql, connection))
+                {
+                    AddFilterParameters(countCommand);
+                    result.TotalCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+                }
+
+                var pageIds = new List<int>();
+                using (var idsCommand = new SqlCommand(pageIdsSql, connection))
+                {
+                    AddFilterParameters(idsCommand);
+                    idsCommand.Parameters.AddWithValue("@Offset", offset);
+                    idsCommand.Parameters.AddWithValue("@PageSize", pageSize);
+
+                    using var idsReader = await idsCommand.ExecuteReaderAsync();
+                    while (await idsReader.ReadAsync())
+                    {
+                        pageIds.Add(idsReader.GetInt32(0));
+                    }
+                }
+
+                if (pageIds.Count == 0)
+                {
+                    result.Items = Array.Empty<DemandRequestSummary>();
+                    return result;
+                }
+
+                var idParamNames = pageIds.Select((_, index) => $"@Id{index}").ToList();
+                string detailsSql = NormalizeSql($@"
 SELECT
     dr.Id AS DemandRequestId,
     dr.DemandRequestNumber AS DRNo,
@@ -79,23 +175,7 @@ LEFT JOIN dbo.DemandRequestItems dri
     ON dri.DemandRequestId = dr.Id
    AND dri.IsActive = 1
 LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
-WHERE dr.IsActive = 1
-  AND (@BranchId IS NULL OR dr.BranchId = @BranchId)
-  AND (@RequestingStoreId IS NULL OR dr.RequestingStoreId = @RequestingStoreId)
-  AND (@RequestedStoreId IS NULL OR dr.RequestedToStoreId = @RequestedStoreId)
-  AND (@StockTypeId IS NULL OR dr.StockTypeId = @StockTypeId)
-  AND (@DateFrom IS NULL OR COALESCE(dr.ModifiedOn, dr.CreatedOn) >= @DateFrom)
-  AND (@DateTo IS NULL OR dr.CreatedOn <= @DateTo)
-  AND (
-        @Search IS NULL
-        OR dr.DemandRequestNumber LIKE '%' + @Search + '%'
-        OR ISNULL(dr.IndentNumber, '') LIKE '%' + @Search + '%'
-        OR b.Name LIKE '%' + @Search + '%'
-        OR ISNULL(rs.StoreName, '') LIKE '%' + @Search + '%'
-        OR s.StoreName LIKE '%' + @Search + '%'
-        OR ISNULL(st.Name, '') LIKE '%' + @Search + '%'
-        OR drs.Name LIKE '%' + @Search + '%'
-      )
+WHERE dr.Id IN ({string.Join(",", idParamNames)})
 GROUP BY
     dr.Id,
     dr.DemandRequestNumber,
@@ -121,31 +201,24 @@ GROUP BY
     dr.VehicleNumber,
     dr.ContactNumber,
     dr.Detail
-ORDER BY dr.CreatedOn DESC;";
+ORDER BY dr.CreatedOn DESC, dr.Id DESC;");
 
-            try
-            {
-                using var connection = new SqlConnection(_connectionString);
-                using var command = new SqlCommand(NormalizeSql(sql), connection)
+                var items = new List<DemandRequestSummary>();
+                using (var detailsCommand = new SqlCommand(detailsSql, connection))
                 {
-                    CommandType = CommandType.Text
-                };
+                    for (int i = 0; i < pageIds.Count; i++)
+                    {
+                        detailsCommand.Parameters.AddWithValue(idParamNames[i], pageIds[i]);
+                    }
 
-                command.Parameters.AddWithValue("@BranchId", (object?)filter.BranchId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@RequestingStoreId", (object?)filter.RequestingStoreId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@RequestedStoreId", (object?)filter.RequestedStoreId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@StockTypeId", (object?)filter.StockTypeId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@DateFrom", (object?)filter.DateFrom ?? DBNull.Value);
-                command.Parameters.AddWithValue("@DateTo", (object?)filter.DateTo ?? DBNull.Value);
-                command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(filter.Search) ? DBNull.Value : filter.Search.Trim());
-
-                await connection.OpenAsync();
-                using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
-                {
-                    results.Add(MapSummary(reader));
+                    using var reader = await detailsCommand.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        items.Add(MapSummary(reader));
+                    }
                 }
+
+                result.Items = items;
             }
             catch (Exception ex)
             {
@@ -153,7 +226,7 @@ ORDER BY dr.CreatedOn DESC;";
                 throw;
             }
 
-            return results;
+            return result;
         }
 
         public async Task<DemandRequestDetails?> GetByIdAsync(int id)
@@ -218,13 +291,13 @@ SELECT
     dri.Id,
     dri.DemandRequestId,
     dri.ItemId,
-    i.Name AS ItemName,
+    COALESCE(i.Name, med.MedicineFullName, f.Name) AS ItemName,
     dri.RequestedQuantity,
     dri.ApprovedQuantity,
     dr.BranchId,
     b.Name AS BranchName,
-    CAST(NULL AS INT) AS MedicineId,
-    CAST(NULL AS INT) AS SubServiceId,
+    dri.MedicineId,
+    dri.SubServiceId,
     dri.IsActive,
     CAST(NULL AS INT) AS CreatedById,
     dri.CreatedOn,
@@ -240,15 +313,19 @@ SELECT
     -- against what was actually approved (matches old system's SP_DemandRequest_GetDemandRequest).
     CAST(CASE WHEN ISNULL(dri.ApprovedQuantity, dri.RequestedQuantity) - ISNULL(dri.IssuedQuantity, 0) > 0
               THEN ISNULL(dri.ApprovedQuantity, dri.RequestedQuantity) - ISNULL(dri.IssuedQuantity, 0) ELSE 0 END AS INT) AS RemainingQuantity,
-    ISNULL(reqStock.TotalItems, 0) AS AvailableQuantityInRequestingStore,
-    ISNULL(destStock.TotalItems, 0) AS AvailableQuantityInRequestedStore
+    ISNULL(reqStock.TotalItemsInStock, 0) AS AvailableQuantityInRequestingStore,
+    ISNULL(destStock.TotalItemsInStock, 0) AS AvailableQuantityInRequestedStore
 FROM dbo.DemandRequestItems dri
 LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = dri.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = dri.SubServiceId
 INNER JOIN dbo.DemandRequests dr ON dr.Id = dri.DemandRequestId
 INNER JOIN dbo.Branches b ON b.Id = dr.BranchId
 LEFT JOIN dbo.StockTypes st ON st.Id = dr.StockTypeId
-LEFT JOIN {_stocksTable} reqStock ON reqStock.ItemId = dri.ItemId AND reqStock.StoreId = dr.RequestingStoreId AND reqStock.IsActive = 1
-LEFT JOIN {_stocksTable} destStock ON destStock.ItemId = dri.ItemId AND destStock.StoreId = dr.RequestedToStoreId AND destStock.IsActive = 1
+LEFT JOIN {_stocksTable} reqStock ON reqStock.StoreId = dr.RequestingStoreId
+    AND ((dri.ItemId IS NOT NULL AND reqStock.ItemId = dri.ItemId) OR (dri.MedicineId IS NOT NULL AND reqStock.BranchMedicineId = dri.MedicineId) OR (dri.SubServiceId IS NOT NULL AND reqStock.BranchSubServiceId = dri.SubServiceId))
+LEFT JOIN {_stocksTable} destStock ON destStock.StoreId = dr.RequestedToStoreId
+    AND ((dri.ItemId IS NOT NULL AND destStock.ItemId = dri.ItemId) OR (dri.MedicineId IS NOT NULL AND destStock.BranchMedicineId = dri.MedicineId) OR (dri.SubServiceId IS NOT NULL AND destStock.BranchSubServiceId = dri.SubServiceId))
 WHERE dri.DemandRequestId = @DemandRequestId
   AND dri.IsActive = 1
 ORDER BY dri.Id;";
@@ -508,11 +585,12 @@ WHERE dr.Id = @DemandRequestId AND dr.IsActive = 1;");
             // across dispatch trips, so re-receiving after a later partial dispatch must not
             // re-credit stock that already landed here on a prior receive.
             string itemsLookupSql = NormalizeSql(@"
-SELECT Id, ItemId, ISNULL(IssuedQuantity, 0) - ISNULL(ReceivedQuantity, 0) AS DeltaQuantity,
+SELECT Id, ItemId, MedicineId, SubServiceId, ISNULL(IssuedQuantity, 0) - ISNULL(ReceivedQuantity, 0) AS DeltaQuantity,
     ISNULL(IssuedQuantity, 0) AS IssuedQuantity,
     ISNULL(ApprovedQuantity, RequestedQuantity) - ISNULL(IssuedQuantity, 0) AS RemainingQuantity
 FROM dbo.DemandRequestItems
-WHERE DemandRequestId = @DemandRequestId AND IsActive = 1 AND ItemId IS NOT NULL;");
+WHERE DemandRequestId = @DemandRequestId AND IsActive = 1
+    AND (ItemId IS NOT NULL OR MedicineId IS NOT NULL OR SubServiceId IS NOT NULL);");
 
             string updateItemsSql = NormalizeSql(@"
 UPDATE dbo.DemandRequestItems
@@ -583,14 +661,18 @@ WHERE Id = @DemandRequestId
                 // dispatch only ever deducted it from the requested (source) store.
                 if (requestingStoreId.HasValue)
                 {
-                    var itemsToReceive = new List<(int DemandRequestItemId, int ItemId, int Quantity, int IssuedQuantity, int RemainingQuantity)>();
+                    var itemsToReceive = new List<(int DemandRequestItemId, ProductKey Product, int Quantity, int IssuedQuantity, int RemainingQuantity)>();
                     using (var itemsLookupCommand = new SqlCommand(itemsLookupSql, connection, (SqlTransaction)transaction))
                     {
                         itemsLookupCommand.Parameters.AddWithValue("@DemandRequestId", id);
                         using var reader = await itemsLookupCommand.ExecuteReaderAsync();
                         while (await reader.ReadAsync())
                         {
-                            itemsToReceive.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4)));
+                            var product = new ProductKey(
+                                reader.IsDBNull(1) ? null : reader.GetInt32(1),
+                                reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                                reader.IsDBNull(3) ? null : reader.GetInt32(3));
+                            itemsToReceive.Add((reader.GetInt32(0), product, reader.GetInt32(4), reader.GetInt32(5), reader.GetInt32(6)));
                         }
                     }
 
@@ -601,8 +683,8 @@ WHERE Id = @DemandRequestId
                             continue;
                         }
 
-                        await AddStockAsync(connection, (SqlTransaction)transaction, item.ItemId, requestingStoreId.Value, branchId.Value, item.Quantity);
-                        await InsertItemLogAsync(connection, (SqlTransaction)transaction, id, item.DemandRequestItemId, item.ItemId,
+                        await AddStockAsync(connection, (SqlTransaction)transaction, item.Product, requestingStoreId.Value, branchId.Value, item.Quantity);
+                        await InsertItemLogAsync(connection, (SqlTransaction)transaction, id, item.DemandRequestItemId, item.Product.ItemId,
                             "Receive", item.Quantity, item.IssuedQuantity, item.IssuedQuantity, item.RemainingQuantity, _schemaPrefix);
                     }
                 }
@@ -763,11 +845,13 @@ LEFT JOIN dbo.DemandRequestStatuses drs ON drs.Id = dr.DemandRequestStatusId
 WHERE dr.Id = @DemandRequestId AND dr.IsActive = 1;");
 
             string itemsLookupSql = NormalizeSql(@"
-SELECT dri.Id, dri.ItemId, i.Name,
+SELECT dri.Id, dri.ItemId, dri.MedicineId, dri.SubServiceId, COALESCE(i.Name, med.MedicineFullName, f.Name),
     ISNULL(dri.ApprovedQuantity, dri.RequestedQuantity) - ISNULL(dri.IssuedQuantity, 0) AS Remaining,
     ISNULL(dri.ApprovedQuantity, dri.RequestedQuantity) AS Approved
 FROM dbo.DemandRequestItems dri
 LEFT JOIN dbo.Items i ON i.Id = dri.ItemId
+LEFT JOIN Pharmacy.Medicines med ON med.MedicineId = dri.MedicineId
+LEFT JOIN Account.Fees f ON f.Id = dri.SubServiceId
 WHERE dri.DemandRequestId = @DemandRequestId AND dri.IsActive = 1;");
 
             string updateItemIssuedSql = NormalizeSql("UPDATE dbo.DemandRequestItems SET IssuedQuantity = ISNULL(IssuedQuantity, 0) + @Qty WHERE Id = @Id;");
@@ -833,18 +917,22 @@ WHERE Id = @DemandRequestId
                     throw new InvalidOperationException($"Cannot dispatch this demand - it must be Approved first (current status: {currentStatus ?? "Unknown"}).");
                 }
 
-                var remainingByItemId = new Dictionary<int, (int? ItemId, string ItemName, int Remaining, int Approved)>();
+                var remainingByItemId = new Dictionary<int, (ProductKey Product, string ItemName, int Remaining, int Approved)>();
                 using (var itemsLookupCommand = new SqlCommand(itemsLookupSql, connection, (SqlTransaction)transaction))
                 {
                     itemsLookupCommand.Parameters.AddWithValue("@DemandRequestId", id);
                     using var reader = await itemsLookupCommand.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
                     {
-                        remainingByItemId[reader.GetInt32(0)] = (
+                        var product = new ProductKey(
                             reader.IsDBNull(1) ? null : reader.GetInt32(1),
-                            reader.IsDBNull(2) ? "Unassigned Item" : reader.GetString(2),
-                            reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
-                            reader.IsDBNull(4) ? 0 : reader.GetInt32(4));
+                            reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                            reader.IsDBNull(3) ? null : reader.GetInt32(3));
+                        remainingByItemId[reader.GetInt32(0)] = (
+                            product,
+                            reader.IsDBNull(4) ? "Unassigned Item" : reader.GetString(4),
+                            reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                            reader.IsDBNull(6) ? 0 : reader.GetInt32(6));
                     }
                 }
 
@@ -860,7 +948,8 @@ WHERE Id = @DemandRequestId
 
                 foreach (var dispatchItem in toDispatch)
                 {
-                    if (!remainingByItemId.TryGetValue(dispatchItem.Id, out var itemInfo) || itemInfo.ItemId == null)
+                    if (!remainingByItemId.TryGetValue(dispatchItem.Id, out var itemInfo)
+                        || (itemInfo.Product.ItemId == null && itemInfo.Product.MedicineId == null && itemInfo.Product.SubServiceId == null))
                     {
                         continue;
                     }
@@ -871,7 +960,7 @@ WHERE Id = @DemandRequestId
                         throw new InvalidOperationException($"Cannot dispatch {dispatchItem.IssuingQuantity} unit(s) of '{itemInfo.ItemName}' - only {itemInfo.Remaining} remain to be issued.");
                     }
 
-                    await RemoveStockAsync(connection, (SqlTransaction)transaction, itemInfo.ItemId.Value, itemInfo.ItemName, requestedToStoreId.Value, dispatchItem.IssuingQuantity);
+                    await RemoveStockAsync(connection, (SqlTransaction)transaction, itemInfo.Product, itemInfo.ItemName, requestedToStoreId.Value, dispatchItem.IssuingQuantity);
 
                     using var updateItemCommand = new SqlCommand(updateItemIssuedSql, connection, (SqlTransaction)transaction);
                     updateItemCommand.Parameters.AddWithValue("@Id", dispatchItem.Id);
@@ -880,7 +969,7 @@ WHERE Id = @DemandRequestId
 
                     int newRemaining = itemInfo.Remaining - dispatchItem.IssuingQuantity;
                     int newIssued = itemInfo.Approved - newRemaining;
-                    await InsertItemLogAsync(connection, (SqlTransaction)transaction, id, dispatchItem.Id, itemInfo.ItemId,
+                    await InsertItemLogAsync(connection, (SqlTransaction)transaction, id, dispatchItem.Id, itemInfo.Product.ItemId,
                         "Dispatch", dispatchItem.IssuingQuantity, newIssued, null, newRemaining, _schemaPrefix);
                 }
 
@@ -988,13 +1077,13 @@ WHERE Id = @DemandRequestId
         // actually on hand there (mirrors TransferInventory_Insert's same check for regular
         // inter-store transfers). Throwing InvalidOperationException here rolls back the
         // whole approval transaction and surfaces a friendly message via the controller.
-        private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, string itemName, int storeId, int quantity)
+        private async Task RemoveStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, string itemName, int storeId, int quantity)
         {
-            string selectSql = $"SELECT ISNULL(TotalItems, 0) FROM {_stocksTable} WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;";
+            string selectSql = $"SELECT ISNULL(TotalItemsInStock, 0) FROM {_stocksTable} WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));";
             int available;
             using (var selectCommand = new SqlCommand(selectSql, connection, transaction))
             {
-                selectCommand.Parameters.AddWithValue("@ItemId", itemId);
+                product.AddParameters(selectCommand);
                 selectCommand.Parameters.AddWithValue("@StoreId", storeId);
                 var result = await selectCommand.ExecuteScalarAsync();
                 available = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
@@ -1007,11 +1096,11 @@ WHERE Id = @DemandRequestId
 
             string updateSql = $@"
 UPDATE {_stocksTable}
-SET TotalItems = TotalItems - @Quantity, ModifiedOn = GETDATE()
-WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;";
+SET TotalItemsInStock = TotalItemsInStock - @Quantity, ModifiedOn = GETDATE()
+WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));";
 
             using var updateCommand = new SqlCommand(updateSql, connection, transaction);
-            updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+            product.AddParameters(updateCommand);
             updateCommand.Parameters.AddWithValue("@StoreId", storeId);
             updateCommand.Parameters.AddWithValue("@Quantity", quantity);
             await updateCommand.ExecuteNonQueryAsync();
@@ -1019,20 +1108,24 @@ WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;";
 
         // Credits stock into a store at receive time - upserts since the destination store
         // may never have held this item before (same pattern TransferInventory_Insert uses
-        // for a brand-new destination row).
-        private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, int itemId, int storeId, int branchId, int quantity)
+        // for a brand-new destination row). No BranchId column on
+        // Pharmacy.PharmacyMedicinesStocks - branch is only reachable via the store, so
+        // @BranchId is accepted for call-site compatibility but not written anywhere.
+        private async Task AddStockAsync(SqlConnection connection, SqlTransaction transaction, ProductKey product, int storeId, int branchId, int quantity)
         {
             string upsertSql = $@"
-IF EXISTS (SELECT 1 FROM {_stocksTable} WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1)
+IF EXISTS (SELECT 1 FROM {_stocksTable} WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId)))
     UPDATE {_stocksTable}
-    SET TotalItems = ISNULL(TotalItems, 0) + @Quantity, ModifiedOn = GETDATE()
-    WHERE ItemId = @ItemId AND StoreId = @StoreId AND IsActive = 1;
+    SET TotalItemsInStock = ISNULL(TotalItemsInStock, 0) + @Quantity, ModifiedOn = GETDATE()
+    WHERE StoreId = @StoreId AND ((@ItemId IS NOT NULL AND ItemId = @ItemId) OR (@MedicineId IS NOT NULL AND BranchMedicineId = @MedicineId) OR (@SubServiceId IS NOT NULL AND BranchSubServiceId = @SubServiceId));
 ELSE
-    INSERT INTO {_stocksTable} (ItemId, TotalItems, BranchId, StoreId, IsActive, CreatedById, CreatedOn)
-    VALUES (@ItemId, @Quantity, @BranchId, @StoreId, 1, 1, GETDATE());";
+    INSERT INTO {_stocksTable} (ItemId, BranchMedicineId, BranchSubServiceId, TotalItemsInStock, MinimumPanicLevel, TotalItemsInTransition, TypeBit, StoreId, CreatedBy, CreatedOn)
+    VALUES (@ItemId, @MedicineId, @SubServiceId, @Quantity, 0, 0,
+        CASE WHEN @ItemId IS NOT NULL THEN 15 WHEN @MedicineId IS NOT NULL THEN 4 WHEN @SubServiceId IS NOT NULL THEN 5 ELSE NULL END,
+        @StoreId, 1, GETDATE());";
 
             using var command = new SqlCommand(upsertSql, connection, transaction);
-            command.Parameters.AddWithValue("@ItemId", itemId);
+            product.AddParameters(command);
             command.Parameters.AddWithValue("@StoreId", storeId);
             command.Parameters.AddWithValue("@BranchId", branchId);
             command.Parameters.AddWithValue("@Quantity", quantity);
@@ -1055,8 +1148,8 @@ ELSE
 SET ApprovedQuantity = @ApprovedQuantity, Notes = @Remarks
 WHERE Id = @Id AND DemandRequestId = @DemandRequestId AND IsActive = 1;");
 
-            string insertItemSql = NormalizeSql(@"INSERT INTO dbo.DemandRequestItems (DemandRequestId, ItemId, RequestedQuantity, ApprovedQuantity, Notes, IsActive, CreatedOn)
-VALUES (@DemandRequestId, @ItemId, @RequestedQuantity, @ApprovedQuantity, @Remarks, 1, SYSUTCDATETIME());");
+            string insertItemSql = NormalizeSql(@"INSERT INTO dbo.DemandRequestItems (DemandRequestId, ItemId, MedicineId, SubServiceId, RequestedQuantity, ApprovedQuantity, Notes, IsActive, CreatedOn)
+VALUES (@DemandRequestId, @ItemId, @MedicineId, @SubServiceId, @RequestedQuantity, @ApprovedQuantity, @Remarks, 1, SYSUTCDATETIME());");
 
             foreach (var item in items)
             {
@@ -1071,14 +1164,16 @@ VALUES (@DemandRequestId, @ItemId, @RequestedQuantity, @ApprovedQuantity, @Remar
                 }
                 else
                 {
-                    if (item.ItemId == null || item.RequestedQuantity <= 0)
+                    if ((item.ItemId == null && item.MedicineId == null && item.SubServiceId == null) || item.RequestedQuantity <= 0)
                     {
                         continue;
                     }
 
                     using var command = new SqlCommand(insertItemSql, connection, transaction);
                     command.Parameters.AddWithValue("@DemandRequestId", demandRequestId);
-                    command.Parameters.AddWithValue("@ItemId", item.ItemId.Value);
+                    command.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@RequestedQuantity", item.RequestedQuantity);
                     command.Parameters.AddWithValue("@ApprovedQuantity", item.ApprovedQuantity);
                     command.Parameters.AddWithValue("@Remarks", (object?)item.Remarks ?? DBNull.Value);
@@ -1135,6 +1230,8 @@ INSERT INTO dbo.DemandRequestItems
 (
     DemandRequestId,
     ItemId,
+    MedicineId,
+    SubServiceId,
     RequestedQuantity,
     ApprovedQuantity,
     IssuedQuantity,
@@ -1146,6 +1243,8 @@ VALUES
 (
     @DemandRequestId,
     @ItemId,
+    @MedicineId,
+    @SubServiceId,
     @RequestedQuantity,
     @ApprovedQuantity,
     @IssuedQuantity,
@@ -1184,6 +1283,8 @@ VALUES
 
                     itemCommand.Parameters.AddWithValue("@DemandRequestId", demandRequestId);
                     itemCommand.Parameters.AddWithValue("@ItemId", (object?)item.ItemId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@MedicineId", (object?)item.MedicineId ?? DBNull.Value);
+                    itemCommand.Parameters.AddWithValue("@SubServiceId", (object?)item.SubServiceId ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@RequestedQuantity", item.RequestedQuantity);
                     itemCommand.Parameters.AddWithValue("@ApprovedQuantity", (object?)item.ApprovedQuantity ?? DBNull.Value);
                     itemCommand.Parameters.AddWithValue("@IssuedQuantity", (object?)item.IssuedQuantity ?? DBNull.Value);
@@ -1220,8 +1321,13 @@ VALUES
                 RequestingBranchName = reader.GetString(reader.GetOrdinal("RequestingBranchName")),
                 RequestingStoreId = reader.IsDBNull(reader.GetOrdinal("RequestingStoreId")) ? null : reader.GetInt32(reader.GetOrdinal("RequestingStoreId")),
                 RequestingStoreName = reader.IsDBNull(reader.GetOrdinal("RequestingStoreName")) ? null : reader.GetString(reader.GetOrdinal("RequestingStoreName")),
-                RequestedStoreId = reader.GetInt32(reader.GetOrdinal("RequestedStoreId")),
-                RequestedStoreName = reader.GetString(reader.GetOrdinal("RequestedStoreName")),
+                // RequestedToStoreId frequently has no matching row in the PharmacyStores view
+                // (~58% of live DemandRequests rows) - the store it points at may have been
+                // deactivated/renumbered on the HMS side since the demand was created. Must
+                // degrade gracefully here rather than throw, or any page containing one of
+                // these rows 500s outright.
+                RequestedStoreId = reader.IsDBNull(reader.GetOrdinal("RequestedStoreId")) ? 0 : reader.GetInt32(reader.GetOrdinal("RequestedStoreId")),
+                RequestedStoreName = reader.IsDBNull(reader.GetOrdinal("RequestedStoreName")) ? "Unknown Store" : reader.GetString(reader.GetOrdinal("RequestedStoreName")),
                 StockTypeId = reader.IsDBNull(reader.GetOrdinal("StockTypeId")) ? null : reader.GetInt32(reader.GetOrdinal("StockTypeId")),
                 StockTypeName = reader.IsDBNull(reader.GetOrdinal("StockTypeName")) ? null : reader.GetString(reader.GetOrdinal("StockTypeName")),
                 ItemsCount = reader.GetInt32(reader.GetOrdinal("ItemsCount")),
@@ -1265,8 +1371,8 @@ VALUES
                 IssuedQuantity = reader.IsDBNull(reader.GetOrdinal("IssuedQuantity")) ? null : reader.GetInt32(reader.GetOrdinal("IssuedQuantity")),
                 IssuingQuantity = reader.IsDBNull(reader.GetOrdinal("IssuingQuantity")) ? null : reader.GetInt32(reader.GetOrdinal("IssuingQuantity")),
                 RemainingQuantity = reader.IsDBNull(reader.GetOrdinal("RemainingQuantity")) ? null : reader.GetInt32(reader.GetOrdinal("RemainingQuantity")),
-                AvailableQuantityInRequestingStore = reader.GetInt32(reader.GetOrdinal("AvailableQuantityInRequestingStore")),
-                AvailableQuantityInRequestedStore = reader.GetInt32(reader.GetOrdinal("AvailableQuantityInRequestedStore"))
+                AvailableQuantityInRequestingStore = reader.GetDecimal(reader.GetOrdinal("AvailableQuantityInRequestingStore")),
+                AvailableQuantityInRequestedStore = reader.GetDecimal(reader.GetOrdinal("AvailableQuantityInRequestedStore"))
             };
         }
     }

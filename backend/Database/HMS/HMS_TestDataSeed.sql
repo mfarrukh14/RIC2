@@ -65,6 +65,12 @@ BEGIN
     VALUES ('Received', 'Seeded received status', @BranchId, 1, @CreatedById, GETDATE(), GETDATE(), 4);
 END;
 
+IF NOT EXISTS (SELECT 1 FROM Inv.DemandRequestStatuses WHERE Name = 'Rejected')
+BEGIN
+    INSERT INTO Inv.DemandRequestStatuses (Name, Description, BranchId, IsActive, CreatedById, CreatedOn, ModifiedOn, Value)
+    VALUES ('Rejected', 'Seeded rejected status', @BranchId, 1, @CreatedById, GETDATE(), GETDATE(), 5);
+END;
+
 IF NOT EXISTS (SELECT 1 FROM Inv.ItemTypeSaleLevels WHERE ItemTypeId = @ItemType1Id)
 BEGIN
     INSERT INTO Inv.ItemTypeSaleLevels (ItemTypeId, FastRunningLevel, SlowMovingLevel, DeadLevel, BranchId, IsActive, CreatedById, CreatedOn)

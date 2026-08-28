@@ -156,6 +156,11 @@ namespace InventoryManagement.Api.Models
         public bool IsActive { get; set; } = true;
     }
 
+    public class ItemFilterRequest : PagedRequest
+    {
+        public string? SearchTerm { get; set; }
+    }
+
     public class Category
     {
         public int Id { get; set; }

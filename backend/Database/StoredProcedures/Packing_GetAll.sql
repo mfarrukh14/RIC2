@@ -4,6 +4,7 @@
 -- Description: Get all packings with related data
 -- =============================================
 CREATE OR ALTER PROCEDURE [dbo].[Packing_GetAll]
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -24,5 +25,6 @@ BEGIN
         br.Name as BranchName
     FROM Inv.Packings p
     LEFT JOIN Inv.Branches br ON p.BranchId = br.Id
+    WHERE p.BranchId = @BranchId
     ORDER BY p.Name;
 END

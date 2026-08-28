@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 import stockAdjustmentApi from '../services/stockAdjustmentApi';
 import inventoryApi from '../services/inventoryApi';
 import StockAdjustmentModal from '../components/StockAdjustmentModal';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
@@ -24,12 +26,14 @@ const normalizeLookupOptions = (items, idKeys, nameKeys, fallbackLabel) =>
 
 const StockAdjustmentPage = () => {
   const { session } = useSession();
-  const [stockAdjustments, setStockAdjustments] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedAdjustment, setSelectedAdjustment] = useState(null);
-  
+  const [actionError, setActionError] = useState(null);
+  // Carries the last-used store forward across modal opens (the modal itself is
+  // unmounted/remounted each time via `{showModal && ...}`, so its own internal
+  // state can't survive that - this lives in the parent instead).
+  const [lastStoreId, setLastStoreId] = useState('');
+
   // Filter states
   const [filters, setFilters] = useState({
     branchId: null,
@@ -37,19 +41,37 @@ const StockAdjustmentPage = () => {
     startDate: null,
     endDate: null
   });
+  const [submittedFilters, setSubmittedFilters] = useState(null);
 
   // Lookup data
   const [stores, setStores] = useState([]);
   const [branches, setBranches] = useState([]);
-  
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+
   const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await stockAdjustmentApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items: stockAdjustments,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    loading,
+    error,
+    reload: loadStockAdjustments,
+    search: runSearch,
+  } = usePagedList(fetchPage, { ...(submittedFilters || {}), searchTerm }, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     loadLookupData();
-    loadStockAdjustments();
+    setSubmittedFilters(filters);
+    runSearch({ ...filters, searchTerm });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stock adjustments are always scoped to the logged-in user's own branch.
@@ -69,20 +91,6 @@ const StockAdjustmentPage = () => {
     }
   };
 
-  const loadStockAdjustments = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await stockAdjustmentApi.getAll(filters);
-      setStockAdjustments(data);
-    } catch (err) {
-      setError('Failed to load stock adjustments');
-      console.error('Error loading stock adjustments:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters(prev => ({
@@ -92,7 +100,8 @@ const StockAdjustmentPage = () => {
   };
 
   const handleSearch = () => {
-    loadStockAdjustments();
+    setSubmittedFilters(filters);
+    runSearch({ ...filters, searchTerm });
   };
 
   const handleAddNew = () => {
@@ -107,7 +116,7 @@ const StockAdjustmentPage = () => {
       setShowModal(true);
     } catch (err) {
       console.error('Error loading adjustment:', err);
-      setError('Failed to load adjustment details');
+      setActionError('Failed to load adjustment details');
     }
   };
 
@@ -118,7 +127,7 @@ const StockAdjustmentPage = () => {
         loadStockAdjustments();
       } catch (err) {
         console.error('Error deleting adjustment:', err);
-        setError('Failed to delete stock adjustment');
+        setActionError('Failed to delete stock adjustment');
       }
     }
   };
@@ -128,7 +137,10 @@ const StockAdjustmentPage = () => {
     setSelectedAdjustment(null);
   };
 
-  const handleModalSubmit = async () => {
+  const handleModalSubmit = async (storeId) => {
+    if (storeId) {
+      setLastStoreId(storeId);
+    }
     setShowModal(false);
     setSelectedAdjustment(null);
     await loadStockAdjustments();
@@ -146,19 +158,6 @@ const StockAdjustmentPage = () => {
     }));
   }, []);
 
-  // Filter adjustments based on search term
-  const filteredAdjustments = stockAdjustments.filter(adj =>
-    adj.storeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    adj.itemNames?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    adj.stockType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    adj.actionBy?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredAdjustments.length / entriesPerPage);
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const endIndex = startIndex + entriesPerPage;
-  const currentAdjustments = filteredAdjustments.slice(startIndex, endIndex);
 
   return (
     <div className="p-6 space-y-6">
@@ -233,37 +232,18 @@ const StockAdjustmentPage = () => {
         </div>
       </div>
 
-      {error && (
+      {(error || actionError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          {actionError || 'Failed to load stock adjustments'}
         </div>
       )}
 
       {/* Results Table */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-4 flex justify-between items-center border-b">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 text-blue-600">
-              <span className="text-2xl">📋</span>
-              <span className="font-semibold">Stock Adjustment</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <label className="text-sm text-gray-600">Show</label>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-gray-300 rounded px-2 py-1 text-sm"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <label className="text-sm text-gray-600">entries</label>
-            </div>
+          <div className="flex items-center space-x-2 text-blue-600">
+            <span className="text-2xl">📋</span>
+            <span className="font-semibold">Stock Adjustment</span>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -280,8 +260,9 @@ const StockAdjustmentPage = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
+                  const value = e.target.value;
+                  setSearchTerm(value);
+                  runSearch({ ...(submittedFilters || filters), searchTerm: value });
                 }}
                 className="border border-gray-300 rounded px-3 py-1 text-sm"
                 placeholder="Search..."
@@ -330,14 +311,14 @@ const StockAdjustmentPage = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : currentAdjustments.length === 0 ? (
+              ) : stockAdjustments.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
                     No data available in table
                   </td>
                 </tr>
               ) : (
-                currentAdjustments.map((adjustment) => (
+                stockAdjustments.map((adjustment) => (
                   <tr key={adjustment.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {adjustment.storeName || '-'}
@@ -386,42 +367,13 @@ const StockAdjustmentPage = () => {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="p-4 flex items-center justify-between border-t">
-          <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredAdjustments.length)} of {filteredAdjustments.length} entries
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              &lt;
-            </button>
-            {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-              const pageNum = i + 1;
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 border border-gray-300 rounded ${
-                    currentPage === pageNum ? 'bg-blue-600 text-white' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              &gt;
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={entriesPerPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
+          onPageSizeChange={setEntriesPerPage}
+        />
       </div>
 
       {/* Modal */}
@@ -433,6 +385,7 @@ const StockAdjustmentPage = () => {
           adjustment={selectedAdjustment}
           stores={stores}
           branches={branches}
+          defaultStoreId={lastStoreId}
         />
       )}
     </div>

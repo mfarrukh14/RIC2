@@ -24,7 +24,7 @@ namespace InventoryManagement.API.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<ReturnInventory>>> GetAll([FromQuery] ReturnInventoryFilterRequest? filter)
+        public async Task<ActionResult<InventoryManagement.Api.Models.PagedResult<ReturnInventory>>> GetAll([FromQuery] ReturnInventoryFilterRequest? filter)
         {
             try
             {

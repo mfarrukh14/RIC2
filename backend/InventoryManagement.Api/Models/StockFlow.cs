@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Models
         public string ActionBy { get; set; } = string.Empty;
     }
 
-    public class StockFlowSearchRequest
+    public class StockFlowSearchRequest : PagedRequest
     {
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }

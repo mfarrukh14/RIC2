@@ -161,7 +161,7 @@ namespace InventoryManagement.API.Models
         public string? ModifiedById { get; set; }
     }
 
-    public class ContingentBillFilterRequest
+    public class ContingentBillFilterRequest : InventoryManagement.Api.Models.PagedRequest
     {
         public string? BudgetSetupId { get; set; }
         public int? VendorId { get; set; }
@@ -170,6 +170,7 @@ namespace InventoryManagement.API.Models
         public int? ContingentBillStatusId { get; set; }
         public DateTime? DateStart { get; set; }
         public DateTime? DateEnd { get; set; }
+        public string? SearchTerm { get; set; }
     }
 
     public class ContingentBillLookupData

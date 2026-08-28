@@ -4,6 +4,7 @@
 -- Description: Get all brands with related data
 -- =============================================
 CREATE OR ALTER PROCEDURE [dbo].[Brand_GetAll]
+    @BranchId INT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -19,7 +20,8 @@ BEGIN
         b.ModifiedById,
         b.ModifiedOn,
         br.Name as BranchName
-    FROM Inv.Brands b
+    FROM Data.Brands b
     LEFT JOIN Inv.Branches br ON b.BranchId = br.Id
+    WHERE b.BranchId = @BranchId
     ORDER BY b.Name;
 END

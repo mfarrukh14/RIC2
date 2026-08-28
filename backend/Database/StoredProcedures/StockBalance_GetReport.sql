@@ -1,5 +1,5 @@
 -- Stored procedure to get stock balance report
-CREATE PROCEDURE StockBalance_GetReport
+CREATE OR ALTER PROCEDURE StockBalance_GetReport
     @StartDate DATETIME = NULL,
     @EndDate DATETIME = NULL,
     @Store NVARCHAR(255) = NULL,
@@ -18,52 +18,71 @@ BEGIN
     DECLARE @ClosingSale DECIMAL(18,2) = 0;
 
     -- Calculate Opening Stock (items received before start date)
-    SELECT 
+    -- StoreId must fall back to grn.StoreId: 30,565 of 30,567 live GoodsReceivingNotes rows
+    -- have no PurchaseOrderId (they're migrated/direct receipts, not PO-driven), so joining
+    -- through Inv.PurchaseOrders alone leaves po.StoreId NULL for effectively every row and
+    -- s.StoreName always NULL - any @Store filter then matches nothing. Same
+    -- ISNULL(po.StoreId, grn.StoreId) pattern already used in PurchaseSummaryInvoice_Procedures.sql.
+    SELECT
         @OpeningPurchase = ISNULL(SUM(gi.TotalBuyingPrice), 0),
         @OpeningSale = ISNULL(SUM(gi.TotalSellingPrice), 0)
-    FROM 
-        GRNItems gi
-    INNER JOIN 
-        GoodsReceivingNotes grn ON gi.GRNId = grn.Id
-    LEFT JOIN 
-        Stores s ON grn.StockTypeId = s.StoreId
-    WHERE 
+    FROM
+        Inv.GRNItems gi
+    INNER JOIN
+        Inv.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
+    LEFT JOIN
+        Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
+    LEFT JOIN
+        Inv.PharmacyStores s ON ISNULL(po.StoreId, grn.StoreId) = s.StoreId
+    WHERE
         grn.DateAndTime < ISNULL(@StartDate, '1900-01-01')
         AND (@Store IS NULL OR s.StoreName = @Store);
 
     -- Calculate Purchase Stock (items received within date range)
-    SELECT 
+    SELECT
         @PurchasePurchase = ISNULL(SUM(gi.TotalBuyingPrice), 0),
         @PurchaseSale = ISNULL(SUM(gi.TotalSellingPrice), 0)
-    FROM 
-        GRNItems gi
-    INNER JOIN 
-        GoodsReceivingNotes grn ON gi.GRNId = grn.Id
-    LEFT JOIN 
-        Stores s ON grn.StockTypeId = s.StoreId
-    WHERE 
+    FROM
+        Inv.GRNItems gi
+    INNER JOIN
+        Inv.GoodsReceivingNotes grn ON gi.GRNId = grn.Id
+    LEFT JOIN
+        Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
+    LEFT JOIN
+        Inv.PharmacyStores s ON ISNULL(po.StoreId, grn.StoreId) = s.StoreId
+    WHERE
         grn.DateAndTime >= ISNULL(@StartDate, '1900-01-01')
         AND grn.DateAndTime <= ISNULL(@EndDate, '9999-12-31')
         AND (@Store IS NULL OR s.StoreName = @Store);
 
-    -- Calculate Sale Stock (consumption within date range)
-    SELECT 
-        @SalePurchase = ISNULL(SUM(scd.Quantity * 10), 0), -- Approximate buying price
-        @SaleSale = ISNULL(SUM(scd.Quantity * 15), 0) -- Approximate selling price
-    FROM 
-        StockConsumptionDetails scd
-    INNER JOIN 
-        StockConsumptions sc ON scd.StockConsumptionId = sc.Id
-    WHERE 
+    -- Calculate Sale Stock (consumption within date range), valued at each
+    -- item's average GRN buying/selling price since consumption records
+    -- don't carry their own price
+    SELECT
+        @SalePurchase = ISNULL(SUM(scd.Quantity * ISNULL(ip.AvgBuyingPrice, 0)), 0),
+        @SaleSale = ISNULL(SUM(scd.Quantity * ISNULL(ip.AvgSellingPrice, 0)), 0)
+    FROM
+        Inv.StockConsumptionDetails scd
+    INNER JOIN
+        Inv.StockConsumptions sc ON scd.StockConsumptionId = sc.Id
+    LEFT JOIN
+        Inv.PharmacyStores s ON scd.StoreId = s.StoreId
+    OUTER APPLY (
+        SELECT AVG(gi.UnitBuyingPrice) AS AvgBuyingPrice, AVG(gi.UnitSellingPrice) AS AvgSellingPrice
+        FROM Inv.GRNItems gi
+        WHERE gi.ItemId = scd.ItemId
+    ) ip
+    WHERE
         sc.CreatedOn >= ISNULL(@StartDate, '1900-01-01')
-        AND sc.CreatedOn <= ISNULL(@EndDate, '9999-12-31');
+        AND sc.CreatedOn <= ISNULL(@EndDate, '9999-12-31')
+        AND (@Store IS NULL OR s.StoreName = @Store);
 
     -- Calculate Closing Stock
     SET @ClosingPurchase = @OpeningPurchase + @PurchasePurchase - @SalePurchase;
     SET @ClosingSale = @OpeningSale + @PurchaseSale - @SaleSale;
 
     -- Return all values
-    SELECT 
+    SELECT
         @OpeningPurchase AS OpeningStockPurchase,
         @OpeningSale AS OpeningStockSale,
         @PurchasePurchase AS PurchaseStockPurchase,

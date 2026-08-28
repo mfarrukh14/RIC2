@@ -1,19 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { FiPlus, FiSearch } from 'react-icons/fi';
 import ItemList from '../components/ItemList';
 import ItemForm from '../components/ItemForm';
+import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import itemApi from '../services/itemApi';
 import { itemTypeApi, brandApi, packingApi } from '../services/api';
 import { itemUnitApi } from '../services/itemUnitApi';
 
 const ItemsPage = () => {
-  const [items, setItems] = useState([]);
-  const [filteredItems, setFilteredItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
+  const fetchPage = useCallback(async (params) => {
+    const data = await itemApi.getAll(params);
+    return { items: data.items || [], totalCount: data.totalCount || 0 };
+  }, []);
+
+  const {
+    items,
+    totalCount,
+    currentPage,
+    pageSize,
+    setPageSize,
+    goToPage,
+    loading,
+    error,
+    reload: reloadItems,
+  } = usePagedList(fetchPage, { searchTerm }, { initialPageSize: 10 });
 
   // Lookup data
   const [itemTypes, setItemTypes] = useState([]);
@@ -28,28 +43,8 @@ const ItemsPage = () => {
   const [taxTypes, setTaxTypes] = useState([]);
 
   useEffect(() => {
-    fetchItems();
     fetchLookupData();
   }, []);
-
-  useEffect(() => {
-    filterItems();
-  }, [searchTerm, items]);
-
-  const fetchItems = async () => {
-    try {
-      setLoading(true);
-      const data = await itemApi.getAll();
-      setItems(data);
-      setFilteredItems(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching items:', err);
-      setError('Failed to fetch items. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchLookupData = async () => {
     // Each lookup is fetched independently so one failing endpoint doesn't
@@ -101,22 +96,6 @@ const ItemsPage = () => {
     setTaxTypes(taxTypesData);
   };
 
-  const filterItems = () => {
-    if (!searchTerm) {
-      setFilteredItems(items);
-      return;
-    }
-
-    const filtered = items.filter(
-      (item) =>
-        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.itemTypeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.categoryName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.barCode?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredItems(filtered);
-  };
-
   const handleAddNew = () => {
     setSelectedItem(null);
     setShowForm(true);
@@ -134,7 +113,7 @@ const ItemsPage = () => {
 
     try {
       await itemApi.delete(id);
-      await fetchItems();
+      await reloadItems();
     } catch (err) {
       console.error('Error deleting item:', err);
       alert(err.response?.data?.message || 'Failed to delete item. Please try again.');
@@ -148,7 +127,7 @@ const ItemsPage = () => {
       } else {
         await itemApi.create(formData);
       }
-      await fetchItems();
+      await reloadItems();
       setShowForm(false);
       setSelectedItem(null);
     } catch (err) {
@@ -163,14 +142,6 @@ const ItemsPage = () => {
     setSelectedItem(null);
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -179,7 +150,7 @@ const ItemsPage = () => {
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
-          {error}
+          Failed to fetch items. Please try again.
         </div>
       )}
 
@@ -205,7 +176,14 @@ const ItemsPage = () => {
             </button>
           </div>
 
-          <ItemList items={filteredItems} onEdit={handleEdit} onDelete={handleDelete} />
+          <ItemList items={items} onEdit={handleEdit} onDelete={handleDelete} loading={loading} />
+          <Pagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={goToPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       ) : (
         <ItemForm

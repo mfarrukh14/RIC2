@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<List<TransferInventory>> GetAllAsync()
+        public async Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter = null)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var transfers = new List<TransferInventory>();
+            var totalCount = 0;
 
             try
             {
@@ -27,12 +29,18 @@ namespace InventoryManagement.Api.Services
                 {
                     CommandType = CommandType.StoredProcedure
                 };
+                command.Parameters.AddWithValue("@SearchTerm", (object?)filter?.SearchTerm ?? DBNull.Value);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
                     transfers.Add(MapToTransferInventory(reader));
                 }
             }
@@ -42,7 +50,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return transfers;
+            return new PagedResult<TransferInventory> { Items = transfers, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
 
         public async Task<TransferInventory?> GetByIdAsync(int id)
@@ -254,7 +262,9 @@ namespace InventoryManagement.Api.Services
             return new TransferInventory
             {
                 Id = reader.GetInt32("Id"),
-                DRNo = reader.GetString("DRNo"),
+                // TransferNumber (aliased DRNo) and Status are nullable on Inv.TransferInventory -
+                // legacy/migrated rows can have either unset.
+                DRNo = reader.IsDBNull("DRNo") ? string.Empty : reader.GetString("DRNo"),
                 FromStoreId = reader.GetInt32("FromStoreId"),
                 FromStoreName = reader.IsDBNull("FromStoreName") ? null : reader.GetString("FromStoreName"),
                 ToStoreId = reader.GetInt32("ToStoreId"),
@@ -265,7 +275,7 @@ namespace InventoryManagement.Api.Services
                 ItemName = reader.IsDBNull("ItemName") ? null : reader.GetString("ItemName"),
                 Quantity = reader.GetInt32("Quantity"),
                 TransferDate = reader.GetDateTime("TransferDate"),
-                Status = reader.GetString("Status"),
+                Status = reader.IsDBNull("Status") ? "Pending" : reader.GetString("Status"),
                 Notes = reader.IsDBNull("Notes") ? null : reader.GetString("Notes"),
                 IsActive = reader.GetBoolean("IsActive"),
                 CreatedOn = reader.IsDBNull("CreatedOn") ? null : reader.GetDateTime("CreatedOn")

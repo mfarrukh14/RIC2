@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IRackRowService
     {
-        Task<IEnumerable<RackRow>> GetAllRackRowsAsync();
+        Task<IEnumerable<RackRow>> GetAllRackRowsAsync(int branchId);
         Task<RackRow?> GetRackRowByIdAsync(int id);
         Task<IEnumerable<RackRow>> GetRackRowsByRackIdAsync(int rackId);
         Task<RackRow> CreateRackRowAsync(RackRowCreateRequest request);

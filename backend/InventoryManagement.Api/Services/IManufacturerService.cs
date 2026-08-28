@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IManufacturerService
     {
-        Task<IEnumerable<Manufacturer>> GetAllManufacturersAsync();
+        Task<IEnumerable<Manufacturer>> GetAllManufacturersAsync(int branchId);
         Task<Manufacturer?> GetManufacturerByIdAsync(int id);
         Task<int> CreateManufacturerAsync(CreateManufacturerRequest request);
         Task<bool> UpdateManufacturerAsync(UpdateManufacturerRequest request);

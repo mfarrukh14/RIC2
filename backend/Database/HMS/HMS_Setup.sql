@@ -557,6 +557,24 @@ BEGIN
         WHEN COL_LENGTH('Pharmacy.Manufacturers', 'ModifiedOn') IS NOT NULL THEN 'ModifiedOn'
         ELSE NULL
     END;
+    -- These columns didn't exist on Pharmacy.Manufacturers when this adapter view
+    -- was first written (hence the CAST(NULL...) placeholders below at the time),
+    -- but AlterPharmacyManufacturersTable.sql has since added all of them to the
+    -- real table. Detect them the same way as the columns above so the view
+    -- actually surfaces this data instead of silently discarding it.
+    DECLARE @ManufacturerNTNColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'NTN') IS NOT NULL THEN 'NTN' ELSE NULL END;
+    DECLARE @ManufacturerSTNColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'STN') IS NOT NULL THEN 'STN' ELSE NULL END;
+    DECLARE @ManufacturerCPName1Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPName1') IS NOT NULL THEN 'CPName1' ELSE NULL END;
+    DECLARE @ManufacturerCPEmail1Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPEmail1') IS NOT NULL THEN 'CPEmail1' ELSE NULL END;
+    DECLARE @ManufacturerCPContactNumber1Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPContactNumber1') IS NOT NULL THEN 'CPContactNumber1' ELSE NULL END;
+    DECLARE @ManufacturerCPName2Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPName2') IS NOT NULL THEN 'CPName2' ELSE NULL END;
+    DECLARE @ManufacturerCPEmail2Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPEmail2') IS NOT NULL THEN 'CPEmail2' ELSE NULL END;
+    DECLARE @ManufacturerCPContactNumber2Column SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CPContactNumber2') IS NOT NULL THEN 'CPContactNumber2' ELSE NULL END;
+    DECLARE @ManufacturerCountryIdColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CountryId') IS NOT NULL THEN 'CountryId' ELSE NULL END;
+    DECLARE @ManufacturerStateOrProvinceIdColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'StateOrProvinceId') IS NOT NULL THEN 'StateOrProvinceId' ELSE NULL END;
+    DECLARE @ManufacturerCityIdColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'CityId') IS NOT NULL THEN 'CityId' ELSE NULL END;
+    DECLARE @ManufacturerBranchIdColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'BranchId') IS NOT NULL THEN 'BranchId' ELSE NULL END;
+    DECLARE @ManufacturerRegisteredOwnerColumn SYSNAME = CASE WHEN COL_LENGTH('Pharmacy.Manufacturers', 'RegisteredOwner') IS NOT NULL THEN 'RegisteredOwner' ELSE NULL END;
 
     IF @ManufacturerIdColumn IS NOT NULL AND @ManufacturerNameColumn IS NOT NULL
     BEGIN
@@ -568,18 +586,18 @@ SELECT
     ' + COALESCE(QUOTENAME(@ManufacturerEmailColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS Email,
     ' + COALESCE(QUOTENAME(@ManufacturerAddressColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS Address,
     ' + COALESCE(QUOTENAME(@ManufacturerContactColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CNo,
-    CAST(NULL AS NVARCHAR(MAX)) AS NTN,
-    CAST(NULL AS NVARCHAR(MAX)) AS STN,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPName1,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPEmail1,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPContactNumber1,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPName2,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPEmail2,
-    CAST(NULL AS NVARCHAR(MAX)) AS CPContactNumber2,
-    CAST(NULL AS INT) AS CountryId,
-    CAST(NULL AS INT) AS StateOrProvinceId,
-    CAST(NULL AS INT) AS CityId,
-    CAST(NULL AS INT) AS BranchId,
+    ' + COALESCE(QUOTENAME(@ManufacturerNTNColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS NTN,
+    ' + COALESCE(QUOTENAME(@ManufacturerSTNColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS STN,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPName1Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPName1,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPEmail1Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPEmail1,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPContactNumber1Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPContactNumber1,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPName2Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPName2,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPEmail2Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPEmail2,
+    ' + COALESCE(QUOTENAME(@ManufacturerCPContactNumber2Column), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS CPContactNumber2,
+    ' + COALESCE(QUOTENAME(@ManufacturerCountryIdColumn), N'CAST(NULL AS INT)') + N' AS CountryId,
+    ' + COALESCE(QUOTENAME(@ManufacturerStateOrProvinceIdColumn), N'CAST(NULL AS INT)') + N' AS StateOrProvinceId,
+    ' + COALESCE(QUOTENAME(@ManufacturerCityIdColumn), N'CAST(NULL AS INT)') + N' AS CityId,
+    ' + COALESCE(QUOTENAME(@ManufacturerBranchIdColumn), N'CAST(NULL AS INT)') + N' AS BranchId,
     ' + CASE
         WHEN @ManufacturerActiveColumn IS NULL THEN N'CAST(1 AS BIT)'
         WHEN @ManufacturerActiveColumn = 'Status' THEN N'CAST(CASE WHEN [Status] IS NULL OR [Status] = 1 THEN 1 ELSE 0 END AS BIT)'
@@ -589,7 +607,7 @@ SELECT
     ' + COALESCE(QUOTENAME(@ManufacturerCreatedOnColumn), N'CAST(NULL AS DATETIME2)') + N' AS CreatedOn,
     ' + COALESCE(QUOTENAME(@ManufacturerModifiedByColumn), N'CAST(NULL AS INT)') + N' AS ModifiedById,
     ' + COALESCE(QUOTENAME(@ManufacturerModifiedOnColumn), N'CAST(NULL AS DATETIME2)') + N' AS ModifiedOn,
-    CAST(NULL AS NVARCHAR(MAX)) AS RegisteredOwner
+    ' + COALESCE(QUOTENAME(@ManufacturerRegisteredOwnerColumn), N'CAST(NULL AS NVARCHAR(MAX))') + N' AS RegisteredOwner
 FROM Pharmacy.Manufacturers;';
 
         EXEC sys.sp_executesql @ManufacturerSql;

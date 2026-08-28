@@ -1,5 +1,6 @@
 import React,{ useState } from 'react';
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import Pagination from './Pagination';
 
 const RackList = ({ racks, onEdit, onDelete }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -14,7 +15,6 @@ const RackList = ({ racks, onEdit, onDelete }) => {
   );
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredRacks.length / entriesPerPage);
   const startIndex = (currentPage - 1) * entriesPerPage;
   const endIndex = startIndex + entriesPerPage;
   const currentRacks = filteredRacks.slice(startIndex, endIndex);
@@ -47,24 +47,6 @@ const RackList = ({ racks, onEdit, onDelete }) => {
       {/* Controls */}
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-600">Show</label>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-gray-300 rounded px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm text-gray-600">entries</label>
-          </div>
-
           <button
             onClick={handleExport}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
@@ -161,39 +143,13 @@ const RackList = ({ racks, onEdit, onDelete }) => {
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600">
-          Showing {startIndex + 1} to {Math.min(endIndex, filteredRacks.length)} of {filteredRacks.length} entries
-        </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            &lt;
-          </button>
-          {[...Array(totalPages)].map((_, i) => (
-            <button
-              key={i + 1}
-              onClick={() => setCurrentPage(i + 1)}
-              className={`px-3 py-1 border border-gray-300 rounded ${
-                currentPage === i + 1 ? 'bg-blue-600 text-white' : 'hover:bg-gray-50'
-              }`}
-            >
-              {i + 1}
-            </button>
-          ))}
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            &gt;
-          </button>
-        </div>
-      </div>
+      <Pagination
+        currentPage={currentPage}
+        pageSize={entriesPerPage}
+        totalCount={filteredRacks.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setEntriesPerPage}
+      />
     </div>
   );
 };

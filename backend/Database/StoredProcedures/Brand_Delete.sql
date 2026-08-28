@@ -26,7 +26,7 @@ BEGIN
         UPDATE Inv.Items SET BrandId = NULL WHERE BrandId = @Id;
     END
 
-    DELETE FROM Inv.Brands WHERE Id = @Id;
+    DELETE FROM Data.Brands WHERE Id = @Id;
 
     SELECT @@ROWCOUNT as AffectedRows, @ItemCount as ItemCount;
 END

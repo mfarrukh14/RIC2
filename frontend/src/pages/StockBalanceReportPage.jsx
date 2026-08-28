@@ -6,10 +6,12 @@ import autoTable from 'jspdf-autotable';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
 
+const getToday = () => new Date().toISOString().split('T')[0];
+
 const StockBalanceReportPage = () => {
   const { session } = useSession();
-  const [startDate, setStartDate] = useState('2025-10-29');
-  const [endDate, setEndDate] = useState('2025-10-29');
+  const [startDate, setStartDate] = useState(getToday());
+  const [endDate, setEndDate] = useState(getToday());
   const [selectedStore, setSelectedStore] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Rawalpindi Institute of Cardiology');
   const [stores, setStores] = useState([]);
@@ -30,7 +32,7 @@ const StockBalanceReportPage = () => {
   const fetchStores = async () => {
     try {
       const data = await getAllStores();
-      setStores(data);
+      setStores(data.filter(store => store.isActive));
     } catch (error) {
       console.error('Error fetching stores:', error);
     }

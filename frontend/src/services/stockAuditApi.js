@@ -1,6 +1,24 @@
-const API_URL = 'http://localhost:5100/api';
+const API_URL = 'http://10.10.10.35:5100/api';
 
 export const stockAuditApi = {
+    // Get past stock audits (history list, matches the old system's Stock Audit list)
+    getAll: async (filters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.branchId) params.append('branchId', filters.branchId);
+        if (filters.storeId) params.append('storeId', filters.storeId);
+        if (filters.startDate) params.append('startDate', filters.startDate);
+        if (filters.endDate) params.append('endDate', filters.endDate);
+
+        const response = await fetch(`${API_URL}/stockaudits?${params.toString()}`);
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to fetch stock audits');
+        }
+
+        return response.json();
+    },
+
     // Search stock audit items
     searchItems: async (searchData) => {
         const response = await fetch(`${API_URL}/stockaudits/search`, {

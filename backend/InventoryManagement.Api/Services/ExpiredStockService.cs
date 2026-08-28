@@ -16,9 +16,11 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<ExpiredStock>> GetExpiredStockAsync(ExpiredStockSearchRequest request)
+        public async Task<PagedResult<ExpiredStock>> GetExpiredStockAsync(ExpiredStockSearchRequest request)
         {
             var expiredStocks = new List<ExpiredStock>();
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var totalCount = 0;
 
             try
             {
@@ -32,12 +34,19 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StartDate", request.StartDate.HasValue ? (object)request.StartDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", request.EndDate.HasValue ? (object)request.EndDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@Item", string.IsNullOrEmpty(request.Item) ? (object)DBNull.Value : request.Item);
+                command.Parameters.AddWithValue("@SearchTerm", string.IsNullOrEmpty(request.SearchTerm) ? (object)DBNull.Value : request.SearchTerm);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     expiredStocks.Add(new ExpiredStock
                     {
                         Name = reader.GetString(reader.GetOrdinal("Name")),
@@ -55,7 +64,7 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return expiredStocks;
+            return new PagedResult<ExpiredStock> { Items = expiredStocks, TotalCount = totalCount, PageNumber = pageNumber, PageSize = pageSize };
         }
     }
 }

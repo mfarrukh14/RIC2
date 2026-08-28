@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { manufacturerApi } from '../services/manufacturerApi';
+import { locationApi } from '../services/locationApi';
 import LocationFields from './LocationFields';
 
 const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false }) => {
@@ -28,23 +29,27 @@ const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false })
 
   useEffect(() => {
     if (manufacturer) {
+      // The API returns these under their real backend property names
+      // (ntn, stn, cNo, cpName1, cpEmail1, ... countryName/stateOrProvinceName/
+      // cityName for display) - map them into the form's own field names here
+      // so previously-saved values actually show up when editing.
       setFormData({
         name: manufacturer.name || '',
         email: manufacturer.email || '',
         ntn: manufacturer.ntn || '',
         stn: manufacturer.stn || '',
-        country: manufacturer.country || '',
-        stateProvince: manufacturer.stateProvince || '',
-        city: manufacturer.city || '',
+        country: manufacturer.countryName || '',
+        stateProvince: manufacturer.stateOrProvinceName || '',
+        city: manufacturer.cityName || '',
         address: manufacturer.address || '',
-        contactNo: manufacturer.contactNo || '',
+        contactNo: manufacturer.cNo || '',
         description: manufacturer.description || '',
-        contactPersonName1: manufacturer.contactPersonName1 || '',
-        contactPersonEmail1: manufacturer.contactPersonEmail1 || '',
-        contactPersonPhone1: manufacturer.contactPersonPhone1 || '',
-        contactPersonName2: manufacturer.contactPersonName2 || '',
-        contactPersonEmail2: manufacturer.contactPersonEmail2 || '',
-        contactPersonPhone2: manufacturer.contactPersonPhone2 || '',
+        contactPersonName1: manufacturer.cpName1 || '',
+        contactPersonEmail1: manufacturer.cpEmail1 || '',
+        contactPersonPhone1: manufacturer.cpContactNumber1 || '',
+        contactPersonName2: manufacturer.cpName2 || '',
+        contactPersonEmail2: manufacturer.cpEmail2 || '',
+        contactPersonPhone2: manufacturer.cpContactNumber2 || '',
         isActive: manufacturer.isActive ?? true,
       });
     }
@@ -58,16 +63,66 @@ const ManufacturerForm = ({ manufacturer, onSave, onCancel, isEditing = false })
     }));
   };
 
+  // Resolves the plain-text country/state/city names held in the form back
+  // into the ids the backend actually stores (CountryId/StateOrProvinceId/CityId).
+  const resolveLocationIds = async () => {
+    let countryId = null;
+    let stateOrProvinceId = null;
+    let cityId = null;
+
+    if (formData.country) {
+      const countries = await locationApi.getCountries();
+      const country = countries.find(c => c.name === formData.country);
+      countryId = country?.id ?? null;
+
+      if (country && formData.stateProvince) {
+        const provinces = await locationApi.getProvinces(country.id);
+        const province = provinces.find(p => p.name === formData.stateProvince);
+        stateOrProvinceId = province?.id ?? null;
+
+        if (province && formData.city) {
+          const cities = await locationApi.getCities(province.id);
+          const city = cities.find(c => c.name === formData.city);
+          cityId = city?.id ?? null;
+        }
+      }
+    }
+
+    return { countryId, stateOrProvinceId, cityId };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
+      const { countryId, stateOrProvinceId, cityId } = await resolveLocationIds();
+
+      const payload = {
+        name: formData.name,
+        email: formData.email || null,
+        ntn: formData.ntn || null,
+        stn: formData.stn || null,
+        countryId,
+        stateOrProvinceId,
+        cityId,
+        address: formData.address || null,
+        cNo: formData.contactNo || null,
+        description: formData.description || null,
+        cpName1: formData.contactPersonName1 || null,
+        cpEmail1: formData.contactPersonEmail1 || null,
+        cpContactNumber1: formData.contactPersonPhone1 || null,
+        cpName2: formData.contactPersonName2 || null,
+        cpEmail2: formData.contactPersonEmail2 || null,
+        cpContactNumber2: formData.contactPersonPhone2 || null,
+        isActive: formData.isActive,
+      };
+
       if (isEditing && manufacturer) {
-        await manufacturerApi.update(manufacturer.id, { ...formData, id: manufacturer.id });
+        await manufacturerApi.update(manufacturer.id, { ...payload, id: manufacturer.id });
       } else {
-        await manufacturerApi.create(formData);
+        await manufacturerApi.create(payload);
       }
       onSave();
     } catch (err) {

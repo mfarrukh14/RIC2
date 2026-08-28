@@ -4,24 +4,29 @@ import { getAllStores } from '../services/storeApi';
 import vendorApi from '../services/vendorApi';
 import { stockTypesApi } from '../services/stockTypesApi';
 import itemApi from '../services/itemApi';
+import { itemTypeApi } from '../services/itemTypeApi';
 import BranchField from '../components/BranchField';
+import Pagination from '../components/Pagination';
 import { useSession } from '../context/SessionContext';
+
+const getToday = () => new Date().toISOString().split('T')[0];
 
 const StockDetailRecordPage = () => {
   const { session } = useSession();
   const [branch, setBranch] = useState('Rawalpindi Institute of Cardiology');
-  const [startDate, setStartDate] = useState('2025-10-29');
-  const [endDate, setEndDate] = useState('2025-10-29');
+  const [startDate, setStartDate] = useState(getToday());
+  const [endDate, setEndDate] = useState(getToday());
   const [selectedStore, setSelectedStore] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [selectedStockType, setSelectedStockType] = useState('');
   const [selectedItem, setSelectedItem] = useState('');
-  const [selectedItemType, setSelectedItemType] = useState('all');
+  const [selectedItemType, setSelectedItemType] = useState('');
   const [selectedSaleType, setSelectedSaleType] = useState('all');
   const [stores, setStores] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [stockTypes, setStockTypes] = useState([]);
   const [items, setItems] = useState([]);
+  const [itemTypes, setItemTypes] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +38,12 @@ const StockDetailRecordPage = () => {
     fetchVendors();
     fetchStockTypes();
     fetchItems();
+    fetchItemTypes();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, itemsPerPage]);
 
   // Records are always scoped to the logged-in user's own branch.
   useEffect(() => {
@@ -45,9 +55,10 @@ const StockDetailRecordPage = () => {
   const fetchStores = async () => {
     try {
       const data = await getAllStores();
-      setStores(data);
-      if (data.length > 0) {
-        setSelectedStore(data[0].storeName);
+      const activeStores = data.filter(store => store.isActive);
+      setStores(activeStores);
+      if (activeStores.length > 0) {
+        setSelectedStore(activeStores[0].storeName);
       }
     } catch (error) {
       console.error('Error fetching stores:', error);
@@ -74,10 +85,19 @@ const StockDetailRecordPage = () => {
 
   const fetchItems = async () => {
     try {
-      const data = await itemApi.getAll();
-      setItems(data);
+      const data = await itemApi.getAllUnpaginated();
+      setItems(data.filter(item => item.isActive));
     } catch (error) {
       console.error('Error fetching items:', error);
+    }
+  };
+
+  const fetchItemTypes = async () => {
+    try {
+      const data = await itemTypeApi.getAll();
+      setItemTypes(data.filter(itemType => itemType.isActive));
+    } catch (error) {
+      console.error('Error fetching item types:', error);
     }
   };
 
@@ -92,7 +112,7 @@ const StockDetailRecordPage = () => {
         vendor: selectedVendor || undefined,
         stockType: selectedStockType || undefined,
         item: selectedItem || undefined,
-        itemType: selectedItemType === 'all' ? undefined : selectedItemType,
+        itemType: selectedItemType || undefined,
         saleType: selectedSaleType === 'all' ? undefined : selectedSaleType
       };
 
@@ -118,7 +138,6 @@ const StockDetailRecordPage = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
 
   return (
     <div className="p-6">
@@ -140,25 +159,28 @@ const StockDetailRecordPage = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
           {/* Branch - locked to the logged-in user's own branch */}
           <BranchField />
 
-          <div>
+          {/* Holds two date inputs, so it gets double width on lg+ (laptop) screens -
+              a single narrow grid cell was crushing both inputs into overlapping,
+              unreadable date pickers. */}
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium mb-1">Date Range Filter</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
-                type="datetime-local"
-                value={startDate + 'T12:00'}
-                onChange={(e) => setStartDate(e.target.value.split('T')[0])}
-                className="flex-1 border rounded px-3 py-2 text-sm"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="min-w-[140px] flex-1 border rounded px-3 py-2 text-sm"
               />
-              <span className="self-center">-</span>
+              <span className="hidden sm:inline self-center">-</span>
               <input
-                type="datetime-local"
-                value={endDate + 'T23:59'}
-                onChange={(e) => setEndDate(e.target.value.split('T')[0])}
-                className="flex-1 border rounded px-3 py-2 text-sm"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="min-w-[140px] flex-1 border rounded px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -196,7 +218,7 @@ const StockDetailRecordPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">Stock Type</label>
             <select
@@ -236,7 +258,12 @@ const StockDetailRecordPage = () => {
               onChange={(e) => setSelectedItemType(e.target.value)}
               className="w-full border rounded px-3 py-2 text-sm"
             >
-              <option value="all">All</option>
+              <option value="">All</option>
+              {itemTypes.map(itemType => (
+                <option key={itemType.id} value={itemType.name}>
+                  {itemType.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -251,56 +278,10 @@ const StockDetailRecordPage = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Item Type</label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="all"
-                  checked={selectedItemType === 'all'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">All</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="medicine"
-                  checked={selectedItemType === 'medicine'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Medicine</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="disposable"
-                  checked={selectedItemType === 'disposable'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Disposable</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="item"
-                  checked={selectedItemType === 'item'}
-                  onChange={(e) => setSelectedItemType(e.target.value)}
-                  className="rounded-full"
-                />
-                <span className="text-sm">Item</span>
-              </label>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Sale Type</label>
-            <div className="flex gap-4 mt-2">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -358,21 +339,7 @@ const StockDetailRecordPage = () => {
 
       {/* Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Show</label>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              className="border rounded px-2 py-1 text-sm"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label className="text-sm">entries</label>
-          </div>
+        <div className="p-4 border-b flex justify-end items-center">
           <div className="flex items-center gap-2">
             <label className="text-sm">Search:</label>
             <input
@@ -438,41 +405,13 @@ const StockDetailRecordPage = () => {
           </table>
         </div>
 
-        <div className="p-4 border-t flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredRecords.length)} of {filteredRecords.length} entries
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Previous
-            </button>
-            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-              const pageNum = i + 1;
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`px-3 py-1 border rounded text-sm ${
-                    currentPage === pageNum ? 'bg-blue-600 text-white' : ''
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded text-sm disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          pageSize={itemsPerPage}
+          totalCount={filteredRecords.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setItemsPerPage}
+        />
       </div>
     </div>
   );
