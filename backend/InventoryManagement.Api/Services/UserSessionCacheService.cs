@@ -34,13 +34,22 @@ namespace InventoryManagement.Api.Services
             int? branchId = userRecord.TryGetValue("BranchId", out var branchIdValue) && branchIdValue is int id ? id : null;
             string? branchName = branchId.HasValue ? await FetchBranchNameAsync(branchId.Value) : null;
 
+            // MemberShip.UserTypes: 1=Super Admin, 2=Organization Admin, 3=Branch
+            // Admin - all three get unrestricted access, matching today's behavior.
+            // 4=User, 5=Doctor, 6=Nurse are store-restricted via AllowedStoreIds.
+            int? userTypeId = userRecord.TryGetValue("UserTypeId", out var userTypeIdValue) && userTypeIdValue is int utId ? utId : null;
+            bool isAdmin = userTypeId is 1 or 2 or 3;
+            var allowedStoreIds = isAdmin ? new List<int>() : await FetchAllowedStoreIdsAsync(userId);
+
             var session = new UserSession
             {
                 UserId = userId,
                 BranchId = branchId,
                 BranchName = branchName,
                 LoggedInOn = DateTime.UtcNow,
-                User = userRecord
+                User = userRecord,
+                IsAdmin = isAdmin,
+                AllowedStoreIds = allowedStoreIds
             };
 
             // Overwrites any existing entry for this user (e.g. a stale session from a prior login).
@@ -80,6 +89,35 @@ namespace InventoryManagement.Api.Services
             }
 
             return row;
+        }
+
+        // Empty result (no rows / no allocation yet) means the caller sees nothing
+        // once store-scoping is applied - fails closed rather than open.
+        private async Task<List<int>> FetchAllowedStoreIdsAsync(int userId)
+        {
+            var storeIds = new List<int>();
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using var command = new SqlCommand(
+                    "SELECT StoreId FROM Inv.StoreAllocationToUser WHERE UserId = @UserId AND IsActive = 1 AND IsDeleted = 0;",
+                    connection);
+                command.Parameters.AddWithValue("@UserId", userId);
+
+                using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    storeIds.Add(reader.GetInt32(0));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving allowed store IDs for UserId {UserId}", userId);
+            }
+
+            return storeIds;
         }
 
         private async Task<string?> FetchBranchNameAsync(int branchId)

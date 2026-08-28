@@ -9,7 +9,7 @@ namespace InventoryManagement.Api.Services
         Task<Store> CreateAsync(StoreCreateRequest request);
         Task UpdateAsync(int id, StoreUpdateRequest request);
         Task DeleteAsync(int id);
-        Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request);
+        Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds);
         Task<StoreLocationLookupResponse> GetLocationLookupAsync();
     }
 }

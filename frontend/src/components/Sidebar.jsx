@@ -97,7 +97,10 @@ const Sidebar = ({ activeSection, onSectionChange, collapsed, onToggleCollapse }
         { id: 'rack-rows', title: 'Rack Rows', icon: TableCellsIcon },
         { id: 'space-allocation', title: 'Space Allocation', icon: MapIcon },
         { id: 'store-management', title: 'Store Management', icon: BuildingOfficeIcon },
-        { id: 'stores-allocation-to-user', title: 'Stores Allocation To User', icon: UsersIcon },
+        // Assigns which stores a user can see (BaseController.AllowedStoreIds reads
+        // this table) - admin-only, same as the backend guard on
+        // StoreAllocationToUserController, so a normal user never even sees the entry.
+        ...(session?.isAdmin ? [{ id: 'stores-allocation-to-user', title: 'Stores Allocation To User', icon: UsersIcon }] : []),
         { id: 'stock-with-least-expiry', title: 'Stock With Least Expiry', icon: ClockIcon }
       ]
     },

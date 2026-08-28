@@ -405,12 +405,12 @@ const StockAuditPage = () => {
                   if (!filters.storeId) return true;
                   const itemId = item.id ?? item.itemId;
                   if (itemId == null) return true;
-                  return (itemQuantities[itemId] ?? 0) > 0;
+                  return (itemQuantities.items?.[itemId] ?? 0) > 0;
                 })
                 .map((item, index) => {
                   const itemId = item.id ?? item.itemId ?? '';
                   const itemName = item.name ?? item.itemName ?? `Item ${index + 1}`;
-                  const qty = filters.storeId && itemId !== '' ? itemQuantities[itemId] ?? 0 : null;
+                  const qty = filters.storeId && itemId !== '' ? itemQuantities.items?.[itemId] ?? 0 : null;
 
                   return (
                   <option key={`audit-item-${itemId || index}`} value={itemId}>

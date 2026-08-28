@@ -21,25 +21,64 @@ namespace InventoryManagement.Api.Services
         // Pharmacy.PharmacyMedicinesStocks row at that store still appear, at 0, instead of
         // vanishing. Reads the live stock ledger (see Stock_Procedures.sql header for why
         // this isn't Inv.Stocks) - no IsActive column exists there, so none is filtered.
-        public async Task<Dictionary<int, int>> GetQuantitiesByStoreAsync(int storeId)
+        // A store can hold several Pharmacy.PharmacyMedicinesStocks rows for the same
+        // product (one per batch/stock type), so quantities must be SUMmed and GROUPed -
+        // see the same pattern in StockStats_Procedures.sql and StockDetailRecord_GetReport.sql.
+        //
+        // Covers all three product kinds that table can carry (Inv.Items,
+        // Pharmacy.BranchMedicines, Data.BranchFees - see Stock.ItemId comment). Medicines and
+        // sub-services must additionally be RESOLVED from the branch-instance id stored on the
+        // stock row (BranchMedicineId -> Pharmacy.BranchMedicines.Id, BranchSubServiceId ->
+        // Data.BranchFees.Id) back to the catalog id (Pharmacy.Medicines.MedicineId /
+        // Account.Fees.Id) that Item_GetAllWithMedicines - and every "unified" item/medicine/
+        // disposable picker built on it (StockAdjustmentModal, PlaceDemandPage,
+        // StockConsumptionPage) - actually key on. These are two disjoint id spaces (confirmed:
+        // 0 of 12194 Pharmacy.BranchMedicines rows have Id = MedicineId) that only look
+        // interchangeable because both are plain ints in similar ranges - matching the raw
+        // branch-instance id against a picker keyed by catalog id silently missed almost every
+        // medicine/disposable, which is why those pickers showed far fewer in-stock rows than
+        // the Stock page.
+        public async Task<StoreItemQuantities> GetQuantitiesByStoreAsync(int storeId)
         {
-            var quantities = new Dictionary<int, int>();
+            var result = new StoreItemQuantities();
 
             try
             {
                 using var connection = new SqlConnection(_connectionString);
                 using var command = new SqlCommand(@"
-SELECT i.Id AS ItemId, ISNULL(p.TotalItemsInStock, 0) AS Quantity
-FROM Inv.Items i
-LEFT JOIN Pharmacy.PharmacyMedicinesStocks p ON p.ItemId = i.Id AND p.StoreId = @StoreId
-WHERE i.IsActive = 1;", connection);
+SELECT 'Item' AS Kind, ItemId AS Id, SUM(TotalItemsInStock) AS Quantity
+FROM Pharmacy.PharmacyMedicinesStocks
+WHERE StoreId = @StoreId AND ItemId IS NOT NULL
+GROUP BY ItemId
+UNION ALL
+SELECT 'Medicine', bm.MedicineId, SUM(p.TotalItemsInStock)
+FROM Pharmacy.PharmacyMedicinesStocks p
+JOIN Pharmacy.BranchMedicines bm ON bm.Id = p.BranchMedicineId
+WHERE p.StoreId = @StoreId AND p.BranchMedicineId IS NOT NULL
+GROUP BY bm.MedicineId
+UNION ALL
+SELECT 'SubService', bf.FeeId, SUM(p.TotalItemsInStock)
+FROM Pharmacy.PharmacyMedicinesStocks p
+JOIN Data.BranchFees bf ON bf.Id = p.BranchSubServiceId
+WHERE p.StoreId = @StoreId AND p.BranchSubServiceId IS NOT NULL AND bf.FeeId IS NOT NULL
+GROUP BY bf.FeeId;", connection);
                 command.Parameters.Add("@StoreId", SqlDbType.Int).Value = storeId;
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    quantities[reader.GetInt32(0)] = Convert.ToInt32(reader.GetDecimal(1));
+                    var kind = reader.GetString(0);
+                    var id = reader.GetInt32(1);
+                    var quantity = Convert.ToInt32(reader.GetDecimal(2));
+
+                    var bucket = kind switch
+                    {
+                        "Item" => result.Items,
+                        "Medicine" => result.Medicines,
+                        _ => result.SubServices
+                    };
+                    bucket[id] = quantity;
                 }
             }
             catch (Exception ex)
@@ -48,7 +87,7 @@ WHERE i.IsActive = 1;", connection);
                 throw;
             }
 
-            return quantities;
+            return result;
         }
 
         // Updates the reorder/panic-level threshold for a single stock row - the one field
@@ -69,7 +108,7 @@ WHERE i.IsActive = 1;", connection);
             return rowsAffected > 0;
         }
 
-        public async Task<PagedResult<Stock>> SearchStocksAsync(StockSearchRequest request)
+        public async Task<PagedResult<Stock>> SearchStocksAsync(StockSearchRequest request, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
             var result = new PagedResult<Stock> { PageNumber = pageNumber, PageSize = pageSize };
@@ -79,7 +118,7 @@ WHERE i.IsActive = 1;", connection);
             {
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
-                using var command = await CreateSearchCommandAsync(connection, request, pageNumber, pageSize);
+                using var command = await CreateSearchCommandAsync(connection, request, pageNumber, pageSize, isAdmin, allowedStoreIds);
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
@@ -102,7 +141,7 @@ WHERE i.IsActive = 1;", connection);
             return result;
         }
 
-        private async Task<SqlCommand> CreateSearchCommandAsync(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize)
+        private async Task<SqlCommand> CreateSearchCommandAsync(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             if (await StoredProcedureExistsAsync(connection, "Stock_Search"))
             {
@@ -122,19 +161,22 @@ WHERE i.IsActive = 1;", connection);
                 procedureCommand.Parameters.AddWithValue("@StockAvailability", (object?)request.StockAvailability ?? DBNull.Value);
                 procedureCommand.Parameters.AddWithValue("@IsVaccine", (object?)request.IsVaccine ?? DBNull.Value);
                 procedureCommand.Parameters.AddWithValue("@MinimumPanicLevelOnly", request.MinimumPanicLevelOnly);
+                procedureCommand.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                procedureCommand.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 PaginationHelper.AddPagingParameters(procedureCommand, pageNumber, pageSize);
 
                 return procedureCommand;
             }
 
-            return CreateFallbackSearchCommand(connection, request, pageNumber, pageSize);
+            return CreateFallbackSearchCommand(connection, request, pageNumber, pageSize, isAdmin, allowedStoreIds);
         }
 
-        private static SqlCommand CreateFallbackSearchCommand(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize)
+        private static SqlCommand CreateFallbackSearchCommand(SqlConnection connection, StockSearchRequest request, int pageNumber, int pageSize, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var command = new SqlCommand(
                 @"
 DECLARE @CategoryIdTable TABLE (CategoryId INT);
+DECLARE @AllowedStoreIdTable TABLE (StoreId INT);
 DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
 
 IF @CategoryIds IS NOT NULL AND LTRIM(RTRIM(@CategoryIds)) <> ''
@@ -142,6 +184,14 @@ BEGIN
     INSERT INTO @CategoryIdTable (CategoryId)
     SELECT TRY_CAST(value AS INT)
     FROM STRING_SPLIT(@CategoryIds, ',')
+    WHERE TRY_CAST(value AS INT) IS NOT NULL;
+END
+
+IF @IsAdmin = 0 AND @AllowedStoreIds IS NOT NULL AND LTRIM(RTRIM(@AllowedStoreIds)) <> ''
+BEGIN
+    INSERT INTO @AllowedStoreIdTable (StoreId)
+    SELECT TRY_CAST(value AS INT)
+    FROM STRING_SPLIT(@AllowedStoreIds, ',')
     WHERE TRY_CAST(value AS INT) IS NOT NULL;
 END
 
@@ -173,6 +223,7 @@ END
     LEFT JOIN Data.BranchFees bf ON bf.Id = p.BranchSubServiceId
     WHERE (@BranchId IS NULL OR ps.BranchId = @BranchId)
       AND (@StoreId IS NULL OR p.StoreId = @StoreId)
+      AND (@IsAdmin = 1 OR p.StoreId IN (SELECT StoreId FROM @AllowedStoreIdTable))
       AND (@ItemTypeId IS NULL OR i.ItemTypeId = @ItemTypeId)
       AND (@ItemId IS NULL OR p.ItemId = @ItemId)
       AND (@StockTypeId IS NULL OR p.StockTypeId = @StockTypeId)
@@ -243,6 +294,8 @@ ORDER BY ItemName ASC;",
             command.Parameters.Add("@StockTypeId", SqlDbType.Int).Value = (object?)request.StockTypeId ?? DBNull.Value;
             command.Parameters.Add("@StockAvailability", SqlDbType.NVarChar, 20).Value = string.IsNullOrWhiteSpace(request.StockAvailability) ? DBNull.Value : request.StockAvailability;
             command.Parameters.Add("@MinimumPanicLevelOnly", SqlDbType.Bit).Value = request.MinimumPanicLevelOnly;
+            command.Parameters.Add("@IsAdmin", SqlDbType.Bit).Value = isAdmin;
+            command.Parameters.Add("@AllowedStoreIds", SqlDbType.NVarChar, -1).Value = isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds);
 
             return command;
         }

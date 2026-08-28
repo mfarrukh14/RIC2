@@ -11,7 +11,7 @@ import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import stockApi from '../services/stockApi';
 import { stockTypesApi } from '../services/stockTypesApi';
-import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
+import { productOptionValue, parseProductOptionValue, quantityForProduct } from '../utils/productKey';
 import Pagination from '../components/Pagination';
 import usePagedList from '../hooks/usePagedList';
 
@@ -131,8 +131,8 @@ const StockConsumptionPage = () => {
 
   const filteredItems = items.filter(item => {
     if (!item.isActive) return false;
-    if (!formData.storeId || item.itemId == null) return true;
-    return (itemQuantities[item.itemId] ?? 0) > 0;
+    if (!formData.storeId) return true;
+    return quantityForProduct(itemQuantities, item) > 0;
   });
 
   const handleDetailChange = (index, field, value) => {
@@ -359,10 +359,10 @@ const StockConsumptionPage = () => {
                             <option value="">Select Item</option>
                             {filteredItems.map(item => {
                               const label = item.sourceType === 'Item' ? item.name : `${item.name} (${item.sourceType})`;
-                              const qty = item.itemId != null ? itemQuantities[item.itemId] ?? 0 : null;
+                              const qty = quantityForProduct(itemQuantities, item);
                               return (
                                 <option key={productOptionValue(item)} value={productOptionValue(item)}>
-                                  {formData.storeId && qty !== null ? `${label} - ${qty}` : label}
+                                  {formData.storeId ? `${label} - ${qty}` : label}
                                 </option>
                               );
                             })}

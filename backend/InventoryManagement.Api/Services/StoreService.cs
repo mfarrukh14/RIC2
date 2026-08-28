@@ -192,7 +192,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request)
+        public async Task<IReadOnlyList<DropdownItem>> GetPharmacyStoreDropdownAsync(PharmacyStoreDropdownRequest request, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var items = new List<DropdownItem>();
             var branchId = request.BranchId.HasValue && request.BranchId > 0
@@ -243,7 +243,7 @@ namespace InventoryManagement.Api.Services
 
                         if (items.Count > 0)
                         {
-                            return items;
+                            return StoreScopeHelper.FilterStores(items, isAdmin, allowedStoreIds, i => i.Value);
                         }
                     }
                     catch (SqlException ex)
@@ -321,7 +321,7 @@ ORDER BY s.StoreName;", connection)
                 throw;
             }
 
-            return items;
+            return StoreScopeHelper.FilterStores(items, isAdmin, allowedStoreIds, i => i.Value);
         }
 
         public async Task<StoreLocationLookupResponse> GetLocationLookupAsync()

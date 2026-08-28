@@ -23,7 +23,14 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var stocks = await _stockService.SearchStocksAsync(request);
+                // A non-admin explicitly picking a store outside their allocation gets an
+                // empty result, not another store's data - never trust the client's StoreId.
+                if (!IsAdmin && request.StoreId.HasValue && !IsStoreAllowed(request.StoreId))
+                {
+                    return Ok(new PagedResult<Stock> { Items = new List<Stock>(), TotalCount = 0, PageNumber = request.PageNumber, PageSize = request.PageSize });
+                }
+
+                var stocks = await _stockService.SearchStocksAsync(request, IsAdmin, AllowedStoreIds);
                 return Ok(stocks);
             }
             catch (Exception ex)
@@ -53,10 +60,15 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("quantities-by-store/{storeId:int}")]
-        public async Task<ActionResult<Dictionary<int, int>>> GetQuantitiesByStore(int storeId)
+        public async Task<ActionResult<StoreItemQuantities>> GetQuantitiesByStore(int storeId)
         {
             try
             {
+                if (!IsStoreAllowed(storeId))
+                {
+                    return Ok(new StoreItemQuantities());
+                }
+
                 var quantities = await _stockService.GetQuantitiesByStoreAsync(storeId);
                 return Ok(quantities);
             }

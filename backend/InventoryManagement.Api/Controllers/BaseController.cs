@@ -19,6 +19,18 @@ namespace InventoryManagement.Api.Controllers
         protected string? BranchName { get; private set; }
         protected UserSession? CurrentUserSession { get; private set; }
 
+        // Super Admin / Organization Admin / Branch Admin - unrestricted access
+        // to every store. Everyone else is scoped to AllowedStoreIds.
+        protected bool IsAdmin { get; private set; }
+        protected IReadOnlyList<int> AllowedStoreIds { get; private set; } = Array.Empty<int>();
+
+        // True for admins unconditionally; for everyone else, only when storeId
+        // is set and is one of the caller's allowed stores. Use this to validate
+        // a request's StoreId server-side rather than trusting it outright -
+        // never let a non-admin's own choice of storeId bypass their scope.
+        protected bool IsStoreAllowed(int? storeId) =>
+            IsAdmin || (storeId.HasValue && AllowedStoreIds.Contains(storeId.Value));
+
         protected BaseController(IUserSessionCacheService sessionCache)
         {
             _sessionCache = sessionCache;
@@ -42,6 +54,8 @@ namespace InventoryManagement.Api.Controllers
             BranchId = session.BranchId;
             BranchName = session.BranchName;
             CurrentUserSession = session;
+            IsAdmin = session.IsAdmin;
+            AllowedStoreIds = session.AllowedStoreIds;
         }
 
         [NonAction]

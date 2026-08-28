@@ -23,7 +23,12 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var inventories = await _inventoryService.GetAllAsync(filter);
+                if (!IsAdmin && filter?.StoreId.HasValue == true && !IsStoreAllowed(filter.StoreId))
+                {
+                    return Ok(new PagedResult<Inventory> { Items = new List<Inventory>(), TotalCount = 0, PageNumber = filter.PageNumber, PageSize = filter.PageSize });
+                }
+
+                var inventories = await _inventoryService.GetAllAsync(filter, IsAdmin, AllowedStoreIds);
                 return Ok(inventories);
             }
             catch (Exception ex)
@@ -51,6 +56,27 @@ namespace InventoryManagement.Api.Controllers
             {
                 _logger.LogError(ex, "Error retrieving inventory with ID {Id}", id);
                 return StatusCode(500, new { message = "An error occurred while retrieving the inventory" });
+            }
+        }
+
+        [HttpGet("{id}/returnable-items")]
+        public async Task<ActionResult<InventoryReturnableItemsResponse>> GetReturnableItems(int id)
+        {
+            try
+            {
+                var response = await _inventoryService.GetReturnableItemsAsync(id);
+
+                if (response == null)
+                {
+                    return NotFound(new { message = $"Inventory with ID {id} not found" });
+                }
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving returnable items for inventory {Id}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving returnable items" });
             }
         }
 
@@ -176,6 +202,7 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 var lookupData = await _inventoryService.GetLookupDataAsync();
+                lookupData.Stores = StoreScopeHelper.FilterStores(lookupData.Stores, IsAdmin, AllowedStoreIds, s => s.StoreId);
                 return Ok(lookupData);
             }
             catch (Exception ex)

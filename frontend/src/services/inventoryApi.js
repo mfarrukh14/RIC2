@@ -24,6 +24,13 @@ const inventoryApi = {
     return response.data;
   },
 
+  // Powers the "Return Inventory" modal - the inventory's line items, each
+  // enriched with how much has already been returned against it.
+  getReturnableItems: async (id) => {
+    const response = await axios.get(`${API_BASE_URL}/inventories/${id}/returnable-items`);
+    return response.data;
+  },
+
   create: async (data) => {
     const response = await axios.post(`${API_BASE_URL}/inventories`, data);
     return response.data;

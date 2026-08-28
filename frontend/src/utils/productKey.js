@@ -24,3 +24,15 @@ export const findProductRow = (rows, { itemId, medicineId, subServiceId }) =>
     (medicineId != null && row.medicineId === medicineId) ||
     (subServiceId != null && row.subServiceId === subServiceId)
   );
+
+// Looks up a row's on-hand quantity in a StoreItemQuantities response
+// ({ items, medicines, subServices }, see StocksController.GetQuantitiesByStore) -
+// an ItemId, BranchMedicineId and BranchSubServiceId can all collide on the same
+// integer, so the right bucket must be picked by the row's kind, not just its id.
+export const quantityForProduct = (quantities, row) => {
+  if (!quantities || !row) return 0;
+  if (row.itemId != null) return quantities.items?.[row.itemId] ?? 0;
+  if (row.medicineId != null) return quantities.medicines?.[row.medicineId] ?? 0;
+  if (row.subServiceId != null) return quantities.subServices?.[row.subServiceId] ?? 0;
+  return 0;
+};

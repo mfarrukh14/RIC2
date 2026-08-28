@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface ITransferInventoryService
     {
-        Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter = null);
+        Task<PagedResult<TransferInventory>> GetAllAsync(TransferInventoryFilterRequest? filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds);
         Task<TransferInventory?> GetByIdAsync(int id);
         Task<TransferInventory> CreateAsync(TransferInventoryCreateRequest request);
         Task<bool> UpdateAsync(int id, TransferInventoryUpdateRequest request);

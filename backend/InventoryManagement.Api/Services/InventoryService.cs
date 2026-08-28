@@ -16,7 +16,7 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter = null)
+        public async Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds)
         {
             var (pageNumber, pageSize) = PaginationHelper.Normalize(filter?.PageNumber ?? 1, filter?.PageSize ?? PaginationHelper.DefaultPageSize);
             var inventories = new List<Inventory>();
@@ -34,6 +34,8 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StoreId", (object?)filter?.StoreId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@DateFrom", (object?)filter?.DateFrom ?? DBNull.Value);
                 command.Parameters.AddWithValue("@DateTo", (object?)filter?.DateTo ?? DBNull.Value);
+                command.Parameters.AddWithValue("@IsAdmin", isAdmin);
+                command.Parameters.AddWithValue("@AllowedStoreIds", isAdmin ? (object)DBNull.Value : string.Join(',', allowedStoreIds));
                 PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
@@ -95,6 +97,75 @@ namespace InventoryManagement.Api.Services
                 _logger.LogError(ex, "Error retrieving inventory with ID {Id}", id);
                 throw;
             }
+        }
+
+        // Powers the "Return Inventory" modal launched from an Add Inventory row -
+        // reuses GetByIdAsync for the header+lines, then folds in how much of each
+        // line has already been returned (one grouped query instead of one per
+        // line) so the modal can show/cap Available Quantity accurately.
+        public async Task<InventoryReturnableItemsResponse?> GetReturnableItemsAsync(int id)
+        {
+            var inventory = await GetByIdAsync(id);
+            if (inventory == null)
+            {
+                return null;
+            }
+
+            var alreadyReturned = new Dictionary<int, int>();
+            try
+            {
+                using var connection = new SqlConnection(_connectionString);
+                using var command = new SqlCommand(@"
+SELECT rii.SourceInventoryDetailId, SUM(rii.Quantity) AS ReturnedQuantity
+FROM Inv.ReturnInventoryItems rii
+JOIN Inv.ReturnInventory ri ON ri.Id = rii.ReturnInventoryId
+WHERE ri.SourceInventoryId = @InventoryId
+    AND ri.IsActive = 1
+    AND rii.IsActive = 1
+    AND rii.SourceInventoryDetailId IS NOT NULL
+GROUP BY rii.SourceInventoryDetailId;", connection);
+                command.Parameters.AddWithValue("@InventoryId", id);
+
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    alreadyReturned[reader.GetInt32(0)] = Convert.ToInt32(reader.GetValue(1));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving already-returned quantities for inventory {Id}", id);
+                throw;
+            }
+
+            var response = new InventoryReturnableItemsResponse
+            {
+                InventoryId = inventory.Id,
+                InvoiceNo = inventory.InvoiceNo,
+                StoreId = inventory.StoreId,
+                BranchId = inventory.BranchId
+            };
+
+            foreach (var detail in inventory.Details ?? new List<InventoryDetail>())
+            {
+                var received = detail.TotalItems ?? 0;
+                var returned = alreadyReturned.TryGetValue(detail.Id, out var qty) ? qty : 0;
+                response.Items.Add(new InventoryReturnableItem
+                {
+                    InventoryDetailId = detail.Id,
+                    ItemId = detail.ItemId,
+                    MedicineId = detail.MedicineId,
+                    SubServiceId = detail.SubServiceId,
+                    ItemName = detail.ItemName,
+                    ReceivedQuantity = received,
+                    AlreadyReturnedQuantity = returned,
+                    AvailableQuantity = Math.Max(0, received - returned),
+                    UnitBuyingPrice = detail.UnitBuyingPrice
+                });
+            }
+
+            return response;
         }
 
         public async Task<int> CreateAsync(InventoryCreateRequest request)

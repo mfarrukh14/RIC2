@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using InventoryManagement.Api.Models;
 using InventoryManagement.Api.Services;
 
 namespace InventoryManagement.Api.Controllers
 {
+    // Duplicate of StoreController (singular route "api/Store") - no frontend
+    // caller currently uses this plural "api/Stores" route, but scoped anyway
+    // so it can't become an unscoped back door to every store's data.
     [ApiController]
     [Route("api/[controller]")]
     public class StoresController : BaseController
@@ -21,7 +25,8 @@ namespace InventoryManagement.Api.Controllers
             try
             {
                 var stores = await _storeService.GetAllAsync();
-                return Ok(stores);
+                var scoped = StoreScopeHelper.FilterStores(stores, IsAdmin, AllowedStoreIds, s => s.Id);
+                return Ok(scoped);
             }
             catch (Exception ex)
             {

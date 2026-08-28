@@ -23,7 +23,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var results = await _demandRequestService.GetAllAsync(filter);
+                var results = await _demandRequestService.GetAllAsync(filter, IsAdmin, AllowedStoreIds);
                 return Ok(results);
             }
             catch (Exception ex)

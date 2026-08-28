@@ -124,6 +124,7 @@ namespace InventoryManagement.API.Models
         public DateTime? InventoryDateStart { get; set; }
         public DateTime? InventoryDateEnd { get; set; }
         public int? ItemId { get; set; }
+        public int? VendorId { get; set; }
         public string? InvoiceNo { get; set; }
         public string? ReportType { get; set; } // 'Purchase', 'Return', 'Both'
     }

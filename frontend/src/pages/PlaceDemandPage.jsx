@@ -16,7 +16,7 @@ import itemApi from '../services/itemApi';
 import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import { useSession } from '../context/SessionContext';
-import { productOptionValue, parseProductOptionValue } from '../utils/productKey';
+import { productOptionValue, parseProductOptionValue, quantityForProduct } from '../utils/productKey';
 
 const createDefaultDateRange = () => {
   const now = new Date();
@@ -837,15 +837,14 @@ const PlaceDemandPage = () => {
                     required
                   >
                     <option value="">Search Item</option>
-                    {lookups.items
-                      .filter((lookupItem) => {
-                        if (!formData.requestedStoreId || lookupItem.itemId == null) return true;
-                        return (itemQuantities[lookupItem.itemId] ?? 0) > 0;
-                      })
-                      .map((lookupItem) => (
+                    {/* A demand request is precisely how a low/zero-stock item gets
+                        restocked, so the full active list stays available here (unlike
+                        the outbound pickers elsewhere) - only the inline quantity hint
+                        narrows by the selected Requested Store. */}
+                    {lookups.items.map((lookupItem) => (
                       <option key={productOptionValue(lookupItem)} value={productOptionValue(lookupItem)}>
                         {lookupItem.sourceType === 'Item' ? lookupItem.name : `${lookupItem.name} (${lookupItem.sourceType})`}
-                        {lookupItem.itemId != null ? ` - ${itemQuantities[lookupItem.itemId] ?? 0}` : ''}
+                        {formData.requestedStoreId ? ` - ${quantityForProduct(itemQuantities, lookupItem)}` : ''}
                       </option>
                     ))}
                   </select>

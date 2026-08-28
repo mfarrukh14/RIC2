@@ -5,8 +5,9 @@ namespace InventoryManagement.Api.Services
     public interface IInventoryService
     {
         // Inventory header operations
-        Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter = null);
+        Task<PagedResult<Inventory>> GetAllAsync(InventoryFilterRequest? filter, bool isAdmin, IReadOnlyCollection<int> allowedStoreIds);
         Task<Inventory?> GetByIdAsync(int id);
+        Task<InventoryReturnableItemsResponse?> GetReturnableItemsAsync(int id);
         Task<int> CreateAsync(InventoryCreateRequest request);
         Task<bool> UpdateAsync(int id, InventoryUpdateRequest request);
         Task<bool> DeleteAsync(int id);
