@@ -9,18 +9,29 @@ namespace InventoryManagement.Api.Services
     public class UserSessionCacheService : IUserSessionCacheService
     {
         private readonly ConcurrentDictionary<int, UserSession> _sessions = new();
-        private readonly string _connectionString;
-        private readonly string _branchSchemaPrefix;
+        private readonly IConfiguration _configuration;
         private readonly ILogger<UserSessionCacheService> _logger;
 
         public UserSessionCacheService(IConfiguration configuration, ILogger<UserSessionCacheService> logger)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new ArgumentNullException(nameof(configuration));
+            _configuration = configuration;
             _logger = logger;
+        }
 
-            var builder = new SqlConnectionStringBuilder(_connectionString);
-            _branchSchemaPrefix = builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
+        // This service is a Singleton (the session dictionary must live for the
+        // whole process), but the active database can change at runtime via
+        // SystemController's debug switch endpoint. Re-reading the connection
+        // string on every call - instead of caching it once in the constructor -
+        // is what makes a database switch actually apply to login/session lookups,
+        // not just to the per-request Scoped services.
+        private string GetConnectionString()
+            => _configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+        private static string GetBranchSchemaPrefix(string connectionString)
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            return builder.InitialCatalog.StartsWith("HMS", StringComparison.OrdinalIgnoreCase) ? "Inv" : "dbo";
         }
 
         public async Task<UserSession?> LoginAsync(int userId)
@@ -69,7 +80,7 @@ namespace InventoryManagement.Api.Services
 
         private async Task<Dictionary<string, object?>?> FetchUserRowAsync(int userId)
         {
-            using var connection = new SqlConnection(_connectionString);
+            using var connection = new SqlConnection(GetConnectionString());
             await connection.OpenAsync();
 
             using var command = new SqlCommand("SELECT * FROM dbo.Users WHERE UserID = @UserId", connection);
@@ -98,7 +109,7 @@ namespace InventoryManagement.Api.Services
             var storeIds = new List<int>();
             try
             {
-                using var connection = new SqlConnection(_connectionString);
+                using var connection = new SqlConnection(GetConnectionString());
                 await connection.OpenAsync();
 
                 using var command = new SqlCommand(
@@ -124,10 +135,12 @@ namespace InventoryManagement.Api.Services
         {
             try
             {
-                using var connection = new SqlConnection(_connectionString);
+                var connectionString = GetConnectionString();
+                using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                using var command = new SqlCommand($"SELECT Name FROM {_branchSchemaPrefix}.Branches WHERE Id = @BranchId", connection);
+                var branchSchemaPrefix = GetBranchSchemaPrefix(connectionString);
+                using var command = new SqlCommand($"SELECT Name FROM {branchSchemaPrefix}.Branches WHERE Id = @BranchId", connection);
                 command.Parameters.AddWithValue("@BranchId", branchId);
 
                 var result = await command.ExecuteScalarAsync();

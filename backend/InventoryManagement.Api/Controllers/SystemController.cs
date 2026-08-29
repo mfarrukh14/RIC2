@@ -51,18 +51,24 @@ namespace InventoryManagement.Api.Controllers
             });
         }
 
+        private const string DefaultDatabase = "HMSMAIN_TF";
+
         [HttpPost("database")]
-        public ActionResult<object> SwitchDatabase([FromBody] SwitchDatabaseRequest request)
+        public ActionResult<object> SwitchDatabase([FromBody] SwitchDatabaseRequest? request)
         {
-            if (string.IsNullOrWhiteSpace(request?.Database) || !KnownDatabases.TryGetValue(request.Database, out var connectionString))
+            // No (or blank) "database" in the body means "use the default" rather
+            // than an error - keeps this endpoint callable with an empty payload.
+            var database = string.IsNullOrWhiteSpace(request?.Database) ? DefaultDatabase : request.Database;
+
+            if (!KnownDatabases.TryGetValue(database, out var connectionString))
             {
-                return BadRequest(new { message = $"Unknown database '{request?.Database}'. Valid options: {string.Join(", ", KnownDatabases.Keys)}" });
+                return BadRequest(new { message = $"Unknown database '{database}'. Valid options: {string.Join(", ", KnownDatabases.Keys)}" });
             }
 
             _configuration["ConnectionStrings:DefaultConnection"] = connectionString;
-            _logger.LogWarning("Active database switched to {Database} via debug endpoint. This affects every connected user.", request.Database);
+            _logger.LogWarning("Active database switched to {Database} via debug endpoint. This affects every connected user.", database);
 
-            return Ok(new { message = $"Active database switched to {request.Database}.", selection = request.Database });
+            return Ok(new { message = $"Active database switched to {database}.", selection = database });
         }
     }
 
