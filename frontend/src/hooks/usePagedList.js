@@ -18,6 +18,10 @@ export default function usePagedList(fetchPage, filters = {}, options = {}) {
 
   const [items, setItems] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  // Raw last server response, for pages whose PagedResult carries extra fields
+  // beyond items/totalCount (e.g. a full-filtered-set Totals summary row) -
+  // most callers can ignore this and just use items/totalCount.
+  const [raw, setRaw] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [loading, setLoading] = useState(autoLoad);
@@ -39,10 +43,12 @@ export default function usePagedList(fetchPage, filters = {}, options = {}) {
       });
       setItems(result.items || []);
       setTotalCount(result.totalCount || 0);
+      setRaw(result);
     } catch (err) {
       setError(err);
       setItems([]);
       setTotalCount(0);
+      setRaw(null);
     } finally {
       setLoading(false);
     }
@@ -89,6 +95,7 @@ export default function usePagedList(fetchPage, filters = {}, options = {}) {
   return {
     items,
     totalCount,
+    raw,
     currentPage,
     pageSize,
     setPageSize,

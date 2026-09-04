@@ -1,6 +1,6 @@
 namespace InventoryManagement.Api.Models
 {
-    public class DemandWiseValueFilter
+    public class DemandWiseValueFilter : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
@@ -39,7 +39,10 @@ namespace InventoryManagement.Api.Models
 
     public class DemandWiseValueResponse
     {
-        public List<DemandWiseValueRow> Records { get; set; } = new();
+        public IReadOnlyList<DemandWiseValueRow> Items { get; set; } = Array.Empty<DemandWiseValueRow>();
+        public int TotalCount { get; set; }
+        public int PageNumber { get; set; }
+        public int PageSize { get; set; }
         public DemandWiseValueTotals Totals { get; set; } = new();
     }
 }

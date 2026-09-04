@@ -16,7 +16,18 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<SaleSummaryStockNoDiscount>> GetSaleSummaryStockNoDiscountAsync(SaleSummaryStockNoDiscountRequest request)
+        public async Task<PagedResult<SaleSummaryStockNoDiscount>> GetSaleSummaryStockNoDiscountAsync(SaleSummaryStockNoDiscountRequest request)
+        {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var result = new PagedResult<SaleSummaryStockNoDiscount> { PageNumber = pageNumber, PageSize = pageSize };
+            result.Items = await RunReportAsync(request, pageNumber, pageSize, result);
+            return result;
+        }
+
+        // pageSize <= 0 tells the proc to skip paging and return every matching row - used
+        // only by the Totals endpoint below, which needs a true full-set aggregate rather
+        // than just the current page.
+        private async Task<List<SaleSummaryStockNoDiscount>> RunReportAsync(SaleSummaryStockNoDiscountRequest request, int pageNumber, int pageSize, PagedResult<SaleSummaryStockNoDiscount>? pagedResult)
         {
             var summaries = new List<SaleSummaryStockNoDiscount>();
 
@@ -31,12 +42,19 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Store", string.IsNullOrEmpty(request.Store) ? (object)DBNull.Value : request.Store);
                 command.Parameters.AddWithValue("@StartDate", request.StartDate.HasValue ? (object)request.StartDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", request.EndDate.HasValue ? (object)request.EndDate.Value : DBNull.Value);
+                command.Parameters.AddWithValue("@PageNumber", pageNumber);
+                command.Parameters.AddWithValue("@PageSize", pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (pagedResult != null && pagedResult.TotalCount == 0)
+                    {
+                        pagedResult.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     var unitPurchaseRate = reader.GetDecimal(reader.GetOrdinal("UnitPurchaseRate"));
                     var unitSaleRate = reader.GetDecimal(reader.GetOrdinal("UnitSaleRate"));
                     var quantity = reader.GetDecimal(reader.GetOrdinal("Quantity"));
@@ -67,8 +85,10 @@ namespace InventoryManagement.Api.Services
 
         public async Task<SaleSummaryStockNoDiscountTotals> GetSaleSummaryStockNoDiscountTotalsAsync(SaleSummaryStockNoDiscountRequest request)
         {
-            var summaries = await GetSaleSummaryStockNoDiscountAsync(request);
-            
+            // -1 pageSize = "no paging" - totals must reflect the full filtered result, not
+            // just whatever page the list view happens to be showing.
+            var summaries = await RunReportAsync(request, 1, -1, null);
+
             return new SaleSummaryStockNoDiscountTotals
             {
                 UnitPurchaseRate = summaries.Sum(s => s.UnitPurchaseRate),

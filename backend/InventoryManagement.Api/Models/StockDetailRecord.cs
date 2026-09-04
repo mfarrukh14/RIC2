@@ -13,7 +13,7 @@ namespace InventoryManagement.Api.Models
         public int Balance { get; set; }
     }
 
-    public class StockDetailRecordSearchRequest
+    public class StockDetailRecordSearchRequest : PagedRequest
     {
         public string? Branch { get; set; }
         public DateTime? StartDate { get; set; }

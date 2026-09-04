@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getSaleSummary, getSaleSummarySummary } from '../services/saleSummaryDailyApi';
 import { getAllStores } from '../services/storeApi';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 const SaleSummaryDailyPage = () => {
   const [stores, setStores] = useState([]);
@@ -13,16 +14,39 @@ const SaleSummaryDailyPage = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedType, setSelectedType] = useState('Daily');
-  const [summaries, setSummaries] = useState([]);
   const [totals, setTotals] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+
+  // The filters actually sent to the server - only updated when a search runs, same
+  // pattern as StockPage/StockStatsPage.
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  const {
+    items: summaries,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(getSaleSummary, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
+
+  const emptyTotals = {
+    totalCount: 0,
+    grossSales: 0,
+    discounts: 0,
+    totalSales: 0,
+    totalSReturn: 0,
+    netSale: 0,
+    costOfSales: 0,
+    gpAmount: 0,
+    gpPercentage: 0
+  };
 
   useEffect(() => {
     fetchStores();
-    fetchSummary();
+    handleSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStores = async () => {
@@ -34,48 +58,24 @@ const SaleSummaryDailyPage = () => {
     }
   };
 
-  const fetchSummary = async () => {
-    setLoading(true);
+  // Grand totals reflect the *entire* filtered range, not just the page on screen, so
+  // they're fetched from the dedicated (unpaged) /summary endpoint rather than derived
+  // from `summaries`.
+  const fetchTotals = async (filters) => {
     try {
-      const [summaryData, totalsData] = await Promise.all([
-        getSaleSummary(selectedStore, startDate, endDate, selectedType),
-        getSaleSummarySummary(selectedStore, startDate, endDate, selectedType)
-      ]);
-      
-      setSummaries(summaryData || []);
-      setTotals(totalsData || {
-        totalCount: 0,
-        grossSales: 0,
-        discounts: 0,
-        totalSales: 0,
-        totalSReturn: 0,
-        netSale: 0,
-        costOfSales: 0,
-        gpAmount: 0,
-        gpPercentage: 0
-      });
+      const totalsData = await getSaleSummarySummary(filters.store, filters.startDate, filters.endDate, filters.type);
+      setTotals(totalsData || emptyTotals);
     } catch (error) {
-      console.error('Error fetching sale summary:', error);
-      setSummaries([]);
-      setTotals({
-        totalCount: 0,
-        grossSales: 0,
-        discounts: 0,
-        totalSales: 0,
-        totalSReturn: 0,
-        netSale: 0,
-        costOfSales: 0,
-        gpAmount: 0,
-        gpPercentage: 0
-      });
-    } finally {
-      setLoading(false);
+      console.error('Error fetching sale summary totals:', error);
+      setTotals(emptyTotals);
     }
   };
 
   const handleSearch = () => {
-    setCurrentPage(1);
-    fetchSummary();
+    const filters = { store: selectedStore, startDate, endDate, type: selectedType };
+    setSubmittedFilters(filters);
+    runSearch(filters);
+    fetchTotals(filters);
   };
 
   const formatDate = (dateString) => {
@@ -90,14 +90,6 @@ const SaleSummaryDailyPage = () => {
   const formatNumber = (num) => {
     return num.toFixed(2);
   };
-
-  // Pagination
-  const filteredSummaries = summaries.filter((summary) =>
-    formatDate(summary.date).toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredSummaries.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -187,21 +179,6 @@ const SaleSummaryDailyPage = () => {
           </div>
         </div>
 
-        {/* Table Header Info */}
-        <div className="flex items-center justify-end mb-4">
-          <div className="text-sm">
-            Search: <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-gray-300 rounded"
-            />
-          </div>
-        </div>
-
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
@@ -226,9 +203,9 @@ const SaleSummaryDailyPage = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : currentItems.length > 0 ? (
+              ) : summaries.length > 0 ? (
                 <>
-                  {currentItems.map((summary, index) => (
+                  {summaries.map((summary, index) => (
                     <tr key={index} className="border-b hover:bg-gray-50">
                       <td className="px-4 py-2 text-sm">{formatDate(summary.date)}</td>
                       <td className="px-4 py-2 text-sm">{summary.count}</td>
@@ -271,8 +248,8 @@ const SaleSummaryDailyPage = () => {
         <Pagination
           currentPage={currentPage}
           pageSize={itemsPerPage}
-          totalCount={filteredSummaries.length}
-          onPageChange={setCurrentPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
           onPageSizeChange={setItemsPerPage}
         />
       </div>

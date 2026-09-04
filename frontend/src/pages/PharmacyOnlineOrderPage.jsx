@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import pharmacyApi from '../services/pharmacyApi';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 function formatDateTime(value) {
   if (!value) return '-';
@@ -16,50 +17,41 @@ const PharmacyOnlineOrderPage = () => {
   const [status, setStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  const {
+    items: entries,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(pharmacyApi.getOnlineOrders, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     pharmacyApi.getLookups()
       .then((data) => setStores(data.stores || []))
       .catch((lookupError) => console.error('Error loading stores:', lookupError));
-    loadEntries();
+
+    const searchFilters = { storeId: undefined, status: undefined, dateFrom: undefined, dateTo: undefined };
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadEntries = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await pharmacyApi.getOnlineOrders({
-        storeId: storeId || undefined,
-        status: status || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined
-      });
-      setEntries(data);
-    } catch (loadError) {
-      console.error('Error loading online orders:', loadError);
-      setError('Failed to load online orders.');
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    const searchFilters = {
+      storeId: storeId || undefined,
+      status: status || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined
+    };
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
   };
-
-  const filteredEntries = useMemo(() => {
-    if (!searchTerm.trim()) return entries;
-    const normalized = searchTerm.trim().toLowerCase();
-    return entries.filter((entry) => [entry.orderNumber, entry.patientName, entry.cnic, entry.mrNo, entry.status]
-      .some((value) => (value || '').toLowerCase().includes(normalized)));
-  }, [entries, searchTerm]);
-
-  useEffect(() => { setCurrentPage(1); }, [entriesPerPage, searchTerm]);
-
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredEntries.slice(startIndex, startIndex + entriesPerPage);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -72,7 +64,7 @@ const PharmacyOnlineOrderPage = () => {
             </h1>
           </div>
 
-          {error && <div className="px-6 pt-4 text-sm text-rose-600">{error}</div>}
+          {error && <div className="px-6 pt-4 text-sm text-rose-600">Failed to load online orders{error.message ? `: ${error.message}` : ''}</div>}
 
           <div className="grid grid-cols-1 gap-4 px-6 py-5 lg:grid-cols-5">
             <div>
@@ -95,15 +87,8 @@ const PharmacyOnlineOrderPage = () => {
               <input type="text" value={status} onChange={(event) => setStatus(event.target.value)} placeholder="Select Status" className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400" />
             </div>
             <div className="flex items-end">
-              <button type="button" onClick={loadEntries} className="w-full rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700">Search</button>
+              <button type="button" onClick={handleSearch} disabled={loading} className="w-full rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">Search</button>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-end">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Search:</span>
-              <input type="text" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 md:w-60" />
-            </label>
           </div>
 
           <div className="overflow-x-auto px-6 pb-4">
@@ -123,10 +108,10 @@ const PharmacyOnlineOrderPage = () => {
               <tbody>
                 {loading ? (
                   <tr><td colSpan="8" className="border-b border-slate-200 px-4 py-10 text-center text-slate-500">Loading...</td></tr>
-                ) : pageItems.length === 0 ? (
+                ) : entries.length === 0 ? (
                   <tr><td colSpan="8" className="border-b border-slate-200 px-4 py-10 text-center text-slate-500">No data available in table</td></tr>
                 ) : (
-                  pageItems.map((entry) => (
+                  entries.map((entry) => (
                     <tr key={entry.patientPharmacyId} className="text-slate-700">
                       <td className="border-b border-slate-200 px-4 py-3">{entry.orderNumber || '-'}</td>
                       <td className="border-b border-slate-200 px-4 py-3">{entry.patientName || '-'}</td>
@@ -146,8 +131,8 @@ const PharmacyOnlineOrderPage = () => {
           <Pagination
             currentPage={currentPage}
             pageSize={entriesPerPage}
-            totalCount={filteredEntries.length}
-            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
             onPageSizeChange={setEntriesPerPage}
           />
         </section>

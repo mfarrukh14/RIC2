@@ -11,19 +11,31 @@ import purchaseOrderApi from '../services/purchaseOrderApi';
 import { vendorApi } from '../services/api';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 function StockWithExpiryPage() {
     const { session } = useSession();
-    const [stocks, setStocks] = useState([]);
     const [stores, setStores] = useState([]);
     const [branches, setBranches] = useState([]);
     const [items, setItems] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [loading, setLoading] = useState(false);
-    
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // The filters actually sent to the server - only updated when "Generate" is
+    // clicked, mirroring StockPage/StockStats - so editing a dropdown mid-form
+    // doesn't re-trigger a search.
+    const [submittedFilters, setSubmittedFilters] = useState(null);
+
+    const {
+        items: stocks,
+        totalCount,
+        currentPage,
+        pageSize: itemsPerPage,
+        setPageSize: setItemsPerPage,
+        goToPage,
+        search: runSearch,
+        loading,
+    } = usePagedList(stockWithExpiryApi.getAll, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
     // Row action modals - mirrors the Stock (MPL) page's Detail / Print /
     // Add to Purchase Order row actions.
@@ -51,7 +63,6 @@ function StockWithExpiryPage() {
         fetchItems();
         fetchCategories();
         fetchVendors();
-        fetchStocks();
     }, []);
 
     // Stock with expiry is always scoped to the logged-in user's own branch.
@@ -60,10 +71,6 @@ function StockWithExpiryPage() {
             setFilters((prev) => ({ ...prev, branchId: session.branchId }));
         }
     }, [session?.branchId]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [itemsPerPage]);
 
     const fetchStores = async () => {
         try {
@@ -110,19 +117,6 @@ function StockWithExpiryPage() {
         }
     };
 
-    const fetchStocks = async () => {
-        setLoading(true);
-        try {
-            const data = await stockWithExpiryApi.getAll(filters);
-            setStocks(data);
-        } catch (error) {
-            console.error('Error fetching stocks:', error);
-            alert('Failed to fetch stock data');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
@@ -136,8 +130,8 @@ function StockWithExpiryPage() {
     };
 
     const handleGenerate = () => {
-        setCurrentPage(1);
-        fetchStocks();
+        setSubmittedFilters(filters);
+        runSearch(filters);
     };
 
     const handleDeselectAll = () => {
@@ -269,10 +263,6 @@ function StockWithExpiryPage() {
             setPoSubmitting(false);
         }
     };
-
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentStocks = stocks.slice(indexOfFirstItem, indexOfLastItem);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -464,12 +454,12 @@ function StockWithExpiryPage() {
                             <tr>
                                 <td colSpan="8" className="px-6 py-4 text-center text-gray-500">Loading...</td>
                             </tr>
-                        ) : currentStocks.length === 0 ? (
+                        ) : stocks.length === 0 ? (
                             <tr>
                                 <td colSpan="8" className="px-6 py-4 text-center text-gray-500">No stock data found</td>
                             </tr>
                         ) : (
-                            currentStocks.map((stock) => (
+                            stocks.map((stock) => (
                                 <tr 
                                     key={stock.id} 
                                     className={`hover:bg-gray-50 ${stock.isBelowMPL ? 'bg-red-100' : ''}`}
@@ -510,8 +500,8 @@ function StockWithExpiryPage() {
             <Pagination
                 currentPage={currentPage}
                 pageSize={itemsPerPage}
-                totalCount={stocks.length}
-                onPageChange={setCurrentPage}
+                totalCount={totalCount}
+                onPageChange={goToPage}
                 onPageSizeChange={setItemsPerPage}
             />
 

@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/SaleSummaryStockNoDiscount';
+const API_URL = 'http://10.10.10.35:5100/api/SaleSummaryStockNoDiscount';
 
-export const getSaleSummaryStockNoDiscount = async (store, startDate, endDate) => {
+// Server-paginated - call shape matches usePagedList: { pageNumber, pageSize, ...filters } -> { items, totalCount }
+export const getSaleSummaryStockNoDiscount = async ({ pageNumber, pageSize, store, startDate, endDate } = {}) => {
   try {
-    const params = {};
+    const params = { pageNumber, pageSize };
     if (store) params.store = store;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
@@ -17,6 +18,8 @@ export const getSaleSummaryStockNoDiscount = async (store, startDate, endDate) =
   }
 };
 
+// Always aggregates over the full filtered result server-side, independent of the list's
+// current page - see SaleSummaryStockNoDiscountService.GetSaleSummaryStockNoDiscountTotalsAsync.
 export const getSaleSummaryStockNoDiscountTotals = async (store, startDate, endDate) => {
   try {
     const params = {};

@@ -25,23 +25,23 @@ namespace InventoryManagement.Api.Services
         Task<PharmacyChallanDetails> ProcessRefundAsync(PharmacyRefundRequest request, int actingUserId);
 
         // Daily Sale
-        Task<IReadOnlyList<PharmacyDailySaleEntry>> GetDailySaleAsync(int? storeId, DateTime? dateFrom, DateTime? dateTo, string? challanType);
+        Task<PharmacyDailySaleReport> GetDailySaleAsync(int? storeId, DateTime? dateFrom, DateTime? dateTo, string? challanType, int pageNumber, int pageSize);
 
         // Item Wise Sale
-        Task<IReadOnlyList<PharmacyItemWiseSaleEntry>> GetItemWiseSaleAsync(int? storeId, int? itemId, DateTime? dateFrom, DateTime? dateTo);
+        Task<PharmacyItemWiseSaleReport> GetItemWiseSaleAsync(int? storeId, int? itemId, DateTime? dateFrom, DateTime? dateTo, int pageNumber, int pageSize);
 
         // Pharmacy Queue
         Task<IReadOnlyList<PharmacyQueueEntry>> GetQueueAsync(int storeId);
 
         // Pharmacy Online Order
-        Task<IReadOnlyList<PharmacyOnlineOrderEntry>> GetOnlineOrdersAsync(DateTime? dateFrom, DateTime? dateTo, int? storeId, string? status);
+        Task<PagedResult<PharmacyOnlineOrderEntry>> GetOnlineOrdersAsync(DateTime? dateFrom, DateTime? dateTo, int? storeId, string? status, int pageNumber, int pageSize);
 
         // Pharmacy Dashboard
         Task<PharmacyDashboardSummary> GetDashboardSummaryAsync(int branchId, int? storeId, DateTime? dateFrom, DateTime? dateTo);
 
         // Immunization
         Task<IReadOnlyList<PharmacyLookupItem>> GetVaccinesAsync();
-        Task<IReadOnlyList<PharmacyVaccineRecord>> GetVaccineRecordsAsync(DateTime? dateFrom, DateTime? dateTo, int? patientId);
+        Task<PagedResult<PharmacyVaccineRecord>> GetVaccineRecordsAsync(DateTime? dateFrom, DateTime? dateTo, int? patientId, int pageNumber, int pageSize);
         Task<PharmacyVaccineRecord> CreateVaccineRecordAsync(PharmacyVaccineCreateRequest request, int actingUserId);
     }
 }

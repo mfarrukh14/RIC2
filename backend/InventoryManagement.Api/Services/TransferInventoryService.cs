@@ -85,7 +85,7 @@ namespace InventoryManagement.Api.Services
             return transfer;
         }
 
-        public async Task<TransferInventory> CreateAsync(TransferInventoryCreateRequest request)
+        public async Task<TransferInventory> CreateAsync(TransferInventoryCreateRequest request, int userId)
         {
             try
             {
@@ -105,7 +105,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Status", (object?)request.Status ?? "Pending");
                 command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
                 command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@CreatedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@CreatedById", userId);
 
                 await connection.OpenAsync();
                 var transferId = Convert.ToInt32(await command.ExecuteScalarAsync());
@@ -119,7 +119,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> UpdateAsync(int id, TransferInventoryUpdateRequest request)
+        public async Task<bool> UpdateAsync(int id, TransferInventoryUpdateRequest request, int userId)
         {
             try
             {
@@ -138,7 +138,7 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Quantity", request.Quantity);
                 command.Parameters.AddWithValue("@Status", (object?)request.Status ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Notes", (object?)request.Notes ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@ModifiedById", userId);
 
                 await connection.OpenAsync();
                 var affectedRows = await command.ExecuteScalarAsync();
@@ -151,7 +151,7 @@ namespace InventoryManagement.Api.Services
             }
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<bool> DeleteAsync(int id, int userId)
         {
             try
             {
@@ -162,7 +162,7 @@ namespace InventoryManagement.Api.Services
                 };
 
                 command.Parameters.AddWithValue("@Id", id);
-                command.Parameters.AddWithValue("@ModifiedById", 1); // TODO: Get from current user
+                command.Parameters.AddWithValue("@ModifiedById", userId);
 
                 await connection.OpenAsync();
                 var affectedRows = await command.ExecuteScalarAsync();
@@ -280,7 +280,8 @@ namespace InventoryManagement.Api.Services
                 Status = reader.IsDBNull("Status") ? "Pending" : reader.GetString("Status"),
                 Notes = reader.IsDBNull("Notes") ? null : reader.GetString("Notes"),
                 IsActive = reader.GetBoolean("IsActive"),
-                CreatedOn = reader.IsDBNull("CreatedOn") ? null : reader.GetDateTime("CreatedOn")
+                CreatedOn = reader.IsDBNull("CreatedOn") ? null : reader.GetDateTime("CreatedOn"),
+                TransferredByName = reader.IsDBNull("TransferredByName") ? null : reader.GetString("TransferredByName")
             };
         }
     }

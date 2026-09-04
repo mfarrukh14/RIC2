@@ -1,10 +1,12 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/SaleSummaryDaily';
+const API_URL = 'http://10.10.10.35:5100/api/SaleSummaryDaily';
 
-export const getSaleSummary = async (store, startDate, endDate, type) => {
+// Server-paginated - call shape matches usePagedList: { pageNumber, pageSize, ...filters }
+// -> { items, totalCount }. Filters here are { store, startDate, endDate, type }.
+export const getSaleSummary = async ({ pageNumber, pageSize, store, startDate, endDate, type } = {}) => {
   try {
-    const params = {};
+    const params = { pageNumber, pageSize };
     if (store) params.store = store;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;

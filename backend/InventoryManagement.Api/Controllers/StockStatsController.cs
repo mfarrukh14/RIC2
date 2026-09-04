@@ -17,7 +17,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpPost("search")]
-        public async Task<ActionResult<List<StockStatsItem>>> SearchStockStats([FromBody] StockStatsSearchRequest request)
+        public async Task<ActionResult<PagedResult<StockStatsItem>>> SearchStockStats([FromBody] StockStatsSearchRequest request)
         {
             try
             {

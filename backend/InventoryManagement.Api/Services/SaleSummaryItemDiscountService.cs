@@ -16,8 +16,36 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<SaleSummaryItemDiscount>> GetSaleSummaryItemDiscountAsync(SaleSummaryItemDiscountRequest request)
+        public async Task<PagedResult<SaleSummaryItemDiscount>> GetSaleSummaryItemDiscountAsync(SaleSummaryItemDiscountRequest request)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            return await ExecuteAsync(request, pageNumber, pageSize);
+        }
+
+        // The totals row must reflect every matching item, not just the page currently on
+        // screen - so it re-runs the same query unpaginated (PageSize = int.MaxValue,
+        // bypassing PaginationHelper.Normalize's 200-row cap) rather than summing only the
+        // page GetSaleSummaryItemDiscountAsync returns. This proc's result is grouped down
+        // to one row per distinct item name, so an unpaginated pass here stays cheap.
+        public async Task<SaleSummaryItemDiscountTotals> GetSaleSummaryItemDiscountTotalsAsync(SaleSummaryItemDiscountRequest request)
+        {
+            var all = await ExecuteAsync(request, 1, int.MaxValue);
+
+            return new SaleSummaryItemDiscountTotals
+            {
+                UnitPurchaseRate = all.Items.Sum(s => s.UnitPurchaseRate),
+                UnitSaleRate = all.Items.Sum(s => s.UnitSaleRate),
+                Quantity = all.Items.Sum(s => s.Quantity),
+                Sale = all.Items.Sum(s => s.Sale),
+                DiscountAmount = all.Items.Sum(s => s.DiscountAmount),
+                PurchaseRate = all.Items.Sum(s => s.TotalPurchaseRate),
+                Profit = all.Items.Sum(s => s.Profit)
+            };
+        }
+
+        private async Task<PagedResult<SaleSummaryItemDiscount>> ExecuteAsync(SaleSummaryItemDiscountRequest request, int pageNumber, int pageSize)
+        {
+            var result = new PagedResult<SaleSummaryItemDiscount> { PageNumber = pageNumber, PageSize = pageSize };
             var summaries = new List<SaleSummaryItemDiscount>();
 
             try
@@ -32,12 +60,18 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StartDate", request.StartDate.HasValue ? (object)request.StartDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", request.EndDate.HasValue ? (object)request.EndDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@Item", string.IsNullOrEmpty(request.Item) ? (object)DBNull.Value : request.Item);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (result.TotalCount == 0)
+                    {
+                        result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     var unitPurchaseRate = reader.GetDecimal(reader.GetOrdinal("UnitPurchaseRate"));
                     var unitSaleRate = reader.GetDecimal(reader.GetOrdinal("UnitSaleRate"));
                     var quantity = reader.GetDecimal(reader.GetOrdinal("Quantity"));
@@ -65,23 +99,8 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return summaries;
-        }
-
-        public async Task<SaleSummaryItemDiscountTotals> GetSaleSummaryItemDiscountTotalsAsync(SaleSummaryItemDiscountRequest request)
-        {
-            var summaries = await GetSaleSummaryItemDiscountAsync(request);
-            
-            return new SaleSummaryItemDiscountTotals
-            {
-                UnitPurchaseRate = summaries.Sum(s => s.UnitPurchaseRate),
-                UnitSaleRate = summaries.Sum(s => s.UnitSaleRate),
-                Quantity = summaries.Sum(s => s.Quantity),
-                Sale = summaries.Sum(s => s.Sale),
-                DiscountAmount = summaries.Sum(s => s.DiscountAmount),
-                PurchaseRate = summaries.Sum(s => s.TotalPurchaseRate),
-                Profit = summaries.Sum(s => s.Profit)
-            };
+            result.Items = summaries;
+            return result;
         }
     }
 }

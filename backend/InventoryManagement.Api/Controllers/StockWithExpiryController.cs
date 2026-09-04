@@ -19,7 +19,7 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<StockWithExpiry>>> GetAll(
+        public async Task<ActionResult<PagedResult<StockWithExpiry>>> GetAll(
             [FromQuery] int? branchId,
             [FromQuery] int? storeId,
             [FromQuery] string? itemType,
@@ -27,7 +27,9 @@ namespace InventoryManagement.Api.Controllers
             [FromQuery] int? categoryId,
             [FromQuery] bool? isExpensiveItem,
             [FromQuery] bool? isFridgeItem,
-            [FromQuery] bool minimumPanicLevelOnly = false)
+            [FromQuery] bool minimumPanicLevelOnly = false,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
@@ -40,7 +42,9 @@ namespace InventoryManagement.Api.Controllers
                     CategoryId = categoryId,
                     IsExpensiveItem = isExpensiveItem,
                     IsFridgeItem = isFridgeItem,
-                    MinimumPanicLevelOnly = minimumPanicLevelOnly
+                    MinimumPanicLevelOnly = minimumPanicLevelOnly,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
                 };
 
                 var stocks = await _service.GetAllAsync(filter);

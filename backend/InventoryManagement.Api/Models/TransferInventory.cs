@@ -20,6 +20,7 @@ namespace InventoryManagement.Api.Models
         public string? Notes { get; set; }
         public bool IsActive { get; set; }
         public int? CreatedById { get; set; }
+        public string? TransferredByName { get; set; }
         public DateTime? CreatedOn { get; set; }
         public int? ModifiedById { get; set; }
         public DateTime? ModifiedOn { get; set; }

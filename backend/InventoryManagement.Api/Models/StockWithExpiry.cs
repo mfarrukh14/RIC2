@@ -44,7 +44,7 @@ namespace InventoryManagement.Api.Models
             $"{RackName ?? "N/A"},{RowNumber?.ToString() ?? "N/A"},{ColumnNumber?.ToString() ?? "N/A"},{DrawerNumber?.ToString() ?? "N/A"}";
     }
     
-    public class StockWithExpiryFilter
+    public class StockWithExpiryFilter : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }

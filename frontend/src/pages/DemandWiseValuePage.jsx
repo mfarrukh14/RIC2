@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDownTrayIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { branchApi } from '../services/branchApi';
 import demandWiseValueApi from '../services/demandWiseValueApi';
@@ -6,6 +6,7 @@ import { getAllStores } from '../services/storeApi';
 import itemApi from '../services/itemApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
@@ -47,6 +48,20 @@ function formatCurrency(value) {
 
 const itemTypes = ['All', 'Medicine(s)', 'Disposable(s)', 'Item(s)'];
 
+// Shapes the filter object sent to the API from the raw form state - shared by
+// the initial auto-load and every subsequent Apply Filters / search click.
+function buildSearchFilters(activeFilters, activeSearch) {
+  return {
+    branchId: activeFilters.branchId || undefined,
+    storeId: activeFilters.storeId || undefined,
+    itemType: activeFilters.itemType === 'All' ? undefined : activeFilters.itemType,
+    itemId: activeFilters.itemId || undefined,
+    startDate: activeFilters.startDate ? new Date(activeFilters.startDate).toISOString() : undefined,
+    endDate: activeFilters.endDate ? new Date(activeFilters.endDate).toISOString() : undefined,
+    search: activeSearch?.trim() || undefined
+  };
+}
+
 const DemandWiseValuePage = () => {
   const { session } = useSession();
   const [lookups, setLookups] = useState({ branches: [], stores: [], items: [] });
@@ -57,17 +72,31 @@ const DemandWiseValuePage = () => {
     itemId: '',
     ...defaultDateRange()
   });
-  const [records, setRecords] = useState([]);
-  const [totals, setTotals] = useState({ totalIssuedQty: 0, totalUnitBuyingPrice: 0, totalBuyingPrice: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [submittedFilters, setSubmittedFilters] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [lookupLoading, setLookupLoading] = useState(true);
+  const [initError, setInitError] = useState('');
+
+  const {
+    items: records,
+    totalCount,
+    raw,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(demandWiseValueApi.getAll, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
+
+  // Totals reflect the FULL filtered result set (computed server-side via a
+  // window aggregate alongside TotalCount), not just the current page's rows.
+  const totals = raw?.totals || { totalIssuedQty: 0, totalUnitBuyingPrice: 0, totalBuyingPrice: 0 };
 
   useEffect(() => {
     const initialize = async () => {
-      setLoading(true);
+      setLookupLoading(true);
       try {
         const [branches, stores, items] = await Promise.all([
           branchApi.getAll(),
@@ -88,40 +117,20 @@ const DemandWiseValuePage = () => {
         };
 
         setFilters(nextFilters);
-        await loadReport(nextFilters, '');
+        const searchFilters = buildSearchFilters(nextFilters, '');
+        setSubmittedFilters(searchFilters);
+        runSearch(searchFilters);
       } catch (initializationError) {
         console.error('Error initializing demand wise value page:', initializationError);
-        setError('Failed to initialize demand wise value page.');
+        setInitError('Failed to initialize demand wise value page.');
       } finally {
-        setLoading(false);
+        setLookupLoading(false);
       }
     };
 
     initialize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const loadReport = async (activeFilters = filters, activeSearch = searchTerm) => {
-    try {
-      setError('');
-      const response = await demandWiseValueApi.getAll({
-        branchId: activeFilters.branchId || undefined,
-        storeId: activeFilters.storeId || undefined,
-        itemType: activeFilters.itemType === 'All' ? undefined : activeFilters.itemType,
-        itemId: activeFilters.itemId || undefined,
-        startDate: activeFilters.startDate ? new Date(activeFilters.startDate).toISOString() : undefined,
-        endDate: activeFilters.endDate ? new Date(activeFilters.endDate).toISOString() : undefined,
-        search: activeSearch?.trim() || undefined
-      });
-
-      setRecords(response.records || []);
-      setTotals(response.totals || { totalIssuedQty: 0, totalUnitBuyingPrice: 0, totalBuyingPrice: 0 });
-    } catch (reportError) {
-      console.error('Error loading demand wise value report:', reportError);
-      setRecords([]);
-      setTotals({ totalIssuedQty: 0, totalUnitBuyingPrice: 0, totalBuyingPrice: 0 });
-      setError('Failed to load demand wise value report.');
-    }
-  };
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -131,13 +140,14 @@ const DemandWiseValuePage = () => {
     }));
   };
 
-  const handleApplyFilters = async () => {
-    setLoading(true);
-    setCurrentPage(1);
-    await loadReport(filters, searchTerm);
-    setLoading(false);
+  const handleApplyFilters = () => {
+    const searchFilters = buildSearchFilters(filters, searchTerm);
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
   };
 
+  // Exports only the currently-loaded page, not the whole filtered result set -
+  // results are now paged server-side (mirrors StockPage's Export button).
   const handleExport = () => {
     const rows = records.map((record) => [
       record.sr,
@@ -166,15 +176,6 @@ const DemandWiseValuePage = () => {
     link.click();
     URL.revokeObjectURL(url);
   };
-
-  const pageItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * entriesPerPage;
-    return records.slice(startIndex, startIndex + entriesPerPage);
-  }, [currentPage, entriesPerPage, records]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [entriesPerPage, records]);
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -289,11 +290,11 @@ const DemandWiseValuePage = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                onKeyDown={async (event) => {
+                onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    setLoading(true);
-                    await loadReport(filters, event.currentTarget.value);
-                    setLoading(false);
+                    const searchFilters = buildSearchFilters(filters, event.currentTarget.value);
+                    setSubmittedFilters(searchFilters);
+                    runSearch(searchFilters);
                   }
                 }}
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
@@ -301,7 +302,8 @@ const DemandWiseValuePage = () => {
             </div>
           </div>
 
-          {error ? <div className="px-5 py-3 text-sm text-rose-600">{error}</div> : null}
+          {initError ? <div className="px-5 py-3 text-sm text-rose-600">{initError}</div> : null}
+          {error ? <div className="px-5 py-3 text-sm text-rose-600">Failed to load demand wise value report{error.message ? `: ${error.message}` : ''}</div> : null}
 
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -319,16 +321,16 @@ const DemandWiseValuePage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {loading ? (
+                {loading || lookupLoading ? (
                   <tr>
                     <td colSpan="9" className="px-4 py-8 text-center text-slate-500">Loading...</td>
                   </tr>
-                ) : pageItems.length === 0 ? (
+                ) : records.length === 0 ? (
                   <tr>
                     <td colSpan="9" className="px-4 py-8 text-center text-slate-500">No data available in table</td>
                   </tr>
                 ) : (
-                  pageItems.map((record) => (
+                  records.map((record) => (
                     <tr key={`${record.drNo}-${record.sr}`}>
                       <td className="px-4 py-3 text-center">{record.sr}</td>
                       <td className="px-4 py-3 text-center">{record.itemName}</td>
@@ -362,8 +364,8 @@ const DemandWiseValuePage = () => {
           <Pagination
             currentPage={currentPage}
             pageSize={entriesPerPage}
-            totalCount={records.length}
-            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
             onPageSizeChange={setEntriesPerPage}
           />
         </section>

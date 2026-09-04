@@ -1,5 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { FiPlus, FiEdit2, FiPrinter, FiSearch } from 'react-icons/fi';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import transferInventoryApi from '../services/transferInventoryApi';
 import stockApi from '../services/stockApi';
 import Pagination from '../components/Pagination';
@@ -200,12 +202,6 @@ const TransferInventoryPage = () => {
     setEditingTransfer(null);
   };
 
-  const handlePrint = (transfer) => {
-    // TODO: Implement print functionality
-    console.log('Print transfer:', transfer);
-    alert('Print functionality coming soon');
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
@@ -216,6 +212,131 @@ const TransferInventoryPage = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatDateTimeWithSeconds = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const datePart = date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timePart = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return `${datePart} ${timePart}`;
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const datePart = date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const timePart = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${datePart} ${timePart}`;
+  };
+
+  // "Print" - the RIC-letterhead Transfer Report: logo, header grid (DR-Number,
+  // Stock Type, Transfer Date, Transferred By, From/To Store), a single-item
+  // table, notes, and a blank Sign/Stamp block for the receiving store.
+  const handlePrint = async (transfer) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo.jpg';
+      await new Promise((resolve) => {
+        logoImg.onload = () => {
+          doc.addImage(logoImg, 'JPEG', 14, 10, 18, 18);
+          resolve();
+        };
+        logoImg.onerror = () => resolve();
+      });
+    } catch (logoError) {
+      console.error('Logo load error:', logoError);
+    }
+
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Rawalpindi Institute of Cardiology', pageWidth / 2, 16, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Rawal Road Rawalpindi, Punjab, Pakistan', pageWidth / 2, 22, { align: 'center' });
+    doc.text('Email: info@ric.gop.pk, Phone: 0519281111-9', pageWidth / 2, 27, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Transfer Report', pageWidth / 2, 36, { align: 'center' });
+
+    const headerRows = [
+      ['DR-Number :', transfer.drNo || '-', 'Stock Type:', transfer.stockTypeName || '-'],
+      ['Transfer Date:', formatDateTimeWithSeconds(transfer.transferDate), 'Transferred By:', transfer.transferredByName || '-'],
+      ['From Store:', transfer.fromStoreName || '-', 'To Store:', transfer.toStoreName || '-']
+    ];
+
+    autoTable(doc, {
+      startY: 42,
+      body: headerRows,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 55 },
+        2: { fontStyle: 'bold', cellWidth: 40 },
+        3: { cellWidth: 55 }
+      }
+    });
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 6,
+      head: [['Sr.', 'Items', 'Transferred Quantity']],
+      body: [[1, transfer.itemName || '-', transfer.quantity ?? 0]],
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      columnStyles: {
+        0: { cellWidth: 15, halign: 'center' },
+        2: { halign: 'center' }
+      }
+    });
+
+    let y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Note:', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(transfer.notes || '-', 40, y);
+
+    // Sign/Stamp block - anchored a fixed distance above the footer rather
+    // than immediately after the note, so it lands in the same lower-right
+    // spot regardless of how little content is above it.
+    const signX = pageWidth * 0.6;
+    let signY = Math.max(y + 20, pageHeight - 70);
+    doc.setFontSize(9);
+    [
+      ['Sign/Stamp:', '_____________________'],
+      ['Name:', '_____________________'],
+      ['Designation:', '_____________________'],
+      ['Department:', '_____________________'],
+      ['Date:', '_____________________']
+    ].forEach(([label, blank]) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, signX, signY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(blank, signX + 28, signY);
+      signY += 7;
+    });
+
+    const footerLineY = pageHeight - 16;
+    doc.setDrawColor(0, 0, 0);
+    doc.line(14, footerLineY, pageWidth - 14, footerLineY);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('This is a computer generated document, therefore signatures are not required.', 14, footerLineY - 4);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatDateTime(new Date()), 14, pageHeight - 10);
+    doc.text('Page 1 of 1', pageWidth - 14, pageHeight - 10, { align: 'right' });
+
+    doc.save(`TransferReport_${transfer.drNo || transfer.id}.pdf`);
   };
 
   return (

@@ -27,7 +27,7 @@ namespace InventoryManagement.Api.Models
         public decimal GPPercentage { get; set; }
     }
 
-    public class SaleSummarySearchRequest
+    public class SaleSummarySearchRequest : PagedRequest
     {
         public string? Store { get; set; }
         public DateTime? StartDate { get; set; }

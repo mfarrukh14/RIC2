@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface ISaleSummaryDailyService
     {
-        Task<IEnumerable<SaleSummaryDaily>> GetSaleSummaryAsync(SaleSummarySearchRequest request);
+        Task<PagedResult<SaleSummaryDaily>> GetSaleSummaryAsync(SaleSummarySearchRequest request);
         Task<SaleSummarySummary> GetSaleSummarySummaryAsync(SaleSummarySearchRequest request);
     }
 }

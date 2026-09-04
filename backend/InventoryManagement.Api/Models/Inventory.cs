@@ -404,7 +404,7 @@ namespace InventoryManagement.Api.Models
         public DateTime? ModifiedOn { get; set; }
     }
 
-    public class StockAuditSearchRequest
+    public class StockAuditSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }
@@ -429,7 +429,7 @@ namespace InventoryManagement.Api.Models
     }
 
     // Stock Stats models
-    public class StockStatsSearchRequest
+    public class StockStatsSearchRequest : PagedRequest
     {
         public int? BranchId { get; set; }
         public int? StoreId { get; set; }

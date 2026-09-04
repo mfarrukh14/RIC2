@@ -23,7 +23,7 @@ namespace InventoryManagement.Api.Models
         public decimal Profit { get; set; }
     }
 
-    public class SaleSummaryItemDiscountRequest
+    public class SaleSummaryItemDiscountRequest : PagedRequest
     {
         public string? Store { get; set; }
         public DateTime? StartDate { get; set; }

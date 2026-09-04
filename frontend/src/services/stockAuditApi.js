@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5100/api';
+const API_URL = 'http://10.10.10.35:5100/api';
 
 export const stockAuditApi = {
     // Get past stock audits (history list, matches the old system's Stock Audit list)
@@ -19,17 +19,24 @@ export const stockAuditApi = {
         return response.json();
     },
 
-    // Search stock audit items
-    searchItems: async (searchData) => {
+    // Search stock audit items - server-paginated, call shape matches usePagedList:
+    // { pageNumber, pageSize, ...filters } -> { items, totalCount }
+    searchItems: async ({ pageNumber, pageSize, ...filters }) => {
         const response = await fetch(`${API_URL}/stockaudits/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(searchData),
+            body: JSON.stringify({ ...filters, pageNumber, pageSize }),
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Failed to search stock audit items');
+            let message = 'Failed to search stock audit items';
+            try {
+                const error = await response.json();
+                message = error.message || message;
+            } catch {
+                // Response body wasn't JSON (e.g. a proxy/timeout error page).
+            }
+            throw new Error(message);
         }
 
         return response.json();

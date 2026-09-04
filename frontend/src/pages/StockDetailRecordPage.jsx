@@ -7,6 +7,7 @@ import itemApi from '../services/itemApi';
 import { itemTypeApi } from '../services/itemTypeApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const getToday = () => new Date().toISOString().split('T')[0];
@@ -27,11 +28,23 @@ const StockDetailRecordPage = () => {
   const [stockTypes, setStockTypes] = useState([]);
   const [items, setItems] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+
+  // The filters actually sent to the server - only updated when "Search" is
+  // clicked, mirroring StockPage - so editing a dropdown mid-form doesn't
+  // re-trigger a search.
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  const {
+    items: records,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(stockDetailRecordsApi.getAll, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     fetchStores();
@@ -40,10 +53,6 @@ const StockDetailRecordPage = () => {
     fetchItems();
     fetchItemTypes();
   }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, itemsPerPage]);
 
   // Records are always scoped to the logged-in user's own branch.
   useEffect(() => {
@@ -101,43 +110,26 @@ const StockDetailRecordPage = () => {
     }
   };
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const params = {
-        branch: branch || undefined,
-        startDate: startDate ? new Date(startDate).toISOString() : undefined,
-        endDate: endDate ? new Date(endDate).toISOString() : undefined,
-        store: selectedStore || undefined,
-        vendor: selectedVendor || undefined,
-        stockType: selectedStockType || undefined,
-        item: selectedItem || undefined,
-        itemType: selectedItemType || undefined,
-        saleType: selectedSaleType === 'all' ? undefined : selectedSaleType
-      };
-
-      const data = await stockDetailRecordsApi.getAll(params);
-      setRecords(data);
-    } catch (error) {
-      console.error('Error fetching stock detail records:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    const params = {
+      branch: branch || undefined,
+      startDate: startDate ? new Date(startDate).toISOString() : undefined,
+      endDate: endDate ? new Date(endDate).toISOString() : undefined,
+      store: selectedStore || undefined,
+      vendor: selectedVendor || undefined,
+      stockType: selectedStockType || undefined,
+      item: selectedItem || undefined,
+      itemType: selectedItemType || undefined,
+      saleType: selectedSaleType === 'all' ? undefined : selectedSaleType
+    };
+    setSubmittedFilters(params);
+    runSearch(params);
   };
 
   const handleExport = () => {
     // Export functionality
     console.log('Export clicked');
   };
-
-  const filteredRecords = records.filter(record =>
-    record.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.stockType?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="p-6">
@@ -269,7 +261,7 @@ const StockDetailRecordPage = () => {
 
           <div className="flex items-end">
             <button
-              onClick={fetchData}
+              onClick={handleSearch}
               disabled={loading}
               className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
             >
@@ -337,20 +329,14 @@ const StockDetailRecordPage = () => {
         </div>
       </div>
 
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          Failed to load stock detail records{error.response?.data?.message ? `: ${error.response.data.message}` : error.message ? `: ${error.message}` : ''}
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex justify-end items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Search:</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border rounded px-3 py-1 text-sm"
-            />
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
@@ -367,8 +353,8 @@ const StockDetailRecordPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {currentItems.length > 0 ? (
-                currentItems.map((record, index) => (
+              {records.length > 0 ? (
+                records.map((record, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm">{record.sr}</td>
                     <td className="px-4 py-3 text-sm">{record.name}</td>
@@ -384,12 +370,12 @@ const StockDetailRecordPage = () => {
               ) : (
                 <tr>
                   <td colSpan="9" className="px-4 py-8 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               )}
             </tbody>
-            {currentItems.length > 0 && (
+            {records.length > 0 && (
               <tfoot className="bg-gray-50 border-t">
                 <tr>
                   <td className="px-4 py-3 text-sm font-semibold" colSpan="3">Sr.</td>
@@ -408,8 +394,8 @@ const StockDetailRecordPage = () => {
         <Pagination
           currentPage={currentPage}
           pageSize={itemsPerPage}
-          totalCount={filteredRecords.length}
-          onPageChange={setCurrentPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
           onPageSizeChange={setItemsPerPage}
         />
       </div>

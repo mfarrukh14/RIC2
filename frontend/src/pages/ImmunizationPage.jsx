@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { InformationCircleIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import pharmacyApi from '../services/pharmacyApi';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 
 function formatDateTime(value) {
   if (!value) return '-';
@@ -23,12 +24,20 @@ const ImmunizationPage = () => {
   const [vaccines, setVaccines] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  const {
+    items: pageItems,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error: loadError,
+    reload: reloadRecords,
+  } = usePagedList(pharmacyApi.getVaccineRecords, {}, { autoLoad: false, initialPageSize: 10 });
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
@@ -45,7 +54,8 @@ const ImmunizationPage = () => {
     pharmacyApi.getVaccines()
       .then(setVaccines)
       .catch((vaccineError) => console.error('Error loading vaccines:', vaccineError));
-    loadRecords();
+    runSearch({ dateFrom: undefined, dateTo: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -61,31 +71,10 @@ const ImmunizationPage = () => {
     return () => { cancelled = true; };
   }, [debouncedPatientQuery, selectedPatient]);
 
-  const loadRecords = async () => {
-    setLoading(true);
+  const loadRecords = () => {
     setError('');
-    try {
-      const data = await pharmacyApi.getVaccineRecords({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined });
-      setRecords(data);
-    } catch (loadError) {
-      console.error('Error loading immunization records:', loadError);
-      setError('Failed to load immunization records.');
-    } finally {
-      setLoading(false);
-    }
+    runSearch({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined });
   };
-
-  const filteredRecords = useMemo(() => {
-    if (!searchTerm.trim()) return records;
-    const normalized = searchTerm.trim().toLowerCase();
-    return records.filter((record) => [record.patientName, record.mrNo, record.vaccineName]
-      .some((value) => (value || '').toLowerCase().includes(normalized)));
-  }, [records, searchTerm]);
-
-  useEffect(() => { setCurrentPage(1); }, [entriesPerPage, searchTerm]);
-
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredRecords.slice(startIndex, startIndex + entriesPerPage);
 
   const closeAddModal = () => {
     setShowAddModal(false);
@@ -114,7 +103,7 @@ const ImmunizationPage = () => {
         remarks: remarks || null
       });
       closeAddModal();
-      await loadRecords();
+      await reloadRecords();
     } catch (addError) {
       console.error('Error adding immunization record:', addError);
       setError(addError.response?.data?.message || 'Failed to add the immunization record.');
@@ -141,7 +130,11 @@ const ImmunizationPage = () => {
             </button>
           </div>
 
-          {error && <div className="px-6 pt-4 text-sm text-rose-600">{error}</div>}
+          {(error || loadError) && (
+            <div className="px-6 pt-4 text-sm text-rose-600">
+              {error || `Failed to load immunization records${loadError.message ? `: ${loadError.message}` : ''}`}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 px-6 py-5 lg:grid-cols-3">
             <div>
@@ -154,13 +147,6 @@ const ImmunizationPage = () => {
             <div className="flex items-end">
               <button type="button" onClick={loadRecords} className="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-indigo-700">Search</button>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-end">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Search:</span>
-              <input type="text" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 md:w-60" />
-            </label>
           </div>
 
           <div className="overflow-x-auto px-6 pb-4">
@@ -197,8 +183,8 @@ const ImmunizationPage = () => {
           <Pagination
             currentPage={currentPage}
             pageSize={entriesPerPage}
-            totalCount={filteredRecords.length}
-            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
             onPageSizeChange={setEntriesPerPage}
           />
         </section>

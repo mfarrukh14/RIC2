@@ -5,6 +5,7 @@ import { itemTypeApi } from '../services/itemTypeApi';
 import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 // Default to the last 30 days up to now, instead of a hardcoded stale range,
@@ -27,9 +28,6 @@ const getDefaultDateRange = () => {
 
 const StockStatsPage = () => {
   const { session } = useSession();
-  const [stats, setStats] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -42,6 +40,11 @@ const StockStatsPage = () => {
     saleType: 'OverAll'
   });
 
+  // The filters actually sent to the server - only updated when "Generate" is
+  // clicked, mirroring StockPage - so editing a dropdown mid-form doesn't
+  // re-trigger a search.
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
   // Lookup data
   const [stores, setStores] = useState([]);
   const [items, setItems] = useState([]);
@@ -52,18 +55,21 @@ const StockStatsPage = () => {
   // Selected items for multi-select
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  const {
+    items: stats,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(stockStatsApi.searchStats, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     loadLookupData();
   }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, entriesPerPage]);
 
   // Stock stats are always scoped to the logged-in user's own branch.
   useEffect(() => {
@@ -120,26 +126,17 @@ const StockStatsPage = () => {
     }
   };
 
-  const handleSearch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const searchFilters = {
-        ...filters,
-        branchId: filters.branchId ? Number(filters.branchId) : null,
-        storeId: filters.storeId ? Number(filters.storeId) : null,
-        itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
-        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
-        itemIds: selectedItems.join(',')
-      };
-      const data = await stockStatsApi.searchStats(searchFilters);
-      setStats(data);
-    } catch (err) {
-      setError('Failed to search stock stats');
-      console.error('Error searching stock stats:', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    const searchFilters = {
+      ...filters,
+      branchId: filters.branchId ? Number(filters.branchId) : null,
+      storeId: filters.storeId ? Number(filters.storeId) : null,
+      itemTypeId: filters.itemTypeId ? Number(filters.itemTypeId) : null,
+      stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
+      itemIds: selectedItems.join(',')
+    };
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
   };
 
   const handleFilterChange = (e) => {
@@ -164,15 +161,8 @@ const StockStatsPage = () => {
     setSelectedItems(prev => prev.filter(id => id !== itemId));
   };
 
-  // Filter items by search term
-  const filteredStats = stats.filter(stat =>
-    stat.itemName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Pagination
-  const indexOfLastEntry = currentPage * entriesPerPage;
-  const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
-  const currentStats = filteredStats.slice(indexOfFirstEntry, indexOfLastEntry);
+  // Row numbering only - actual paging now happens server-side (see usePagedList above).
+  const indexOfFirstEntry = (currentPage - 1) * entriesPerPage;
 
   return (
     <div className="p-6">
@@ -185,7 +175,7 @@ const StockStatsPage = () => {
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          Failed to search stock stats{error.message ? `: ${error.message}` : ''}
         </div>
       )}
 
@@ -407,18 +397,6 @@ const StockStatsPage = () => {
 
       {/* Results Table */}
       <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex justify-end items-center mb-4">
-          <div>
-            <input
-              type="text"
-              placeholder="Search:"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-            />
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -447,14 +425,14 @@ const StockStatsPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {currentStats.length === 0 ? (
+              {stats.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="px-3 py-8 text-center text-sm text-gray-500">
-                    No data available in table
+                    {loading ? 'Loading...' : 'No data available in table'}
                   </td>
                 </tr>
               ) : (
-                currentStats.map((stat, index) => (
+                stats.map((stat, index) => (
                   <tr key={stat.itemId} className="hover:bg-gray-50">
                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                       {indexOfFirstEntry + index + 1}
@@ -487,8 +465,8 @@ const StockStatsPage = () => {
         <Pagination
           currentPage={currentPage}
           pageSize={entriesPerPage}
-          totalCount={filteredStats.length}
-          onPageChange={setCurrentPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
           onPageSizeChange={setEntriesPerPage}
         />
       </div>

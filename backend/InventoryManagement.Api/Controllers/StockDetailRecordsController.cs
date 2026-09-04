@@ -23,8 +23,8 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var records = await _stockDetailRecordService.GetStockDetailRecordsAsync(request);
-                return Ok(records);
+                var result = await _stockDetailRecordService.GetStockDetailRecordsAsync(request);
+                return Ok(result);
             }
             catch (Exception ex)
             {

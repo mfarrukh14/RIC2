@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import pharmacyApi from '../services/pharmacyApi';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 function formatDateTime(value) {
@@ -26,12 +27,19 @@ const ItemWiseSalePage = () => {
   const [itemId, setItemId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  const {
+    items: pageItems,
+    totalCount,
+    raw,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+  } = usePagedList(pharmacyApi.getItemWiseSale, {}, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     pharmacyApi.getLookups()
@@ -55,39 +63,20 @@ const ItemWiseSalePage = () => {
     return () => { cancelled = true; };
   }, [storeId, branchId]);
 
-  const loadEntries = async () => {
-    setLoading(true);
+  const loadEntries = () => {
     setError('');
-    try {
-      const data = await pharmacyApi.getItemWiseSale({
-        storeId: storeId || undefined,
-        itemId: itemId || undefined,
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined
-      });
-      setEntries(data);
-    } catch (loadError) {
-      console.error('Error loading item wise sale:', loadError);
-      setError('Failed to load item wise sale.');
-    } finally {
-      setLoading(false);
-    }
+    runSearch({
+      storeId: storeId || undefined,
+      itemId: itemId || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined
+    });
   };
 
-  const filteredEntries = useMemo(() => {
-    if (!searchTerm.trim()) return entries;
-    const normalized = searchTerm.trim().toLowerCase();
-    return entries.filter((entry) => [entry.mrNo, entry.patientName, entry.challanNo, entry.itemName, entry.storeName]
-      .some((value) => (value || '').toLowerCase().includes(normalized)));
-  }, [entries, searchTerm]);
-
-  useEffect(() => { setCurrentPage(1); }, [entriesPerPage, searchTerm]);
-
-  const startIndex = (currentPage - 1) * entriesPerPage;
-  const pageItems = filteredEntries.slice(startIndex, startIndex + entriesPerPage);
-
-  const totalQuantity = filteredEntries.reduce((sum, entry) => sum + (Number(entry.quantity) || 0), 0);
-  const totalSale = filteredEntries.reduce((sum, entry) => sum + (Number(entry.total) || 0), 0);
+  // Grand totals across the whole filtered result set (not just this page) -
+  // computed server-side alongside the paged rows, see PharmacyItemWiseSaleReport.
+  const totalQuantity = raw?.totalQuantity ?? 0;
+  const totalSale = raw?.totalSaleAmount ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-100 p-0 sm:p-1">
@@ -139,13 +128,6 @@ const ItemWiseSalePage = () => {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-end">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <span>Search:</span>
-              <input type="text" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 md:w-60" />
-            </label>
-          </div>
-
           <div className="overflow-x-auto px-6 pb-4">
             <table className="min-w-full border-separate border-spacing-0 text-sm">
               <thead>
@@ -182,7 +164,7 @@ const ItemWiseSalePage = () => {
                   ))
                 )}
               </tbody>
-              {filteredEntries.length > 0 && (
+              {pageItems.length > 0 && (
                 <tfoot>
                   <tr className="text-left font-semibold text-slate-800">
                     <td colSpan="6" className="border-t border-slate-200 px-4 py-3">Total</td>
@@ -198,8 +180,8 @@ const ItemWiseSalePage = () => {
           <Pagination
             currentPage={currentPage}
             pageSize={entriesPerPage}
-            totalCount={filteredEntries.length}
-            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
             onPageSizeChange={setEntriesPerPage}
           />
         </section>

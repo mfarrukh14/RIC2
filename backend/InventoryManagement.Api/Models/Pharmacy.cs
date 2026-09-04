@@ -177,6 +177,18 @@ namespace InventoryManagement.Api.Models
         public decimal Remaining { get; set; }
     }
 
+    // PagedResult only carries the current page, but the Daily Sale screen also shows a
+    // Totals footer across the WHOLE filtered report (every matching challan, not just the
+    // visible page) - these come back as SQL window aggregates computed once over the full
+    // filtered set, the same way TotalCount already is, so one round trip gets both.
+    public class PharmacyDailySaleReport : PagedResult<PharmacyDailySaleEntry>
+    {
+        public decimal TotalDiscount { get; set; }
+        public decimal TotalSaleAmount { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal TotalRemaining { get; set; }
+    }
+
     // ---- Item Wise Sale ----
 
     public class PharmacyItemWiseSaleEntry
@@ -191,6 +203,14 @@ namespace InventoryManagement.Api.Models
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Total { get; set; }
+    }
+
+    // Same reasoning as PharmacyDailySaleReport - Item Wise Sale's Total Qty/Total Sale
+    // footer must reflect the whole filtered report, not just the current page.
+    public class PharmacyItemWiseSaleReport : PagedResult<PharmacyItemWiseSaleEntry>
+    {
+        public int TotalQuantity { get; set; }
+        public decimal TotalSaleAmount { get; set; }
     }
 
     // ---- Pharmacy Queue ----

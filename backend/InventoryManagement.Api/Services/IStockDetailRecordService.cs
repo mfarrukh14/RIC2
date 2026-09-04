@@ -4,6 +4,6 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStockDetailRecordService
     {
-        Task<IEnumerable<StockDetailRecord>> GetStockDetailRecordsAsync(StockDetailRecordSearchRequest request);
+        Task<PagedResult<StockDetailRecord>> GetStockDetailRecordsAsync(StockDetailRecordSearchRequest request);
     }
 }

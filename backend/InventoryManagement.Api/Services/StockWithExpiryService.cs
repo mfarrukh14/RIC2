@@ -6,7 +6,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStockWithExpiryService
     {
-        Task<IEnumerable<StockWithExpiry>> GetAllAsync(StockWithExpiryFilter filter);
+        Task<PagedResult<StockWithExpiry>> GetAllAsync(StockWithExpiryFilter filter);
     }
 
     public class StockWithExpiryService : IStockWithExpiryService
@@ -21,8 +21,10 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockWithExpiry>> GetAllAsync(StockWithExpiryFilter filter)
+        public async Task<PagedResult<StockWithExpiry>> GetAllAsync(StockWithExpiryFilter filter)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(filter.PageNumber, filter.PageSize);
+            var result = new PagedResult<StockWithExpiry> { PageNumber = pageNumber, PageSize = pageSize };
             var stocks = new List<StockWithExpiry>();
 
             try
@@ -34,7 +36,7 @@ namespace InventoryManagement.Api.Services
                     using (var command = new SqlCommand("StockWithExpiry_GetAll", connection))
                     {
                         command.CommandType = CommandType.StoredProcedure;
-                        
+
                         command.Parameters.AddWithValue("@BranchId", (object?)filter.BranchId ?? DBNull.Value);
                         command.Parameters.AddWithValue("@StoreId", (object?)filter.StoreId ?? DBNull.Value);
                         command.Parameters.AddWithValue("@ItemType", (object?)filter.ItemType ?? DBNull.Value);
@@ -43,18 +45,25 @@ namespace InventoryManagement.Api.Services
                         command.Parameters.AddWithValue("@IsExpensiveItem", (object?)filter.IsExpensiveItem ?? DBNull.Value);
                         command.Parameters.AddWithValue("@IsFridgeItem", (object?)filter.IsFridgeItem ?? DBNull.Value);
                         command.Parameters.AddWithValue("@MinimumPanicLevelOnly", filter.MinimumPanicLevelOnly);
+                        PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
+                                if (result.TotalCount == 0)
+                                {
+                                    result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                                }
+
                                 stocks.Add(MapReaderToStock(reader));
                             }
                         }
                     }
                 }
 
-                return stocks;
+                result.Items = stocks;
+                return result;
             }
             catch (Exception ex)
             {

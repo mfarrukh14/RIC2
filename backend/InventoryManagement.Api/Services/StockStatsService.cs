@@ -14,12 +14,15 @@ namespace InventoryManagement.Api.Services
                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
         }
 
-        public async Task<List<StockStatsItem>> SearchStockStatsAsync(StockStatsSearchRequest request)
+        public async Task<PagedResult<StockStatsItem>> SearchStockStatsAsync(StockStatsSearchRequest request)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var result = new PagedResult<StockStatsItem> { PageNumber = pageNumber, PageSize = pageSize };
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("StockStats_Search", connection);
             command.CommandType = CommandType.StoredProcedure;
-            
+
             command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StartDate", (object?)request.StartDate ?? DBNull.Value);
@@ -28,13 +31,19 @@ namespace InventoryManagement.Api.Services
             command.Parameters.AddWithValue("@ItemIds", (object?)request.ItemIds ?? DBNull.Value);
             command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
             command.Parameters.AddWithValue("@SaleType", request.SaleType);
+            PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
-            
+
             var items = new List<StockStatsItem>();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                }
+
                 items.Add(new StockStatsItem
                 {
                     ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
@@ -47,7 +56,8 @@ namespace InventoryManagement.Api.Services
                 });
             }
 
-            return items;
+            result.Items = items;
+            return result;
         }
     }
 }

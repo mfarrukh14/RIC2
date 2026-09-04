@@ -5,6 +5,7 @@ import inventoryApi from '../services/inventoryApi';
 import stockApi from '../services/stockApi';
 import BranchField from '../components/BranchField';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
 import { useSession } from '../context/SessionContext';
 
 const normalizeStores = (stores) =>
@@ -24,9 +25,15 @@ const normalizeStores = (stores) =>
 
 const StockAuditPage = () => {
   const { session } = useSession();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+
+  // Local-only "Qty on Shelf" edits, keyed by itemId - the backend has never
+  // persisted these (StockAudit_Search always returns QtyOnShelf/Difference as
+  // 0, and StockAudit_Insert takes no per-item quantities), so this stays a
+  // client-side overlay independent of the paged/re-fetched item rows below.
+  const [qtyOverrides, setQtyOverrides] = useState({});
+
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
 
   // Past stock audits (history list) - matches the old system's Stock Audit
@@ -44,6 +51,22 @@ const StockAuditPage = () => {
     manufacturerIds: '',
     stockTypeId: null
   });
+
+  // The filters actually sent to the server - only updated when "Generate" is
+  // clicked, mirroring StockPage/StockStatsPage.
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+
+  const {
+    items: auditItems,
+    totalCount,
+    currentPage,
+    pageSize: entriesPerPage,
+    setPageSize: setEntriesPerPage,
+    goToPage,
+    search: runSearch,
+    loading: searchLoading,
+    error: searchError,
+  } = usePagedList(stockAuditApi.searchItems, submittedFilters || {}, { autoLoad: false, initialPageSize: 10 });
 
   // Audit form
   const [auditForm, setAuditForm] = useState({
@@ -65,20 +88,14 @@ const StockAuditPage = () => {
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState([]);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  // Pagination (Past Stock Audits history list only - the item search above is
+  // now paged server-side via usePagedList)
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(10);
 
   useEffect(() => {
     loadLookupData();
   }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, entriesPerPage]);
 
   useEffect(() => {
     setHistoryPage(1);
@@ -142,26 +159,18 @@ const StockAuditPage = () => {
     }
   };
 
-  const handleGenerate = async () => {
-    setLoading(true);
-    setError(null);
+  const handleGenerate = () => {
     setSuccessMessage('');
-    try {
-      const searchFilters = {
-        branchId: filters.branchId ? Number(filters.branchId) : null,
-        storeId: filters.storeId ? Number(filters.storeId) : null,
-        stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
-        itemIds: selectedItems.join(','),
-        manufacturerIds: selectedManufacturers.join(',')
-      };
-      const data = await stockAuditApi.searchItems(searchFilters);
-      setItems(data);
-    } catch (err) {
-      setError('Failed to generate stock audit items');
-      console.error('Error generating stock audit:', err);
-    } finally {
-      setLoading(false);
-    }
+    setQtyOverrides({});
+    const searchFilters = {
+      branchId: filters.branchId ? Number(filters.branchId) : null,
+      storeId: filters.storeId ? Number(filters.storeId) : null,
+      stockTypeId: filters.stockTypeId ? Number(filters.stockTypeId) : null,
+      itemIds: selectedItems.join(','),
+      manufacturerIds: selectedManufacturers.join(',')
+    };
+    setSubmittedFilters(searchFilters);
+    runSearch(searchFilters);
   };
 
   const handleFilterChange = (e) => {
@@ -201,26 +210,27 @@ const StockAuditPage = () => {
   };
 
   const handleQtyChange = (itemId, qty) => {
-    setItems(prev => prev.map(item => {
-      if (item.itemId === itemId) {
-        const qtyOnShelf = parseFloat(qty) || 0;
-        const difference = qtyOnShelf - item.totalItems;
-        return { ...item, qtyOnShelf, difference };
-      }
-      return item;
-    }));
+    setQtyOverrides(prev => ({ ...prev, [itemId]: qty }));
+  };
+
+  const getDisplayQty = (item) => qtyOverrides[item.itemId] ?? (item.qtyOnShelf || '');
+
+  const getDisplayDifference = (item) => {
+    const override = qtyOverrides[item.itemId];
+    if (override === undefined) return item.difference || '';
+    return (parseFloat(override) || 0) - item.totalItems;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!filters.storeId) {
-      setError('Please select a store from the filters above');
+      setFormError('Please select a store from the filters above');
       return;
     }
-    
-    setLoading(true);
-    setError(null);
+
+    setSubmitting(true);
+    setFormError(null);
     setSuccessMessage('');
 
     try {
@@ -242,25 +252,17 @@ const StockAuditPage = () => {
         stockAuditDate: new Date().toISOString().split('T')[0],
         remarks: ''
       });
-      setItems([]);
+      setQtyOverrides({});
       setSelectedItems([]);
       setSelectedManufacturers([]);
     } catch (err) {
-      setError(err.message || 'Failed to create stock audit');
+      setFormError(err.message || 'Failed to create stock audit');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // Filter items by search term
-  const filteredItems = items.filter(item =>
-    item.itemName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Pagination
-  const indexOfLastEntry = currentPage * entriesPerPage;
-  const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
-  const currentItems = filteredItems.slice(indexOfFirstEntry, indexOfLastEntry);
+  const displayError = formError || (searchError ? `Failed to generate stock audit items${searchError.message ? `: ${searchError.message}` : ''}` : null);
 
   const pastAuditsPage = pastAudits.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
 
@@ -268,9 +270,9 @@ const StockAuditPage = () => {
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">Stock Audit</h1>
 
-      {error && (
+      {displayError && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+          {displayError}
         </div>
       )}
 
@@ -472,29 +474,17 @@ const StockAuditPage = () => {
         <div className="flex justify-end">
           <button
             onClick={handleGenerate}
-            disabled={loading}
+            disabled={searchLoading}
             className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400"
           >
-            {loading ? 'Generating...' : 'Generate'}
+            {searchLoading ? 'Generating...' : 'Generate'}
           </button>
         </div>
       </div>
 
       {/* Results Table */}
-      {items.length > 0 && (
+      {auditItems.length > 0 && (
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <div className="flex justify-end items-center mb-4">
-            <div>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm"
-              />
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -532,7 +522,7 @@ const StockAuditPage = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentItems.map((item, index) => (
+                {auditItems.map((item, index) => (
                   <React.Fragment key={`audit-row-${item.itemId ?? 'item'}-${item.stockType ?? 'stock'}-${item.batchNo ?? index}-${index}`}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-3 py-4 whitespace-nowrap">
@@ -551,7 +541,7 @@ const StockAuditPage = () => {
                         <input
                           type="text"
                           placeholder="Qty On Shelf"
-                          value={item.qtyOnShelf || ''}
+                          value={getDisplayQty(item)}
                           onChange={(e) => handleQtyChange(item.itemId, e.target.value)}
                           className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
                         />
@@ -560,7 +550,7 @@ const StockAuditPage = () => {
                         <input
                           type="text"
                           placeholder="Difference"
-                          value={item.difference || ''}
+                          value={getDisplayDifference(item)}
                           readOnly
                           className="w-24 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-50"
                         />
@@ -606,8 +596,8 @@ const StockAuditPage = () => {
           <Pagination
             currentPage={currentPage}
             pageSize={entriesPerPage}
-            totalCount={filteredItems.length}
-            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            onPageChange={goToPage}
             onPageSizeChange={setEntriesPerPage}
           />
         </div>
@@ -661,10 +651,10 @@ const StockAuditPage = () => {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting}
               className="px-8 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-400 font-medium"
             >
-              {loading ? 'Submitting...' : 'Submit'}
+              {submitting ? 'Submitting...' : 'Submit'}
             </button>
           </div>
         </form>

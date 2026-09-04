@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { getSaleSummaryStockNoDiscount, getSaleSummaryStockNoDiscountTotals } from '../services/saleSummaryStockNoDiscountApi';
 import { getAllStores } from '../services/storeApi';
 import Pagination from '../components/Pagination';
+import usePagedList from '../hooks/usePagedList';
+
+const DEFAULT_TOTALS = {
+  unitPurchaseRate: 0,
+  unitSaleRate: 0,
+  quantity: 0,
+  sale: 0,
+  purchaseRate: 0,
+  profit: 0,
+  discountAmount: 0
+};
 
 const SaleSummaryStockNoDiscountPage = () => {
   const [stores, setStores] = useState([]);
@@ -12,16 +23,31 @@ const SaleSummaryStockNoDiscountPage = () => {
   // picks one.
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [summaries, setSummaries] = useState([]);
+
+  // The filters actually sent to the server - only updated when "Generate Report" is
+  // clicked (or on first load), so editing a dropdown mid-form doesn't re-trigger a search.
+  const [submittedFilters, setSubmittedFilters] = useState({ store: '', startDate: '', endDate: '' });
+
   const [totals, setTotals] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [totalsLoading, setTotalsLoading] = useState(false);
+
+  const {
+    items: summaries,
+    totalCount,
+    currentPage,
+    pageSize: itemsPerPage,
+    setPageSize: setItemsPerPage,
+    goToPage,
+    search: runSearch,
+    loading,
+    error,
+  } = usePagedList(getSaleSummaryStockNoDiscount, submittedFilters, { autoLoad: false, initialPageSize: 10 });
 
   useEffect(() => {
     fetchStores();
-    fetchSummary();
+    fetchTotals(submittedFilters);
+    runSearch(submittedFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStores = async () => {
@@ -33,57 +59,32 @@ const SaleSummaryStockNoDiscountPage = () => {
     }
   };
 
-  const fetchSummary = async () => {
-    setLoading(true);
+  // Totals reflect the full filtered result server-side (see
+  // GetSaleSummaryStockNoDiscountTotalsAsync), independent of which page of the list is
+  // currently loaded - fetched alongside the paged list, not derived from it.
+  const fetchTotals = async (filters) => {
+    setTotalsLoading(true);
     try {
-      const [summaryData, totalsData] = await Promise.all([
-        getSaleSummaryStockNoDiscount(selectedStore, startDate, endDate),
-        getSaleSummaryStockNoDiscountTotals(selectedStore, startDate, endDate)
-      ]);
-      
-      setSummaries(summaryData || []);
-      setTotals(totalsData || {
-        unitPurchaseRate: 0,
-        unitSaleRate: 0,
-        quantity: 0,
-        sale: 0,
-        purchaseRate: 0,
-        profit: 0,
-        discountAmount: 0
-      });
-    } catch (error) {
-      console.error('Error fetching sale summary stock no discount:', error);
-      setSummaries([]);
-      setTotals({
-        unitPurchaseRate: 0,
-        unitSaleRate: 0,
-        quantity: 0,
-        sale: 0,
-        purchaseRate: 0,
-        profit: 0,
-        discountAmount: 0
-      });
+      const totalsData = await getSaleSummaryStockNoDiscountTotals(filters.store, filters.startDate, filters.endDate);
+      setTotals(totalsData || DEFAULT_TOTALS);
+    } catch (err) {
+      console.error('Error fetching sale summary stock no discount totals:', err);
+      setTotals(DEFAULT_TOTALS);
     } finally {
-      setLoading(false);
+      setTotalsLoading(false);
     }
   };
 
   const handleSearch = () => {
-    setCurrentPage(1);
-    fetchSummary();
+    const filters = { store: selectedStore, startDate, endDate };
+    setSubmittedFilters(filters);
+    runSearch(filters);
+    fetchTotals(filters);
   };
 
   const formatNumber = (num) => {
-    return num.toFixed(2);
+    return Number(num ?? 0).toFixed(2);
   };
-
-  // Pagination
-  const filteredSummaries = summaries.filter((summary) =>
-    summary.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredSummaries.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -93,9 +94,10 @@ const SaleSummaryStockNoDiscountPage = () => {
           <h1 className="text-2xl font-bold text-blue-600">Sale Summary Wrt Stock WO Discount</h1>
           <button
             onClick={handleSearch}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            disabled={loading || totalsLoading}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
           >
-            Generate Report
+            {loading || totalsLoading ? 'Generating...' : 'Generate Report'}
           </button>
         </div>
 
@@ -142,20 +144,11 @@ const SaleSummaryStockNoDiscountPage = () => {
           <h2 className="text-lg font-semibold text-gray-700">Item Wise Profit & Loss</h2>
         </div>
 
-        {/* Table Header Info */}
-        <div className="flex items-center justify-end mb-4">
-          <div className="text-sm">
-            Search: <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 border border-gray-300 rounded"
-            />
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            Failed to load sale summary{error.message ? `: ${error.message}` : ''}
           </div>
-        </div>
+        )}
 
         {/* Table */}
         <div className="overflow-x-auto">
@@ -178,9 +171,9 @@ const SaleSummaryStockNoDiscountPage = () => {
                     Loading...
                   </td>
                 </tr>
-              ) : currentItems.length > 0 ? (
+              ) : summaries.length > 0 ? (
                 <>
-                  {currentItems.map((summary, index) => (
+                  {summaries.map((summary, index) => (
                     <tr key={index} className="border-b hover:bg-gray-50">
                       <td className="px-4 py-2 text-sm">{summary.name}</td>
                       <td className="px-4 py-2 text-sm">{formatNumber(summary.unitPurchaseRate)}</td>
@@ -227,8 +220,8 @@ const SaleSummaryStockNoDiscountPage = () => {
         <Pagination
           currentPage={currentPage}
           pageSize={itemsPerPage}
-          totalCount={filteredSummaries.length}
-          onPageChange={setCurrentPage}
+          totalCount={totalCount}
+          onPageChange={goToPage}
           onPageSizeChange={setItemsPerPage}
         />
       </div>

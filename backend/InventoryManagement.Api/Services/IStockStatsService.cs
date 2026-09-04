@@ -4,6 +4,6 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStockStatsService
     {
-        Task<List<StockStatsItem>> SearchStockStatsAsync(StockStatsSearchRequest request);
+        Task<PagedResult<StockStatsItem>> SearchStockStatsAsync(StockStatsSearchRequest request);
     }
 }

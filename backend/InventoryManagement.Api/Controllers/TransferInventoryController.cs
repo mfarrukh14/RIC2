@@ -65,7 +65,7 @@ namespace InventoryManagement.Api.Controllers
 
                 request.BranchId = branchId;
 
-                var transfer = await _transferInventoryService.CreateAsync(request);
+                var transfer = await _transferInventoryService.CreateAsync(request, UserId);
                 return CreatedAtAction(nameof(GetById), new { id = transfer.Id }, transfer);
             }
             catch (SqlException ex) when (ex.Message.Contains("Cannot transfer"))
@@ -84,7 +84,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var result = await _transferInventoryService.UpdateAsync(id, request);
+                var result = await _transferInventoryService.UpdateAsync(id, request, UserId);
                 if (!result)
                 {
                     return NotFound(new { message = $"Transfer inventory with ID {id} not found" });
@@ -103,7 +103,7 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var result = await _transferInventoryService.DeleteAsync(id);
+                var result = await _transferInventoryService.DeleteAsync(id, UserId);
                 if (!result)
                 {
                     return NotFound(new { message = $"Transfer inventory with ID {id} not found" });

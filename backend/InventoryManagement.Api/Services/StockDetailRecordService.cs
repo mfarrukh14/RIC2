@@ -16,8 +16,10 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<StockDetailRecord>> GetStockDetailRecordsAsync(StockDetailRecordSearchRequest request)
+        public async Task<PagedResult<StockDetailRecord>> GetStockDetailRecordsAsync(StockDetailRecordSearchRequest request)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var result = new PagedResult<StockDetailRecord> { PageNumber = pageNumber, PageSize = pageSize };
             var records = new List<StockDetailRecord>();
 
             try
@@ -37,20 +39,28 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@Item", string.IsNullOrEmpty(request.Item) ? (object)DBNull.Value : request.Item);
                 command.Parameters.AddWithValue("@ItemType", string.IsNullOrEmpty(request.ItemType) ? (object)DBNull.Value : request.ItemType);
                 command.Parameters.AddWithValue("@SaleType", string.IsNullOrEmpty(request.SaleType) ? (object)DBNull.Value : request.SaleType);
+                PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
-                int sr = 1;
                 while (await reader.ReadAsync())
                 {
+                    if (result.TotalCount == 0)
+                    {
+                        result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     var stockTypeOrdinal = reader.GetOrdinal("StockType");
                     var buyingPriceOrdinal = reader.GetOrdinal("BuyingPrice");
                     var sellingPriceOrdinal = reader.GetOrdinal("SellingPrice");
 
                     records.Add(new StockDetailRecord
                     {
-                        Sr = sr++,
+                        // Sr now comes from the proc's ROW_NUMBER() OVER (ORDER BY i.Name) -
+                        // computed over the full filtered set before paging, so it reflects
+                        // true report position rather than restarting at 1 on every page.
+                        Sr = reader.GetInt32(reader.GetOrdinal("Sr")),
                         Name = reader.GetString(reader.GetOrdinal("Name")),
                         StockType = reader.IsDBNull(stockTypeOrdinal) ? string.Empty : reader.GetString(stockTypeOrdinal),
                         BuyingPrice = reader.IsDBNull(buyingPriceOrdinal) ? 0 : reader.GetDecimal(buyingPriceOrdinal),
@@ -68,7 +78,8 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return records;
+            result.Items = records;
+            return result;
         }
     }
 }

@@ -14,25 +14,34 @@ namespace InventoryManagement.Api.Services
                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
         }
 
-        public async Task<List<StockAuditItem>> SearchStockAuditItemsAsync(StockAuditSearchRequest request)
+        public async Task<PagedResult<StockAuditItem>> SearchStockAuditItemsAsync(StockAuditSearchRequest request)
         {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var result = new PagedResult<StockAuditItem> { PageNumber = pageNumber, PageSize = pageSize };
+
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand("StockAudit_Search", connection);
             command.CommandType = CommandType.StoredProcedure;
-            
+
             command.Parameters.AddWithValue("@BranchId", (object?)request.BranchId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StoreId", (object?)request.StoreId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ItemTypeId", (object?)request.ItemTypeId ?? DBNull.Value);
             command.Parameters.AddWithValue("@StockTypeId", (object?)request.StockTypeId ?? DBNull.Value);
             command.Parameters.AddWithValue("@ItemIds", (object?)request.ItemIds ?? DBNull.Value);
             command.Parameters.AddWithValue("@ManufacturerIds", (object?)request.ManufacturerIds ?? DBNull.Value);
+            PaginationHelper.AddPagingParameters(command, pageNumber, pageSize);
 
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
-            
+
             var items = new List<StockAuditItem>();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = PaginationHelper.ReadTotalCount(reader);
+                }
+
                 items.Add(new StockAuditItem
                 {
                     ItemId = reader.GetInt32(reader.GetOrdinal("ItemId")),
@@ -48,7 +57,8 @@ namespace InventoryManagement.Api.Services
                 });
             }
 
-            return items;
+            result.Items = items;
+            return result;
         }
 
         public async Task<StockAudit> CreateStockAuditAsync(StockAuditRequest request)

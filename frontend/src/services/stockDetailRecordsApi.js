@@ -1,8 +1,9 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/stockdetailrecords';
+const API_URL = 'http://10.10.10.35:5100/api/stockdetailrecords';
 
 export const stockDetailRecordsApi = {
+  // Server-paginated - call shape matches usePagedList: { pageNumber, pageSize, ...filters }
   getAll: async (params) => {
     const response = await axios.get(API_URL, { params });
     return response.data;

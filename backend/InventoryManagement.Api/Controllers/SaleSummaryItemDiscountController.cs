@@ -23,8 +23,8 @@ namespace InventoryManagement.Api.Controllers
         {
             try
             {
-                var summaries = await _saleSummaryItemDiscountService.GetSaleSummaryItemDiscountAsync(request);
-                return Ok(summaries);
+                var result = await _saleSummaryItemDiscountService.GetSaleSummaryItemDiscountAsync(request);
+                return Ok(result);
             }
             catch (Exception ex)
             {

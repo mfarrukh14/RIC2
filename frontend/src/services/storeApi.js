@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5100/api/Store';
+const API_URL = 'http://10.10.10.35:5100/api/Store';
 
 // GET /api/Store (dbo.SP_Pharmacy_AllStores, backed by Pharmacy.PharmacyStores) returns
 // Id/Name/ParentId/ParentName/ImagePath/IsDisableRetailSale/DayClosingWise/etc - not the

@@ -1187,12 +1187,16 @@ ELSE
 
         // ==================== Daily Sale ====================
 
-        public async Task<IReadOnlyList<PharmacyDailySaleEntry>> GetDailySaleAsync(int? storeId, DateTime? dateFrom, DateTime? dateTo, string? challanType)
+        public async Task<PharmacyDailySaleReport> GetDailySaleAsync(int? storeId, DateTime? dateFrom, DateTime? dateTo, string? challanType, int pageNumber, int pageSize)
         {
+            var (normalizedPageNumber, normalizedPageSize) = PaginationHelper.Normalize(pageNumber, pageSize);
+            var result = new PharmacyDailySaleReport { PageNumber = normalizedPageNumber, PageSize = normalizedPageSize };
             var results = new List<PharmacyDailySaleEntry>();
             const string sql = @"
 SELECT f.Id, p.MRNo, COALESCE(f.PatientFullName, p.Name) AS PatientName, f.VisitNo, f.ChallanNo, ISNULL(ct.Name, '') AS ChallanType, s.StoreName,
-    f.Timestamp, f.Discount, f.Total, f.PaidAmount, f.Remaining
+    f.Timestamp, f.Discount, f.Total, f.PaidAmount, f.Remaining, COUNT(*) OVER() AS TotalCount,
+    SUM(f.Discount) OVER() AS TotalDiscountAll, SUM(f.Total) OVER() AS TotalSaleAmountAll,
+    SUM(f.PaidAmount) OVER() AS TotalPaidAll, SUM(f.Remaining) OVER() AS TotalRemainingAll
 FROM Pharmacy.PharmacyChallanForms f
 LEFT JOIN Account.ChallanTypes ct ON ct.Id = f.ChallanTypeId
 LEFT JOIN dbo.Patients p ON p.PatientID = f.PatientId
@@ -1202,7 +1206,8 @@ WHERE ct.Name IN ('Final', 'Refund')
   AND (@DateFrom IS NULL OR f.Timestamp >= @DateFrom)
   AND (@DateTo IS NULL OR f.Timestamp <= @DateTo)
   AND (@ChallanType IS NULL OR ct.Name = @ChallanType)
-ORDER BY f.Timestamp DESC;";
+ORDER BY f.Timestamp DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
@@ -1210,10 +1215,21 @@ ORDER BY f.Timestamp DESC;";
             command.Parameters.AddWithValue("@DateFrom", (object?)dateFrom ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateTo", (object?)dateTo ?? DBNull.Value);
             command.Parameters.AddWithValue("@ChallanType", (object?)challanType ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Offset", (normalizedPageNumber - 1) * normalizedPageSize);
+            command.Parameters.AddWithValue("@PageSize", normalizedPageSize);
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+                    result.TotalDiscount = ReadDecimal(reader, reader.GetOrdinal("TotalDiscountAll"));
+                    result.TotalSaleAmount = ReadDecimal(reader, reader.GetOrdinal("TotalSaleAmountAll"));
+                    result.TotalPaid = ReadDecimal(reader, reader.GetOrdinal("TotalPaidAll"));
+                    result.TotalRemaining = ReadDecimal(reader, reader.GetOrdinal("TotalRemainingAll"));
+                }
+
                 results.Add(new PharmacyDailySaleEntry
                 {
                     Id = reader.GetInt32(0),
@@ -1231,18 +1247,22 @@ ORDER BY f.Timestamp DESC;";
                 });
             }
 
-            return results;
+            result.Items = results;
+            return result;
         }
 
         // ==================== Item Wise Sale ====================
 
-        public async Task<IReadOnlyList<PharmacyItemWiseSaleEntry>> GetItemWiseSaleAsync(int? storeId, int? itemId, DateTime? dateFrom, DateTime? dateTo)
+        public async Task<PharmacyItemWiseSaleReport> GetItemWiseSaleAsync(int? storeId, int? itemId, DateTime? dateFrom, DateTime? dateTo, int pageNumber, int pageSize)
         {
+            var (normalizedPageNumber, normalizedPageSize) = PaginationHelper.Normalize(pageNumber, pageSize);
+            var result = new PharmacyItemWiseSaleReport { PageNumber = normalizedPageNumber, PageSize = normalizedPageSize };
             var results = new List<PharmacyItemWiseSaleEntry>();
             const string sql = @"
 SELECT COALESCE(f.PatientFullName, p.Name) AS PatientName, p.MRNo, f.VisitNo, f.ChallanNo, f.Timestamp, s.StoreName,
     COALESCE(m.MedicineFullName, ii.Name, 'Unassigned') AS ItemName, d.Quantity,
-    CASE WHEN d.Quantity <> 0 THEN d.Total / d.Quantity ELSE 0 END AS UnitPrice, d.Total
+    CASE WHEN d.Quantity <> 0 THEN d.Total / d.Quantity ELSE 0 END AS UnitPrice, d.Total, COUNT(*) OVER() AS TotalCount,
+    SUM(d.Quantity) OVER() AS TotalQuantityAll, SUM(d.Total) OVER() AS TotalSaleAmountAll
 FROM Pharmacy.PharmacyChallanFormDetails d
 INNER JOIN Pharmacy.PharmacyChallanForms f ON f.Id = d.PharmacyChallanFormsId
 LEFT JOIN Account.ChallanTypes ct ON ct.Id = f.ChallanTypeId
@@ -1255,7 +1275,8 @@ WHERE ct.Name IN ('Final', 'Refund') AND d.Quantity > 0
   AND (@ItemId IS NULL OR d.ItemId = @ItemId)
   AND (@DateFrom IS NULL OR f.Timestamp >= @DateFrom)
   AND (@DateTo IS NULL OR f.Timestamp <= @DateTo)
-ORDER BY f.Timestamp DESC;";
+ORDER BY f.Timestamp DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
@@ -1263,10 +1284,19 @@ ORDER BY f.Timestamp DESC;";
             command.Parameters.AddWithValue("@ItemId", (object?)itemId ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateFrom", (object?)dateFrom ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateTo", (object?)dateTo ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Offset", (normalizedPageNumber - 1) * normalizedPageSize);
+            command.Parameters.AddWithValue("@PageSize", normalizedPageSize);
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+                    result.TotalQuantity = reader.IsDBNull(reader.GetOrdinal("TotalQuantityAll")) ? 0 : reader.GetInt32(reader.GetOrdinal("TotalQuantityAll"));
+                    result.TotalSaleAmount = ReadDecimal(reader, reader.GetOrdinal("TotalSaleAmountAll"));
+                }
+
                 results.Add(new PharmacyItemWiseSaleEntry
                 {
                     PatientName = reader.IsDBNull(0) ? null : reader.GetString(0),
@@ -1282,7 +1312,8 @@ ORDER BY f.Timestamp DESC;";
                 });
             }
 
-            return results;
+            result.Items = results;
+            return result;
         }
 
         // ==================== Pharmacy Queue ====================
@@ -1326,12 +1357,14 @@ ORDER BY pp.TimeStamp DESC;";
 
         // ==================== Pharmacy Online Order ====================
 
-        public async Task<IReadOnlyList<PharmacyOnlineOrderEntry>> GetOnlineOrdersAsync(DateTime? dateFrom, DateTime? dateTo, int? storeId, string? status)
+        public async Task<PagedResult<PharmacyOnlineOrderEntry>> GetOnlineOrdersAsync(DateTime? dateFrom, DateTime? dateTo, int? storeId, string? status, int pageNumber, int pageSize)
         {
+            var (normalizedPageNumber, normalizedPageSize) = PaginationHelper.Normalize(pageNumber, pageSize);
+            var result = new PagedResult<PharmacyOnlineOrderEntry> { PageNumber = normalizedPageNumber, PageSize = normalizedPageSize };
             var results = new List<PharmacyOnlineOrderEntry>();
             const string sql = @"
 SELECT pp.Id, pp.PharmacyOrderNumber, COALESCE(pp.PatientFullName, p.Name) AS PatientName, p.CNIC, p.MRNo,
-    e.FullName AS ActionByName, s.StoreName, pp.TimeStamp, pp.PatientPharmacyStatusName
+    e.FullName AS ActionByName, s.StoreName, pp.TimeStamp, pp.PatientPharmacyStatusName, COUNT(*) OVER() AS TotalCount
 FROM Patient.PatientPharmacies pp
 LEFT JOIN dbo.Patients p ON p.PatientID = pp.PatientId
 LEFT JOIN Users u ON u.UserID = pp.ActionById
@@ -1342,7 +1375,8 @@ WHERE ISNULL(pp.IsOnlinePharmacy, 0) = 1
   AND (@DateFrom IS NULL OR pp.TimeStamp >= @DateFrom)
   AND (@DateTo IS NULL OR pp.TimeStamp <= @DateTo)
   AND (@Status IS NULL OR pp.PatientPharmacyStatusName = @Status)
-ORDER BY pp.TimeStamp DESC;";
+ORDER BY pp.TimeStamp DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
@@ -1350,10 +1384,17 @@ ORDER BY pp.TimeStamp DESC;";
             command.Parameters.AddWithValue("@DateFrom", (object?)dateFrom ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateTo", (object?)dateTo ?? DBNull.Value);
             command.Parameters.AddWithValue("@Status", (object?)status ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Offset", (normalizedPageNumber - 1) * normalizedPageSize);
+            command.Parameters.AddWithValue("@PageSize", normalizedPageSize);
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+                }
+
                 results.Add(new PharmacyOnlineOrderEntry
                 {
                     PatientPharmacyId = reader.GetInt32(0),
@@ -1368,7 +1409,8 @@ ORDER BY pp.TimeStamp DESC;";
                 });
             }
 
-            return results;
+            result.Items = results;
+            return result;
         }
 
         // ==================== Pharmacy Dashboard ====================
@@ -1484,11 +1526,13 @@ ORDER BY s.StockExpiryDate ASC;";
             return results;
         }
 
-        public async Task<IReadOnlyList<PharmacyVaccineRecord>> GetVaccineRecordsAsync(DateTime? dateFrom, DateTime? dateTo, int? patientId)
+        public async Task<PagedResult<PharmacyVaccineRecord>> GetVaccineRecordsAsync(DateTime? dateFrom, DateTime? dateTo, int? patientId, int pageNumber, int pageSize)
         {
+            var (normalizedPageNumber, normalizedPageSize) = PaginationHelper.Normalize(pageNumber, pageSize);
+            var result = new PagedResult<PharmacyVaccineRecord> { PageNumber = normalizedPageNumber, PageSize = normalizedPageSize };
             var results = new List<PharmacyVaccineRecord>();
             const string sql = @"
-SELECT pv.PatientVaccineId, pv.PatientId, p.Name AS PatientName, p.MRNo, pv.VaccineId, v.Name AS VaccineName, pv.VaccinationDate, pv.VaccinationRemarks
+SELECT pv.PatientVaccineId, pv.PatientId, p.Name AS PatientName, p.MRNo, pv.VaccineId, v.Name AS VaccineName, pv.VaccinationDate, pv.VaccinationRemarks, COUNT(*) OVER() AS TotalCount
 FROM Patient.PatientVaccines pv
 LEFT JOIN dbo.Patients p ON p.PatientID = pv.PatientId
 LEFT JOIN Data.Vaccines v ON v.VaccineId = pv.VaccineId
@@ -1496,17 +1540,25 @@ WHERE ISNULL(pv.IsDeleted, 0) = 0
   AND (@PatientId IS NULL OR pv.PatientId = @PatientId)
   AND (@DateFrom IS NULL OR pv.VaccinationDate >= @DateFrom)
   AND (@DateTo IS NULL OR pv.VaccinationDate <= @DateTo)
-ORDER BY pv.VaccinationDate DESC;";
+ORDER BY pv.VaccinationDate DESC
+OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);
             command.Parameters.AddWithValue("@PatientId", (object?)patientId ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateFrom", (object?)dateFrom ?? DBNull.Value);
             command.Parameters.AddWithValue("@DateTo", (object?)dateTo ?? DBNull.Value);
+            command.Parameters.AddWithValue("@Offset", (normalizedPageNumber - 1) * normalizedPageSize);
+            command.Parameters.AddWithValue("@PageSize", normalizedPageSize);
             await connection.OpenAsync();
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                if (result.TotalCount == 0)
+                {
+                    result.TotalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+                }
+
                 results.Add(new PharmacyVaccineRecord
                 {
                     PatientVaccineId = reader.GetInt32(0),
@@ -1520,7 +1572,8 @@ ORDER BY pv.VaccinationDate DESC;";
                 });
             }
 
-            return results;
+            result.Items = results;
+            return result;
         }
 
         public async Task<PharmacyVaccineRecord> CreateVaccineRecordAsync(PharmacyVaccineCreateRequest request, int actingUserId)
@@ -1540,8 +1593,8 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             await connection.OpenAsync();
             var id = Convert.ToInt32(await command.ExecuteScalarAsync());
 
-            var records = await GetVaccineRecordsAsync(null, null, request.PatientId);
-            return records.First(r => r.PatientVaccineId == id);
+            var records = await GetVaccineRecordsAsync(null, null, request.PatientId, 1, PaginationHelper.MaxPageSize);
+            return records.Items.First(r => r.PatientVaccineId == id);
         }
     }
 }

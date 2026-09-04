@@ -289,12 +289,13 @@ namespace InventoryManagement.Api.Controllers
         // ==================== Daily Sale ====================
 
         [HttpGet("daily-sale")]
-        public async Task<ActionResult<IReadOnlyList<PharmacyDailySaleEntry>>> GetDailySale(
-            [FromQuery] int? storeId, [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] string? challanType)
+        public async Task<ActionResult<PharmacyDailySaleReport>> GetDailySale(
+            [FromQuery] int? storeId, [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] string? challanType,
+            [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                return Ok(await _pharmacyService.GetDailySaleAsync(storeId, dateFrom, dateTo, challanType));
+                return Ok(await _pharmacyService.GetDailySaleAsync(storeId, dateFrom, dateTo, challanType, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
@@ -306,12 +307,13 @@ namespace InventoryManagement.Api.Controllers
         // ==================== Item Wise Sale ====================
 
         [HttpGet("item-wise-sale")]
-        public async Task<ActionResult<IReadOnlyList<PharmacyItemWiseSaleEntry>>> GetItemWiseSale(
-            [FromQuery] int? storeId, [FromQuery] int? itemId, [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo)
+        public async Task<ActionResult<PharmacyItemWiseSaleReport>> GetItemWiseSale(
+            [FromQuery] int? storeId, [FromQuery] int? itemId, [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo,
+            [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                return Ok(await _pharmacyService.GetItemWiseSaleAsync(storeId, itemId, dateFrom, dateTo));
+                return Ok(await _pharmacyService.GetItemWiseSaleAsync(storeId, itemId, dateFrom, dateTo, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
@@ -339,12 +341,13 @@ namespace InventoryManagement.Api.Controllers
         // ==================== Pharmacy Online Order ====================
 
         [HttpGet("online-orders")]
-        public async Task<ActionResult<IReadOnlyList<PharmacyOnlineOrderEntry>>> GetOnlineOrders(
-            [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] int? storeId, [FromQuery] string? status)
+        public async Task<ActionResult<PagedResult<PharmacyOnlineOrderEntry>>> GetOnlineOrders(
+            [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] int? storeId, [FromQuery] string? status,
+            [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                return Ok(await _pharmacyService.GetOnlineOrdersAsync(dateFrom, dateTo, storeId, status));
+                return Ok(await _pharmacyService.GetOnlineOrdersAsync(dateFrom, dateTo, storeId, status, pageNumber, pageSize));
             }
             catch (Exception ex)
             {
@@ -392,12 +395,13 @@ namespace InventoryManagement.Api.Controllers
         }
 
         [HttpGet("immunizations")]
-        public async Task<ActionResult<IReadOnlyList<PharmacyVaccineRecord>>> GetVaccineRecords(
-            [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] int? patientId)
+        public async Task<ActionResult<PagedResult<PharmacyVaccineRecord>>> GetVaccineRecords(
+            [FromQuery] DateTime? dateFrom, [FromQuery] DateTime? dateTo, [FromQuery] int? patientId,
+            [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
-                return Ok(await _pharmacyService.GetVaccineRecordsAsync(dateFrom, dateTo, patientId));
+                return Ok(await _pharmacyService.GetVaccineRecordsAsync(dateFrom, dateTo, patientId, pageNumber, pageSize));
             }
             catch (Exception ex)
             {

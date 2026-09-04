@@ -4,7 +4,7 @@ namespace InventoryManagement.Api.Services
 {
     public interface IStockAuditService
     {
-        Task<List<StockAuditItem>> SearchStockAuditItemsAsync(StockAuditSearchRequest request);
+        Task<PagedResult<StockAuditItem>> SearchStockAuditItemsAsync(StockAuditSearchRequest request);
         Task<StockAudit> CreateStockAuditAsync(StockAuditRequest request);
         Task<List<StockAuditListItem>> GetAllAsync(StockAuditListRequest request);
     }

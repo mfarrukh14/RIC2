@@ -16,9 +16,14 @@ namespace InventoryManagement.Api.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<SaleSummaryDaily>> GetSaleSummaryAsync(SaleSummarySearchRequest request)
+        // Shared reader for SaleSummaryDaily_GetReport - pageNumber/pageSize are left at
+        // the proc's defaults (1 / int.MaxValue, i.e. unpaged) by GetSaleSummarySummaryAsync
+        // below, since the grand totals must reflect every bucket in the filtered range,
+        // not just the page currently on screen.
+        private async Task<(List<SaleSummaryDaily> Items, int TotalCount)> FetchAsync(SaleSummarySearchRequest request, int? pageNumber, int? pageSize)
         {
             var summaries = new List<SaleSummaryDaily>();
+            var totalCount = 0;
 
             try
             {
@@ -32,16 +37,23 @@ namespace InventoryManagement.Api.Services
                 command.Parameters.AddWithValue("@StartDate", request.StartDate.HasValue ? (object)request.StartDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@EndDate", request.EndDate.HasValue ? (object)request.EndDate.Value : DBNull.Value);
                 command.Parameters.AddWithValue("@Type", string.IsNullOrEmpty(request.Type) ? "Daily" : request.Type);
+                if (pageNumber.HasValue) command.Parameters.AddWithValue("@PageNumber", pageNumber.Value);
+                if (pageSize.HasValue) command.Parameters.AddWithValue("@PageSize", pageSize.Value);
 
                 await connection.OpenAsync();
                 using var reader = await command.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
                 {
+                    if (totalCount == 0)
+                    {
+                        totalCount = PaginationHelper.ReadTotalCount(reader);
+                    }
+
                     var grossSales = reader.GetDecimal(reader.GetOrdinal("GrossSales"));
                     var discounts = reader.GetDecimal(reader.GetOrdinal("Discounts"));
                     var totalSReturn = reader.GetDecimal(reader.GetOrdinal("TotalSReturn"));
-                    var costOfSales = reader.GetDecimal(reader.GetOrdinal("CostOfSales"));
+                    var costOfSales = reader.IsDBNull(reader.GetOrdinal("CostOfSales")) ? 0 : reader.GetDecimal(reader.GetOrdinal("CostOfSales"));
                     var totalSales = grossSales - discounts;
                     var netSale = totalSales - totalSReturn;
                     var gpAmount = netSale - costOfSales;
@@ -68,13 +80,30 @@ namespace InventoryManagement.Api.Services
                 throw;
             }
 
-            return summaries;
+            return (summaries, totalCount);
+        }
+
+        public async Task<PagedResult<SaleSummaryDaily>> GetSaleSummaryAsync(SaleSummarySearchRequest request)
+        {
+            var (pageNumber, pageSize) = PaginationHelper.Normalize(request.PageNumber, request.PageSize);
+            var (items, totalCount) = await FetchAsync(request, pageNumber, pageSize);
+
+            return new PagedResult<SaleSummaryDaily>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            };
         }
 
         public async Task<SaleSummarySummary> GetSaleSummarySummaryAsync(SaleSummarySearchRequest request)
         {
-            var summaries = await GetSaleSummaryAsync(request);
-            
+            // Unpaged - the proc defaults @PageNumber/@PageSize to return every bucket in
+            // the filtered range so these totals aren't scoped to whatever page the list
+            // view happens to be showing.
+            var (summaries, _) = await FetchAsync(request, null, null);
+
             var totalCount = summaries.Sum(s => s.Count);
             var grossSales = summaries.Sum(s => s.GrossSales);
             var discounts = summaries.Sum(s => s.Discounts);
