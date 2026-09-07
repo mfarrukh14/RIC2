@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://10.10.10.35:5100/api/SaleSummaryStockNoDiscount';
+const API_URL = 'http://localhost:5100/api/SaleSummaryStockNoDiscount';
 
 // Server-paginated - call shape matches usePagedList: { pageNumber, pageSize, ...filters } -> { items, totalCount }
 export const getSaleSummaryStockNoDiscount = async ({ pageNumber, pageSize, store, startDate, endDate } = {}) => {

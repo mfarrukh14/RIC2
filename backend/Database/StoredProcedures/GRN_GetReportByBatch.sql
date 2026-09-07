@@ -31,8 +31,8 @@ BEGIN
         Inv.PurchaseOrders po ON grn.PurchaseOrderId = po.PurchaseOrderId
     LEFT JOIN 
         Inv.StockTypes st ON grn.StockTypeId = st.Id
-    LEFT JOIN 
-        Inv.Stores s ON po.StoreId = s.StoreId
+    LEFT JOIN
+        Inv.PharmacyStores s ON grn.StoreId = s.StoreId
     LEFT JOIN 
         Inv.Vendors v ON grn.VendorId = v.Id
     WHERE 

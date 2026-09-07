@@ -55,16 +55,18 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
   const [profitMargin, setProfitMargin] = useState(0);
   const [profitPerItem, setProfitPerItem] = useState(0);
 
-  // Tracks the header/detail row this form is actually writing to, so a retry after a
-  // failed submit (e.g. the detail insert fails validation) updates the same records
-  // instead of creating a new orphaned header every attempt.
+  // Tracks the header this form is actually writing to, so a retry after a
+  // failed submit (e.g. a detail insert fails validation) updates the same header
+  // instead of creating a new orphaned one every attempt.
   const [savedInventoryId, setSavedInventoryId] = useState(null);
-  const [savedDetailId, setSavedDetailId] = useState(null);
 
-  // New (non-edit) inventories can hold several item lines under one header, matching
-  // the old system's flow of receiving multiple items into a store in a single Add
-  // Inventory entry - each line captured here keeps `savedDetailId` so a retry after a
-  // partial failure doesn't recreate lines that already saved successfully.
+  // Inventories can hold several item lines under one header, matching the old
+  // system's flow of receiving multiple items into a store in a single Add
+  // Inventory entry - each line keeps `savedDetailId` so a retry after a partial
+  // failure doesn't recreate lines that already saved successfully. When editing,
+  // this list is pre-loaded with every line already stored against the inventory
+  // (see the load effect below) so they aren't lost, and new lines can still be
+  // added the same way as on Add Inventory.
   const [items, setItems] = useState([]);
   const [itemsError, setItemsError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -91,57 +93,68 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
     }
   }, [inventory, lookupData.stockTypes]);
 
+  // Maps an already-saved InventoryDetail (from the API) into the same shape
+  // addItemToList() produces, so existing lines render in the items table
+  // exactly like freshly-added ones - just pre-marked as saved.
+  const existingDetailToItem = (detail) => ({
+    key: `existing-${detail.id}`,
+    itemName: detail.itemName || `Item #${detail.itemId ?? detail.medicineId ?? detail.subServiceId ?? detail.id}`,
+    savedDetailId: detail.id,
+    payload: {
+      itemId: detail.itemId ?? null,
+      medicineId: detail.medicineId ?? null,
+      subServiceId: detail.subServiceId ?? null,
+      manufacturerId: detail.manufacturerId ?? null,
+      mfgDate: detail.mfgDate || null,
+      expiryDate: detail.expiryDate || null,
+      noOfBoxes: detail.noOfBoxes ?? null,
+      noOfPackets: detail.noOfPackets ?? null,
+      itemsPerPacket: detail.itemsPerPacket ?? null,
+      totalItems: detail.totalItems ?? null,
+      packQuantity: detail.packQuantity ?? null,
+      unitBuyingPrice: detail.unitBuyingPrice ?? null,
+      totalBuyingPrice: detail.totalBuyingPrice ?? null,
+      advanceTaxPercentage: detail.advanceTaxPercentage ?? null,
+      advanceTaxAmount: detail.advanceTaxAmount ?? null,
+      discount: detail.discount || false,
+      discountAmount: detail.discountAmount ?? null,
+      retailCharges: detail.retailCharges || false,
+      retailChargesAmount: detail.retailChargesAmount ?? null,
+      gstCharges: detail.gstCharges || false,
+      gstChargesAmount: detail.gstChargesAmount ?? null,
+      unitSellingPrice: detail.unitSellingPrice ?? null,
+      totalSellingPrice: detail.totalSellingPrice ?? null,
+      profitMarginPerItem: detail.profitMarginPerItem ?? 0,
+      profitPerItem: detail.profitPerItem ?? 0
+    }
+  });
+
   useEffect(() => {
     if (!inventory) return;
 
     // The row passed in from the list only has header fields - fetch the full
-    // record (with its detail line) so editing doesn't wipe out the item/quantity/
-    // pricing data the user already entered when this inventory was created.
+    // record (with every detail line) so editing doesn't wipe out the item/
+    // quantity/pricing data already entered when this inventory was created.
     let cancelled = false;
     (async () => {
       try {
         const full = await inventoryApi.getById(inventory.id);
         if (cancelled) return;
 
-        const detail = full.details?.[0] || null;
         setSavedInventoryId(full.id);
-        setSavedDetailId(detail?.id || null);
+        setItems((full.details || []).map(existingDetailToItem));
 
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
+          ...ITEM_FIELD_DEFAULTS,
           vendorId: full.vendorId || '',
           storeId: full.storeId || '',
           branchId: full.branchId || '',
           stockTypeId: full.stockTypeId || '',
           vendorInvoiceNumber: full.vendorInvoiceNumber || '',
           vendorInvoiceTimestamp: full.vendorInvoiceTimestamp ?
-            new Date(full.vendorInvoiceTimestamp).toISOString().split('T')[0] : '',
-          itemId: detail?.itemId || '',
-          medicineId: detail?.medicineId || '',
-          subServiceId: detail?.subServiceId || '',
-          manufacturerId: detail?.manufacturerId || '',
-          mfgDate: detail?.mfgDate ? new Date(detail.mfgDate).toISOString().split('T')[0] : '',
-          expiryDate: detail?.expiryDate ? new Date(detail.expiryDate).toISOString().split('T')[0] : '',
-          noOfBoxes: detail?.noOfBoxes ?? '',
-          noOfPackets: detail?.noOfPackets ?? '',
-          itemsPerPacket: detail?.itemsPerPacket ?? '',
-          totalItems: detail?.totalItems ?? '',
-          packQuantity: detail?.packQuantity ?? '',
-          unitBuyingPrice: detail?.unitBuyingPrice ?? '',
-          totalBuyingPrice: detail?.totalBuyingPrice ?? '',
-          advanceTaxPercentage: detail?.advanceTaxPercentage ?? '',
-          advanceTaxAmount: detail?.advanceTaxAmount ?? '',
-          discount: detail?.discount || false,
-          discountAmount: detail?.discountAmount ?? '',
-          retailCharges: detail?.retailCharges || false,
-          retailChargesAmount: detail?.retailChargesAmount ?? '',
-          gstCharges: detail?.gstCharges || false,
-          gstChargesAmount: detail?.gstChargesAmount ?? '',
-          unitSellingPrice: detail?.unitSellingPrice ?? '',
-          totalSellingPrice: detail?.totalSellingPrice ?? '',
-          registrationNumber: full.registrationNumber || '',
-          batch: full.batch || '',
-          lotNumber: full.lotNumber || ''
-        });
+            new Date(full.vendorInvoiceTimestamp).toISOString().split('T')[0] : ''
+        }));
       } catch (err) {
         console.error('Error loading inventory details:', err);
       }
@@ -334,7 +347,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!inventory && items.length === 0) {
+    if (items.length === 0) {
       setItemsError('Please add at least one item to the list before submitting.');
       return;
     }
@@ -370,39 +383,28 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
         setSavedInventoryId(inventoryId);
       }
 
-      if (inventory) {
-        // Editing an existing inventory still edits its single detail line in place.
-        const detailData = buildDetailPayload(formData, profitMargin, profitPerItem);
-        detailData.inventoryId = inventoryId;
-
-        if (savedDetailId) {
-          await inventoryApi.updateDetail(savedDetailId, detailData);
-        } else {
-          const detailResult = await inventoryApi.createDetail(detailData);
-          setSavedDetailId(detailResult.id);
+      // Create every line in the list that isn't already persisted. Pre-existing
+      // lines (loaded from the inventory being edited) and lines already saved from
+      // a prior partial-failure attempt both carry a savedDetailId, so a retry - or
+      // just editing the header of an inventory whose items weren't touched - never
+      // recreates them.
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        if (item.savedDetailId) {
+          continue;
         }
-      } else {
-        // Create every line added to the list under this one header. Lines already
-        // saved from a prior partial-failure attempt (savedDetailId set) are skipped so
-        // a retry doesn't create duplicates.
-        for (let index = 0; index < items.length; index += 1) {
-          const item = items[index];
-          if (item.savedDetailId) {
-            continue;
-          }
 
-          try {
-            const detailResult = await inventoryApi.createDetail({ ...item.payload, inventoryId });
-            setItems((prev) => prev.map((current) => (
-              current.key === item.key ? { ...current, savedDetailId: detailResult.id } : current
-            )));
-          } catch (detailErr) {
-            console.error('Error saving inventory item:', detailErr);
-            const message = detailErr.response?.data?.message || detailErr.message || 'Failed to save this item.';
-            setItemsError(`Failed to save "${item.itemName}": ${message}. Items already saved above were kept - fix this line and submit again.`);
-            setSubmitting(false);
-            return;
-          }
+        try {
+          const detailResult = await inventoryApi.createDetail({ ...item.payload, inventoryId });
+          setItems((prev) => prev.map((current) => (
+            current.key === item.key ? { ...current, savedDetailId: detailResult.id } : current
+          )));
+        } catch (detailErr) {
+          console.error('Error saving inventory item:', detailErr);
+          const message = detailErr.response?.data?.message || detailErr.message || 'Failed to save this item.';
+          setItemsError(`Failed to save "${item.itemName}": ${message}. Items already saved above were kept - fix this line and submit again.`);
+          setSubmitting(false);
+          return;
         }
       }
 
@@ -536,7 +538,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="itemId"
               value={productOptionValue(formData)}
               onChange={(e) => setFormData(prev => ({ ...prev, ...parseProductOptionValue(e.target.value) }))}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Search Item</option>
@@ -556,7 +558,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="manufacturerId"
               value={formData.manufacturerId}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Manufacturer</option>
@@ -580,7 +582,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="mfgDate"
               value={formData.mfgDate}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="DD/MM/YYYY"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -595,7 +597,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="expiryDate"
               value={formData.expiryDate}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="DD/MM/YYYY"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -613,7 +615,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="noOfBoxes"
               value={formData.noOfBoxes}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="No of Boxes"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -628,7 +630,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="noOfPackets"
               value={formData.noOfPackets}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="No of Packets"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -646,7 +648,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="itemsPerPacket"
               value={formData.itemsPerPacket}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="Item Per Packet"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -845,7 +847,7 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
               name="unitSellingPrice"
               value={formData.unitSellingPrice}
               onChange={handleChange}
-              required={!!inventory || items.length === 0}
+              required={items.length === 0}
               placeholder="Unit Selling Price"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -928,70 +930,71 @@ const InventoryFormPage = ({ inventory, onSave, onCancel }) => {
         </div>
 
         {/* Items list - lets several items be received into this store under one
-            header/invoice, instead of only ever accepting a single item. */}
-        {!inventory && (
-          <div className="mb-6">
-            <div className="flex justify-end mb-3">
-              <button
-                type="button"
-                onClick={addItemToList}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-              >
-                + Add Item to List
-              </button>
-            </div>
+            header/invoice, instead of only ever accepting a single item. When
+            editing, this is pre-loaded with every line already stored against
+            this inventory (marked "Saved") so new lines can be added alongside
+            them without losing what's already there. */}
+        <div className="mb-6">
+          <div className="flex justify-end mb-3">
+            <button
+              type="button"
+              onClick={addItemToList}
+              className="px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+            >
+              + Add Item to List
+            </button>
+          </div>
 
-            <div className="border border-gray-200 rounded-md overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+          <div className="border border-gray-200 rounded-md overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Buying Price</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Selling Price</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {items.length === 0 ? (
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Buying Price</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit Selling Price</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">
+                      No items added yet
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {items.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="px-4 py-4 text-center text-sm text-gray-500">
-                        No items added yet
+                ) : (
+                  items.map((item) => (
+                    <tr key={item.key}>
+                      <td className="px-4 py-2 text-sm text-gray-900">{item.itemName}</td>
+                      <td className="px-4 py-2 text-sm text-gray-500">{item.payload.totalItems ?? 0}</td>
+                      <td className="px-4 py-2 text-sm text-gray-500">{item.payload.unitBuyingPrice ?? 0}</td>
+                      <td className="px-4 py-2 text-sm text-gray-500">{item.payload.unitSellingPrice ?? 0}</td>
+                      <td className="px-4 py-2 text-sm">
+                        {item.savedDetailId ? (
+                          <span className="text-green-600">Saved</span>
+                        ) : (
+                          <span className="text-gray-500">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-sm">
+                        <button
+                          type="button"
+                          onClick={() => removeItemFromList(item.key)}
+                          disabled={!!item.savedDetailId}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Remove
+                        </button>
                       </td>
                     </tr>
-                  ) : (
-                    items.map((item) => (
-                      <tr key={item.key}>
-                        <td className="px-4 py-2 text-sm text-gray-900">{item.itemName}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{item.payload.totalItems ?? 0}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{item.payload.unitBuyingPrice ?? 0}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{item.payload.unitSellingPrice ?? 0}</td>
-                        <td className="px-4 py-2 text-sm">
-                          {item.savedDetailId ? (
-                            <span className="text-green-600">Saved</span>
-                          ) : (
-                            <span className="text-gray-500">Pending</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-sm">
-                          <button
-                            type="button"
-                            onClick={() => removeItemFromList(item.key)}
-                            disabled={!!item.savedDetailId}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3">
