@@ -201,7 +201,7 @@ END
         p.ItemId,
         p.SysBatchNo,
         p.BatchNo,
-        COALESCE(i.Name, bm.MedicineName, bf.Name) AS ResolvedName,
+        COALESCE(i.Name, bm.MedicineFullName, bf.Name) AS ResolvedName,
         COALESCE(st.Name, 'Regular') AS StockType,
         p.TotalItemsInStock AS TotalItems,
         COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,

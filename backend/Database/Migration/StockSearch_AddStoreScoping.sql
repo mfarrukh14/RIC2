@@ -50,7 +50,10 @@ BEGIN
             p.ItemId,
             p.SysBatchNo,
             p.BatchNo,
-            COALESCE(i.Name, bm.MedicineName, bf.Name) AS ResolvedName,
+            -- MedicineFullName (not MedicineName) so medicine rows show the same
+            -- "Type MedicineName (Generic) Strength" format as the old HMIS, e.g.
+            -- "Inj Clexane (Enoxaparin sodium) 80mg" instead of just "Clexane".
+            COALESCE(i.Name, bm.MedicineFullName, bf.Name) AS ResolvedName,
             COALESCE(st.Name, 'Regular') AS StockType,
             p.TotalItemsInStock AS TotalItems,
             COALESCE(p.MinimumPanicLevel, i.MinimumPanicLevel, 0) AS MinimumPanicLevel,
